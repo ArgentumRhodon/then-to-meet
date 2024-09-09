@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { NoMeetingLoaded, ErrorCard, getPeople, getSlots, people, slots, info } from '$lib';
 	import PeopleList from '$lib/components/PeopleList.svelte';
+	import TimeTable from '$lib/components/TimeTable.svelte';
 	import { ProgressRadial } from '@skeletonlabs/skeleton';
 
 	let w2mLink = 'https://www.when2meet.com/?25478485-BiFSz';
@@ -12,20 +13,28 @@
 		let match;
 
 		if ((match = meetingIDRegex.exec(meetingLink)) !== null) {
-			const meetingID = match[0];
-			const htmlRes = await fetch(`/api/w2m/${meetingID}`);
-			const html = await htmlRes.text();
-			// parse html response
-			const parser = new DOMParser();
-			const dom = parser.parseFromString(html, 'text/html');
-			const scriptContent = dom.scripts[targetScriptNum].innerHTML;
-			// update stores
-			$slots = getSlots(scriptContent);
-			$people = getPeople(scriptContent, $slots);
-			// Other info about the meeting
-			$info = {
-				title: dom.title.split(' - ')[0]
-			};
+			try {
+				const meetingID = match[0];
+				const htmlRes = await fetch(`/api/w2m/${meetingID}`);
+				const html = await htmlRes.text();
+				// parse html response
+				const parser = new DOMParser();
+				const dom = parser.parseFromString(html, 'text/html');
+				const scriptContent = dom.scripts[targetScriptNum].innerHTML;
+				// update stores
+				$slots = getSlots(scriptContent);
+				$people = getPeople(scriptContent, $slots);
+				// Other info about the meeting
+				$info = {
+					title: dom.title.split(' - ')[0]
+				};
+			} catch (e) {
+				throw new Error(
+					'Failed to load link/ID. Ensure it is correct and check your network connection.'
+				);
+			}
+		} else {
+			throw new Error('Bad link/ID.');
 		}
 	};
 
@@ -36,7 +45,7 @@
 </script>
 
 <div class="h-full flex flex-col lg:flex-row">
-	<div class="bg-surface-900 lg:w-96 h-min lg:h-full p-4 shadow-2xl">
+	<div class="bg-surface-900 lg:w-96 min-w-96 h-min lg:h-full p-4 shadow-2xl">
 		<form
 			class="input-group sm:grid-cols-[auto_1fr_auto] lg:grid-cols-none"
 			on:submit={onLinkSubmit}
@@ -61,15 +70,24 @@
 				{:then res}
 					<PeopleList />
 				{:catch error}
-					<ErrorCard
-						{error}
-						customMessage={`Error loading When2meet event. Check your network connection and ensure the provided link is correct.`}
-					/>
+					<ErrorCard {error} />
 				{/await}
 			{:else}
 				<NoMeetingLoaded />
 			{/if}
 		</div>
 	</div>
-	<div class="h-full flex-grow p-4"></div>
+	<div class="h-min flex-grow p-4 overflow-x-scroll">
+		{#if meetingPromise !== undefined}
+			{#await meetingPromise}
+				<ProgressRadial width="w-24" />
+			{:then res}
+				<TimeTable />
+			{:catch error}
+				<ErrorCard {error} />
+			{/await}
+		{:else}
+			<NoMeetingLoaded />
+		{/if}
+	</div>
 </div>

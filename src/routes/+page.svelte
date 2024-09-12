@@ -1,5 +1,14 @@
 <script lang="ts">
-	import { NoMeetingLoaded, ErrorCard, getPeople, getSlots, people, slots, info } from '$lib';
+	import {
+		NoMeetingLoaded,
+		ErrorCard,
+		getPeople,
+		getSlots,
+		people,
+		slots,
+		info,
+		linkMemory
+	} from '$lib';
 	import PeopleList from '$lib/components/PeopleList.svelte';
 	import TimeTable from '$lib/components/TimeTable.svelte';
 	import { ProgressRadial } from '@skeletonlabs/skeleton';

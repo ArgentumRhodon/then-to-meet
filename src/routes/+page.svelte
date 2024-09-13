@@ -35,8 +35,18 @@
 				$people = getPeople(scriptContent, $slots);
 				// Other info about the meeting
 				$info = {
-					title: dom.title.split(' - ')[0]
+					title: dom.title.split(' - ')[0],
+					link: w2mLink
 				};
+				// If link hasn't been recorded, record it
+				linkMemory.update((arr) => {
+					if (arr.some((e) => e.title === $info.title)) {
+						return arr;
+					}
+
+					return [...arr, $info];
+				});
+				console.log($linkMemory);
 			} catch (e) {
 				throw new Error(
 					'Failed to load link/ID. Ensure it is correct and check your network connection.'

@@ -1,20 +1,21 @@
 interface SlotData {
-    slot: number;
-    time: string;
-    available: number[];
+	slot: number;
+	time: string;
+	available: number[];
 }
 
 interface Slots {
-    [day: string]: SlotData[];
+	[day: string]: SlotData[];
 }
 
 interface Person {
-    id: number;
-    name: string;
+	id: number;
+	name: string;
 }
 
 interface Info {
-    title: string;
+	title: string;
+	link: string;
 }
 
-export type {SlotData, Slots, Person, Info}
+export type { SlotData, Slots, Person, Info };

@@ -33,6 +33,7 @@
   },
   "type": "module",
   "dependencies": {
-    "luxon": "^3.5.0"
+    "luxon": "^3.5.0",
+    "svelte-persisted-store": "^0.11.0"
   }
 }

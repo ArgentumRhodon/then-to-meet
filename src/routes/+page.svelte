@@ -13,7 +13,7 @@
 	import TimeTable from '$lib/components/TimeTable.svelte';
 	import { ProgressRadial } from '@skeletonlabs/skeleton';
 
-	let w2mLink = 'https://www.when2meet.com/?25478485-BiFSz';
+	let w2mLink = '';
 	let meetingPromise: Promise<void>;
 	const targetScriptNum = 9;
 
@@ -77,6 +77,13 @@
 				placeholder="https://www.when2meet.com/..."
 				bind:value={w2mLink}
 			/>
+			{#if $linkMemory.length}
+				<select name="memorizedLink" id="" class="select" bind:value={w2mLink}>
+					{#each $linkMemory as memLink}
+						<option value={memLink.link}>{memLink.title}</option>
+					{/each}
+				</select>
+			{/if}
 			<button class="btn variant-filled-primary p-4">Load Meeting</button>
 		</form>
 

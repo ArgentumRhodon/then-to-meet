@@ -78,7 +78,7 @@
 				bind:value={w2mLink}
 			/>
 			{#if $linkMemory.length}
-				<select name="memorizedLink" id="" class="select" bind:value={w2mLink}>
+				<select name="memorizedLink" id="" class="select !bg-surface-800" bind:value={w2mLink}>
 					{#each $linkMemory as memLink}
 						<option value={memLink.link}>{memLink.title}</option>
 					{/each}

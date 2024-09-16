@@ -29,6 +29,7 @@
 </script>
 
 <ul class="space-y-2">
+	<h2 class="text-lg">{$info.title}</h2>
 	<li>
 		<button class="btn variant-filled-surface w-full" on:click={toggleAll}>Toggle All</button>
 	</li>

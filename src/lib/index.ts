@@ -4,6 +4,7 @@ import TimeTable from './components/TimeTable.svelte';
 import PeopleList from './components/PeopleList.svelte';
 import ErrorCard from './components/ErrorCard.svelte';
 import LinkMemory from './components/LinkMemory.svelte';
+import LinkForm from './components/LinkForm.svelte';
 import getPeople from './parsers/getPeople';
 import getSlots from './parsers/getSlots';
 import people from './stores/people';
@@ -19,6 +20,7 @@ export {
 	ErrorCard,
 	TimeTable,
 	LinkMemory,
+	LinkForm,
 	getPeople,
 	getSlots,
 	resetMeetingStores,

@@ -14,7 +14,7 @@
 		<thead class="h-8 sticky top-0">
 			<tr class="bg-surface-500">
 				{#each Object.keys($slots) as day}
-					<th class="border border-surface-700 p-0.5 sticky top-0">{day}</th>
+					<th class="border border-surface-500 p-0.5 sticky top-0">{day}</th>
 				{/each}
 			</tr>
 		</thead>

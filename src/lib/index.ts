@@ -10,6 +10,7 @@ import selectedPeople from './stores/selectedPeople';
 import slots from './stores/slots';
 import info from './stores/info';
 import linkMemory from './stores/linkMemory';
+import resetMeetingStores from './stores/resetMeetingStores';
 
 export {
 	NoMeetingLoaded,
@@ -18,6 +19,7 @@ export {
 	TimeTable,
 	getPeople,
 	getSlots,
+	resetMeetingStores,
 	people,
 	slots,
 	info,

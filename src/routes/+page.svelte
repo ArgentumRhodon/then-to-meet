@@ -8,7 +8,8 @@
 		slots,
 		info,
 		linkMemory,
-		resetMeetingStores
+		resetMeetingStores,
+		LinkMemory
 	} from '$lib';
 	import PeopleList from '$lib/components/PeopleList.svelte';
 	import TimeTable from '$lib/components/TimeTable.svelte';
@@ -65,16 +66,12 @@
 	const loadLink = (link: string): void => {
 		meetingPromise = loadMeeting(link);
 	};
-
-	const loadSelect = () => {
-		if (selectLink != '-1') {
-			loadLink(selectLink);
-		}
-	};
 </script>
 
 <div class="h-full flex flex-col lg:flex-row">
-	<div class="bg-surface-900 lg:w-96 min-w-[20rem] h-min lg:h-full p-4 shadow-2xl">
+	<div class="bg-surface-900 lg:w-96 min-w-[20rem] h-min lg:h-full p-4 shadow-2xl space-y-4">
+		<h1 class="text-2xl font-bold">Then-To-Meet</h1>
+		<hr />
 		<form
 			class="input-group sm:grid-cols-[auto_1fr_auto] lg:grid-cols-none"
 			on:submit={() => loadLink(inputLink)}
@@ -92,25 +89,8 @@
 		</form>
 
 		{#if $linkMemory.length > 0}
-			<hr class="my-4" />
-			<div class="input-group sm:grid-cols-[auto_1fr] lg:grid-cols-none">
-				<!-- <label for="linkMemory" class="input-group-shim p-4">Load Previous</label> -->
-				<select
-					class="select p-4"
-					name="linkMemory"
-					id=""
-					bind:value={selectLink}
-					on:change={loadSelect}
-				>
-					<option value="-1" selected>Load Previous</option>
-					{#each $linkMemory as { link, title }}
-						<option value={link}>{title}</option>
-					{/each}
-				</select>
-			</div>
+			<LinkMemory {loadLink} />
 		{/if}
-
-		<hr class="my-4" />
 
 		<div>
 			{#if meetingPromise !== undefined}

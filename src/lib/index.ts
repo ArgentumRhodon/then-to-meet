@@ -3,6 +3,7 @@ import NoMeetingLoaded from './components/NoMeetingLoaded.svelte';
 import TimeTable from './components/TimeTable.svelte';
 import PeopleList from './components/PeopleList.svelte';
 import ErrorCard from './components/ErrorCard.svelte';
+import LinkMemory from './components/LinkMemory.svelte';
 import getPeople from './parsers/getPeople';
 import getSlots from './parsers/getSlots';
 import people from './stores/people';
@@ -17,6 +18,7 @@ export {
 	PeopleList,
 	ErrorCard,
 	TimeTable,
+	LinkMemory,
 	getPeople,
 	getSlots,
 	resetMeetingStores,

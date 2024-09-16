@@ -24,8 +24,8 @@
 					{#each Object.keys($slots) as day}
 						<td
 							class="border border-surface-500 text-primary-100/50 p-0.5"
-							class:bg-green-500={availableContainsSelected($slots[day][rowIndex].available)}
-							class:text-black={availableContainsSelected($slots[day][rowIndex].available)}
+							class:!bg-green-500={availableContainsSelected($slots[day][rowIndex].available)}
+							class:!text-black={availableContainsSelected($slots[day][rowIndex].available)}
 						>
 							{$slots[day][rowIndex].time}
 						</td>

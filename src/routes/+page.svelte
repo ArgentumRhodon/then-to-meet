@@ -66,8 +66,10 @@
 	};
 </script>
 
-<div class="h-full flex flex-col lg:flex-row">
-	<div class="bg-surface-900 lg:w-96 min-w-[20rem] h-min lg:h-full p-4 shadow-2xl space-y-4">
+<div class="h-full lg:h-screen flex flex-col lg:flex-row">
+	<div
+		class="bg-surface-900 lg:w-96 min-w-[20rem] h-min lg:h-full p-4 shadow-2xl space-y-4 lg:overflow-y-scroll"
+	>
 		<h1 class="text-2xl font-bold">Then-To-Meet</h1>
 
 		<hr />

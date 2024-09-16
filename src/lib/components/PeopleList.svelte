@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { info, people, selectedPeople } from '$lib';
 	import type { Person } from '$lib/types';
+	import { onMount } from 'svelte';
 
 	const togglePerson = (person: Person): void => {
 		selectedPeople.update((people) => {
@@ -13,15 +14,29 @@
 			return newPeople;
 		});
 	};
+
+	onMount(() => {
+		$selectedPeople = new Set($people);
+	});
+
+	const toggleAll = () => {
+		if ($people.every((person) => $selectedPeople.has(person))) {
+			$selectedPeople = new Set();
+		} else {
+			$selectedPeople = new Set($people);
+		}
+	};
 </script>
 
-<h2 class="text-lg mb-2">{$info.title}</h2>
 <ul class="space-y-2">
+	<li>
+		<button class="btn variant-filled-surface w-full" on:click={toggleAll}>Toggle All</button>
+	</li>
 	{#each $people as person}
 		<li>
 			<button
-				class="btn variant-outline-surface w-full"
-				class:!variant-filled-primary={$selectedPeople.has(person)}
+				class="btn variant-outline-primary w-full"
+				class:!variant-filled-secondary={$selectedPeople.has(person)}
 				on:click={() => togglePerson(person)}
 			>
 				{person.name}

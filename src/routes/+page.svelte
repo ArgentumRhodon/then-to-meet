@@ -51,7 +51,6 @@
 
 					return [...arr, $info];
 				});
-				console.log($linkMemory);
 			} catch (e) {
 				throw new Error(
 					'Failed to load link/ID. Ensure it is correct and check your network connection.'

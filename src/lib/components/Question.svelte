@@ -21,7 +21,7 @@
 </svelte:head>
 
 <button
-	class="btn-icon variant-ringed-warning btn-icon-sm [&>*]:pointer-events-none"
+	class="btn-icon variant-ringed-warning btn-icon-sm w-[33px] h-[33px] [&>*]:pointer-events-none"
 	use:popup={popupHover}
 >
 	<i class="fa-solid fa-question"></i>

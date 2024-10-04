@@ -29,7 +29,7 @@
 </script>
 
 <ul class="space-y-2">
-	<div class="flex justify-between">
+	<div class="flex justify-between items-center">
 		<h2 class="text-lg">{$info.title}</h2>
 		<Question msg="Select participants below to see overlapping availability in the time table." />
 	</div>

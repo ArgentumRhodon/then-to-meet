@@ -1,11 +1,28 @@
 <script lang="ts">
 	import { slots, selectedPeople } from '$lib';
 
-	// 'available' is an array of IDs of people available in that slot
-	$: availableContainsSelected = (available: number[]) => {
-		if ($selectedPeople.size === 0) return false;
+	const expFalloff = (input: number): number => {
+		return (Math.pow(2, 2 * input) - 1) / (Math.pow(2, 2) - 1);
+	};
 
-		return [...$selectedPeople].every((person) => available.includes(person.id));
+	$: slotStyle = (available: number[]): string => {
+		const stepSize = 1 / $selectedPeople.size;
+
+		// Represents the ratio of available people to people selected
+		let ratio = 0;
+		$selectedPeople.forEach((person) => {
+			if (available.includes(person.id)) {
+				ratio += stepSize;
+			}
+		});
+
+		const opacity = expFalloff(ratio); // Make perfect overlap pop with an exponental falloff
+		const bgColor = `rgba(${(1 - opacity) * 255}, ${opacity * 255}, 0, ${opacity})`; // Green good, red bad
+
+		let txtColor = 'rgb(185, 185, 185)';
+		if (opacity > 0.65) txtColor = 'black'; // Ensure decent text contrast
+
+		return `color:${txtColor};background-color:${bgColor}`;
 	};
 </script>
 
@@ -24,8 +41,7 @@
 					{#each Object.keys($slots) as day}
 						<td
 							class="border border-surface-500 text-primary-100/50 p-0.5"
-							class:!bg-green-500={availableContainsSelected($slots[day][rowIndex].available)}
-							class:!text-black={availableContainsSelected($slots[day][rowIndex].available)}
+							style={slotStyle($slots[day][rowIndex].available)}
 						>
 							{$slots[day][rowIndex].time}
 						</td>

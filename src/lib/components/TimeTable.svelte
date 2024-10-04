@@ -5,7 +5,26 @@
 	$: availableContainsSelected = (available: number[]) => {
 		if ($selectedPeople.size === 0) return false;
 
-		return [...$selectedPeople].every((person) => available.includes(person.id));
+		return [...$selectedPeople].some((person) => available.includes(person.id));
+	};
+
+	$: slotStyle = (available: number[]): string => {
+		if ($selectedPeople.size === 0) return 'rgba(0,0,0,0)';
+
+		const opacityStepSize = 1 / $selectedPeople.size;
+		let opacity = 0;
+		$selectedPeople.forEach((person) => {
+			if (available.includes(person.id)) {
+				opacity += opacityStepSize;
+			}
+		});
+		const bgColor = `rgba(0, 255, 0, ${opacity})`;
+
+		let textColor = 'black';
+		if (opacity < 0.375) textColor = 'white';
+		if (opacity === 0) textColor = '';
+
+		return `color:${textColor};background-color:${bgColor}`;
 	};
 </script>
 
@@ -24,8 +43,7 @@
 					{#each Object.keys($slots) as day}
 						<td
 							class="border border-surface-500 text-primary-100/50 p-0.5"
-							class:!bg-green-500={availableContainsSelected($slots[day][rowIndex].available)}
-							class:!text-black={availableContainsSelected($slots[day][rowIndex].available)}
+							style={slotStyle($slots[day][rowIndex].available)}
 						>
 							{$slots[day][rowIndex].time}
 						</td>

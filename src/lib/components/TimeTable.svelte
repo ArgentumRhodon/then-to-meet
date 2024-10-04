@@ -1,30 +1,28 @@
 <script lang="ts">
 	import { slots, selectedPeople } from '$lib';
 
-	// 'available' is an array of IDs of people available in that slot
-	$: availableContainsSelected = (available: number[]) => {
-		if ($selectedPeople.size === 0) return false;
-
-		return [...$selectedPeople].some((person) => available.includes(person.id));
+	const expFalloff = (input: number): number => {
+		return (Math.pow(2, 2 * input) - 1) / (Math.pow(2, 2) - 1);
 	};
 
 	$: slotStyle = (available: number[]): string => {
-		if ($selectedPeople.size === 0) return 'rgba(0,0,0,0)';
+		const stepSize = 1 / $selectedPeople.size;
 
-		const opacityStepSize = 1 / $selectedPeople.size;
-		let opacity = 0;
+		// Represents the ratio of available people to people selected
+		let ratio = 0;
 		$selectedPeople.forEach((person) => {
 			if (available.includes(person.id)) {
-				opacity += opacityStepSize;
+				ratio += stepSize;
 			}
 		});
-		const bgColor = `rgba(0, 255, 0, ${opacity})`;
 
-		let textColor = 'black';
-		if (opacity < 0.375) textColor = 'white';
-		if (opacity === 0) textColor = '';
+		const opacity = expFalloff(ratio); // Make perfect overlap pop with an exponental falloff
+		const bgColor = `rgba(${(1 - opacity) * 255}, ${opacity * 255}, 0, ${opacity})`; // Green good, red bad
 
-		return `color:${textColor};background-color:${bgColor}`;
+		let txtColor = 'rgb(185, 185, 185)';
+		if (opacity > 0.65) txtColor = 'black'; // Ensure decent text contrast
+
+		return `color:${txtColor};background-color:${bgColor}`;
 	};
 </script>
 

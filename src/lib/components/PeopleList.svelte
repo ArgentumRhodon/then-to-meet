@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { info, people, Question, selectedPeople } from '$lib';
+	import { info, people, selectedPeople } from '$lib';
 	import type { Person } from '$lib/types';
 	import { onMount } from 'svelte';
+	import TimePrinter from './TimePrinter.svelte';
 
 	const togglePerson = (person: Person): void => {
 		selectedPeople.update((people) => {
@@ -28,23 +29,26 @@
 	};
 </script>
 
-<ul class="space-y-2">
+<div class="space-y-2">
 	<div class="flex justify-between items-center">
 		<h2 class="text-lg">{$info.title}</h2>
-		<Question msg="Select participants below to see overlapping availability in the time table." />
 	</div>
-	<li>
-		<button class="btn variant-filled-surface w-full" on:click={toggleAll}>Toggle All</button>
-	</li>
-	{#each $people as person}
-		<li>
-			<button
-				class="btn variant-outline-secondary w-full"
-				class:!variant-filled-secondary={$selectedPeople.has(person)}
-				on:click={() => togglePerson(person)}
-			>
-				{person.name}
-			</button>
-		</li>
-	{/each}
-</ul>
+
+	<h3>Select Participants</h3>
+	<button class="btn variant-filled-surface w-full" on:click={toggleAll}>Toggle All</button>
+	<ul class="space-y-2">
+		{#each $people as person}
+			<li>
+				<button
+					class="btn variant-outline-secondary w-full"
+					class:!variant-filled-secondary={$selectedPeople.has(person)}
+					on:click={() => togglePerson(person)}
+				>
+					{person.name}
+				</button>
+			</li>
+		{/each}
+	</ul>
+
+	<TimePrinter />
+</div>

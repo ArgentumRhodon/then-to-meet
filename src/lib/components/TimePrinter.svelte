@@ -1,7 +1,6 @@
 <script lang="ts">
-	import selectedPeople from '$lib/stores/selectedPeople';
-	import slots from '$lib/stores/slots';
-	import { type MeetingData, type Meetings, type SlotData } from '$lib/types';
+	import { slots, meetings, selectedPeople } from '$lib';
+	import { type MeetingData, type SlotData } from '$lib/types';
 
 	const lengthRange = {
 		min: 15,
@@ -28,7 +27,8 @@
 	};
 
 	const printTimes = () => {
-		const meetings: Meetings = {};
+		meetings.set({});
+
 		const minSlotDiff = lengthRange.min / 15;
 		let maxSlotDiff = lengthRange.max / 15;
 
@@ -52,21 +52,24 @@
 				}
 
 				// Initialize new array of meetings for a given day
-				if (!meetings[day]) meetings[day] = new Array<MeetingData>();
+				if (!$meetings[day]) $meetings[day] = {};
 
 				// Determine max difference between found and specified
 				let maxDifference = Math.min(difference, maxSlotDiff);
 				// Add all meetings with start of i slot with length between max and min
 				for (let j = i + minSlotDiff; j <= i + maxDifference; j++) {
-					meetings[day].push({
+					const meetingLength = (j - i) * 15;
+					if (!$meetings[day][meetingLength])
+						$meetings[day][meetingLength] = new Array<MeetingData>();
+
+					$meetings[day][meetingLength].push({
 						start: daySlots[i].time,
-						end: daySlots[j].time,
-						length: (j - i) * 15
+						end: daySlots[j].time
 					});
 				}
 			}
 		}
-		console.log(meetings);
+		console.log($meetings);
 	};
 </script>
 

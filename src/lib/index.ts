@@ -14,6 +14,7 @@ import slots from './stores/slots';
 import info from './stores/info';
 import linkMemory from './stores/linkMemory';
 import resetMeetingStores from './stores/resetMeetingStores';
+import meetings from './stores/meetings';
 
 export {
 	NoMeetingLoaded,
@@ -30,5 +31,6 @@ export {
 	slots,
 	info,
 	selectedPeople,
-	linkMemory
+	linkMemory,
+	meetings
 };

@@ -19,13 +19,14 @@ interface Info {
 }
 
 interface MeetingData {
-	start: string,
-	end: string,
-	length: number,
+	start: string;
+	end: string;
 }
 
 interface Meetings {
-	[day: string]: MeetingData[]
+	[day: string]: {
+		[length: number]: MeetingData[];
+	};
 }
 
 export type { SlotData, Slots, Person, Info, Meetings, MeetingData };

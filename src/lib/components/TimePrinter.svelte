@@ -109,7 +109,7 @@
 							</svelte:fragment>
 							<svelte:fragment slot="content">
 								{#each Object.values($meetings[day][length]) as meeting}
-									<p>{meeting.start} - {meeting.end}</p>
+									<p class="ml-6">{meeting.start} - {meeting.end}</p>
 								{/each}
 							</svelte:fragment>
 						</AccordionItem>

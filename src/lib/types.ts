@@ -25,7 +25,7 @@ interface MeetingData {
 
 interface Meetings {
 	[day: string]: {
-		[length: number]: MeetingData[];
+		[length: string]: MeetingData[];
 	};
 }
 

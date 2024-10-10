@@ -74,6 +74,7 @@
 
 	// Timeout to allow time for accordion animation...
 	const scrollDown = () => {
+		console.log(scrollParent.scrollHeight);
 		setTimeout(() => scrollParent.scrollTo(0, scrollParent.scrollHeight), 150);
 	};
 </script>
@@ -92,6 +93,7 @@
 					min="15"
 					max={$lengthRange.max}
 					bind:value={$lengthRange.min}
+					on:input={scrollDown}
 				/>
 			</label>
 			<label class="flex-1">
@@ -103,6 +105,7 @@
 					step="15"
 					min={$lengthRange.min}
 					bind:value={$lengthRange.max}
+					on:input={scrollDown}
 				/>
 			</label>
 		</div>

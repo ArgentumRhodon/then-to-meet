@@ -8,17 +8,7 @@
 
 	$: slotStyle = (slot: SlotData): string => {
 		let txtColor = 'black';
-		let bgColor = 'rgb(0, 255, 255)';
-
-		if ($hoveredMeeting) {
-			const { start, end } = $hoveredMeeting;
-
-			console.log($hoveredMeeting, slot);
-
-			if (slot.slot >= start.slot && slot.slot <= end.slot) {
-				return `color:${txtColor};background-color:${bgColor}`;
-			}
-		}
+		let bgColor = 'rgb(0, 255, 0)';
 
 		const stepSize = 1 / $selectedPeople.size;
 
@@ -30,7 +20,16 @@
 			}
 		});
 
-		const opacity = expFalloff(ratio); // Make perfect overlap pop with an exponental falloff
+		let opacity = expFalloff(ratio); // Make perfect overlap pop with an exponental falloff
+
+		if ($hoveredMeeting) {
+			const { start, end } = $hoveredMeeting;
+
+			if (slot.slot < start.slot || slot.slot > end.slot) {
+				opacity /= 2;
+			}
+		}
+
 		bgColor = `rgba(${(1 - opacity) * 255}, ${opacity * 255}, 0, ${opacity})`; // Green good, red bad
 
 		if (opacity < 0.65) txtColor = 'rgb(185, 185, 185)'; // Ensure decent text contrast

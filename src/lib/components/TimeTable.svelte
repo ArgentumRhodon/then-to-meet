@@ -1,26 +1,39 @@
 <script lang="ts">
-	import { slots, selectedPeople } from '$lib';
+	import { slots, selectedPeople, hoveredMeeting } from '$lib';
+	import type { SlotData } from '$lib/types';
 
 	const expFalloff = (input: number): number => {
 		return (Math.pow(2, 2 * input) - 1) / (Math.pow(2, 2) - 1);
 	};
 
-	$: slotStyle = (available: number[]): string => {
+	$: slotStyle = (slot: SlotData): string => {
+		let txtColor = 'black';
+		let bgColor = 'rgb(0, 255, 255)';
+
+		if ($hoveredMeeting) {
+			const { start, end } = $hoveredMeeting;
+
+			console.log($hoveredMeeting, slot);
+
+			if (slot.slot >= start.slot && slot.slot <= end.slot) {
+				return `color:${txtColor};background-color:${bgColor}`;
+			}
+		}
+
 		const stepSize = 1 / $selectedPeople.size;
 
 		// Represents the ratio of available people to people selected
 		let ratio = 0;
 		$selectedPeople.forEach((person) => {
-			if (available.includes(person.id)) {
+			if (slot.available.includes(person.id)) {
 				ratio += stepSize;
 			}
 		});
 
 		const opacity = expFalloff(ratio); // Make perfect overlap pop with an exponental falloff
-		const bgColor = `rgba(${(1 - opacity) * 255}, ${opacity * 255}, 0, ${opacity})`; // Green good, red bad
+		bgColor = `rgba(${(1 - opacity) * 255}, ${opacity * 255}, 0, ${opacity})`; // Green good, red bad
 
-		let txtColor = 'rgb(185, 185, 185)';
-		if (opacity > 0.65) txtColor = 'black'; // Ensure decent text contrast
+		if (opacity < 0.65) txtColor = 'rgb(185, 185, 185)'; // Ensure decent text contrast
 
 		return `color:${txtColor};background-color:${bgColor}`;
 	};
@@ -41,7 +54,7 @@
 					{#each Object.keys($slots) as day}
 						<td
 							class="border border-surface-500 text-primary-100/50 p-0.5"
-							style={slotStyle($slots[day][rowIndex].available)}
+							style={slotStyle($slots[day][rowIndex])}
 						>
 							{$slots[day][rowIndex].time}
 						</td>

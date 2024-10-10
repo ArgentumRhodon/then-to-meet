@@ -1,8 +1,10 @@
 <script lang="ts">
-	import { slots, meetings, selectedPeople } from '$lib';
+	import { slots, meetings, selectedPeople, hoveredMeeting } from '$lib';
 	import { type MeetingData, type SlotData } from '$lib/types';
 	import { Accordion, AccordionItem } from '@skeletonlabs/skeleton';
 	import { writable } from 'svelte/store';
+
+	export let scrollParent: HTMLDivElement;
 
 	const lengthRange = writable({
 		min: 15,
@@ -56,66 +58,92 @@
 						$meetings[day][meetingLength] = new Array<MeetingData>();
 
 					$meetings[day][meetingLength].push({
-						start: daySlots[i].time,
-						end: daySlots[j].time
+						start: {
+							time: daySlots[i].time,
+							slot: daySlots[i].slot
+						},
+						end: {
+							time: daySlots[j].time,
+							slot: daySlots[j].slot
+						}
 					});
 				}
 			}
 		}
 	}
+
+	// Timeout to allow time for accordion animation...
+	const scrollDown = () => {
+		setTimeout(() => scrollParent.scrollTo(0, scrollParent.scrollHeight), 150);
+	};
 </script>
 
-<h3>Meeting Times</h3>
-<form action="" class="space-y-2">
-	<div class="flex gap-2">
-		<label class="flex-1">
-			<span>Min Length (Minutes)</span>
-			<input
-				type="number"
-				name="link"
-				class="input p-4"
-				step="15"
-				min="15"
-				max={$lengthRange.max}
-				bind:value={$lengthRange.min}
-			/>
-		</label>
-		<label class="flex-1">
-			<span>Max Length (Minutes)</span>
-			<input
-				type="number"
-				name="link"
-				class="input p-4"
-				step="15"
-				min={$lengthRange.min}
-				bind:value={$lengthRange.max}
-			/>
-		</label>
-	</div>
-</form>
+<div class="space-y-2">
+	<h3>Meeting Times</h3>
+	<form action="" class="space-y-2 !mt-0">
+		<div class="flex gap-2">
+			<label class="flex-1">
+				<span>Min Length (Minutes)</span>
+				<input
+					type="number"
+					name="link"
+					class="input p-4"
+					step="15"
+					min="15"
+					max={$lengthRange.max}
+					bind:value={$lengthRange.min}
+				/>
+			</label>
+			<label class="flex-1">
+				<span>Max Length (Minutes)</span>
+				<input
+					type="number"
+					name="link"
+					class="input p-4"
+					step="15"
+					min={$lengthRange.min}
+					bind:value={$lengthRange.max}
+				/>
+			</label>
+		</div>
+	</form>
 
-<Accordion>
-	{#each Object.keys($meetings) as day}
-		<AccordionItem>
-			<svelte:fragment slot="summary">
-				<h4>{day}</h4>
-			</svelte:fragment>
-			<svelte:fragment slot="content">
-				<Accordion>
-					{#each Object.keys($meetings[day]) as length}
-						<AccordionItem>
-							<svelte:fragment slot="summary">
-								<p>{length}</p>
-							</svelte:fragment>
-							<svelte:fragment slot="content">
-								{#each Object.values($meetings[day][length]) as meeting}
-									<p class="ml-6">{meeting.start} - {meeting.end}</p>
-								{/each}
-							</svelte:fragment>
-						</AccordionItem>
-					{/each}
-				</Accordion>
-			</svelte:fragment>
-		</AccordionItem>
-	{/each}
-</Accordion>
+	{#if $selectedPeople.size >= 2}
+		<Accordion>
+			{#each Object.keys($meetings) as day}
+				<AccordionItem on:click={scrollDown}>
+					<svelte:fragment slot="summary">
+						<h4>{day}</h4>
+					</svelte:fragment>
+					<svelte:fragment slot="content">
+						<Accordion>
+							{#each Object.keys($meetings[day]) as length}
+								<AccordionItem on:click={scrollDown}>
+									<svelte:fragment slot="summary">
+										<p>{length}</p>
+									</svelte:fragment>
+									<svelte:fragment slot="content">
+										{#each Object.values($meetings[day][length]) as meeting}
+											<p
+												class="ml-6 card card-hover !m-0 p-2"
+												on:mouseenter={() => ($hoveredMeeting = meeting)}
+												on:mouseleave={() => ($hoveredMeeting = null)}
+											>
+												{meeting.start.time} - {meeting.end.time}
+											</p>
+										{/each}
+									</svelte:fragment>
+								</AccordionItem>
+							{/each}
+						</Accordion>
+					</svelte:fragment>
+				</AccordionItem>
+			{/each}
+		</Accordion>
+		{#if Object.keys($meetings).length === 0}
+			<p class="card variant-filled-error p-4">No overlap</p>
+		{/if}
+	{:else}
+		<p class="card variant-filled-warning p-4">Select at least 2 participants</p>
+	{/if}
+</div>

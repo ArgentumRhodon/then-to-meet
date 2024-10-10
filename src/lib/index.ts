@@ -15,6 +15,7 @@ import info from './stores/info';
 import linkMemory from './stores/linkMemory';
 import resetMeetingStores from './stores/resetMeetingStores';
 import meetings from './stores/meetings';
+import hoveredMeeting from './stores/hoveredMeeting';
 
 export {
 	NoMeetingLoaded,
@@ -32,5 +33,6 @@ export {
 	info,
 	selectedPeople,
 	linkMemory,
-	meetings
+	meetings,
+	hoveredMeeting
 };

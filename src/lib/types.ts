@@ -19,8 +19,14 @@ interface Info {
 }
 
 interface MeetingData {
-	start: string;
-	end: string;
+	start: {
+		time: string;
+		slot: number;
+	}
+	end: {
+		time: string;
+		slot: number;
+	}
 }
 
 interface Meetings {

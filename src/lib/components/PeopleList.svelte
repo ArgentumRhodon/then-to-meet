@@ -49,6 +49,4 @@
 			</li>
 		{/each}
 	</ul>
-
-	<TimePrinter />
 </div>

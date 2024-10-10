@@ -10,7 +10,8 @@
 		linkMemory,
 		resetMeetingStores,
 		LinkMemory,
-		LinkForm
+		LinkForm,
+		TimePrinter
 	} from '$lib';
 	import PeopleList from '$lib/components/PeopleList.svelte';
 	import TimeTable from '$lib/components/TimeTable.svelte';
@@ -64,11 +65,14 @@
 	const loadLink = (link: string): void => {
 		meetingPromise = loadMeeting(link);
 	};
+
+	let scrollParent;
 </script>
 
 <div class="h-full lg:h-screen flex flex-col lg:flex-row">
 	<div
-		class="bg-surface-900 lg:w-96 min-w-[20rem] h-min lg:h-full p-4 shadow-2xl space-y-4 lg:overflow-y-scroll"
+		class="scroll-smooth bg-surface-900 lg:w-96 min-w-[20rem] h-min lg:h-full p-4 shadow-2xl space-y-4 lg:overflow-y-scroll"
+		bind:this={scrollParent}
 	>
 		<h1 class="text-2xl font-bold">ThenToMeet</h1>
 
@@ -85,7 +89,10 @@
 				{#await meetingPromise}
 					<ProgressRadial width="w-24" />
 				{:then res}
-					<PeopleList />
+					<div class="space-y-4">
+						<PeopleList />
+						<TimePrinter {scrollParent} />
+					</div>
 				{:catch error}
 					<ErrorCard {error} />
 				{/await}

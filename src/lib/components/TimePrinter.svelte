@@ -72,9 +72,21 @@
 		}
 	}
 
+	const handleTimeChange = (e: Event) => {
+		const input = event?.target as HTMLInputElement;
+		let inputValue: number = Number(input.value);
+		inputValue = Math.round(inputValue / 15) * 15;
+		if ((e.target as HTMLInputElement).name === 'min') {
+			$lengthRange.min = inputValue;
+		} else {
+			$lengthRange.max = inputValue;
+		}
+		input.value = String(inputValue);
+		scrollDown();
+	};
+
 	// Timeout to allow time for accordion animation...
 	const scrollDown = () => {
-		console.log(scrollParent.scrollHeight);
 		setTimeout(() => scrollParent.scrollTo(0, scrollParent.scrollHeight), 150);
 	};
 </script>
@@ -87,25 +99,25 @@
 				<span>Min Length (Minutes)</span>
 				<input
 					type="number"
-					name="link"
+					name="min"
 					class="input p-4"
 					step="15"
 					min="15"
 					max={$lengthRange.max}
-					bind:value={$lengthRange.min}
-					on:input={scrollDown}
+					value={$lengthRange.min}
+					on:change={handleTimeChange}
 				/>
 			</label>
 			<label class="flex-1">
 				<span>Max Length (Minutes)</span>
 				<input
 					type="number"
-					name="link"
+					name="max"
 					class="input p-4"
 					step="15"
 					min={$lengthRange.min}
-					bind:value={$lengthRange.max}
-					on:input={scrollDown}
+					value={$lengthRange.max}
+					on:change={handleTimeChange}
 				/>
 			</label>
 		</div>

@@ -5,7 +5,7 @@ import PeopleList from './components/PeopleList.svelte';
 import ErrorCard from './components/ErrorCard.svelte';
 import LinkMemory from './components/LinkMemory.svelte';
 import LinkForm from './components/LinkForm.svelte';
-import Question from './components/Question.svelte';
+import TimePrinter from './components/TimePrinter.svelte';
 import getPeople from './parsers/getPeople';
 import getSlots from './parsers/getSlots';
 import people from './stores/people';
@@ -14,6 +14,8 @@ import slots from './stores/slots';
 import info from './stores/info';
 import linkMemory from './stores/linkMemory';
 import resetMeetingStores from './stores/resetMeetingStores';
+import meetings from './stores/meetings';
+import hoveredMeeting from './stores/hoveredMeeting';
 
 export {
 	NoMeetingLoaded,
@@ -22,7 +24,7 @@ export {
 	TimeTable,
 	LinkMemory,
 	LinkForm,
-	Question,
+	TimePrinter,
 	getPeople,
 	getSlots,
 	resetMeetingStores,
@@ -30,5 +32,7 @@ export {
 	slots,
 	info,
 	selectedPeople,
-	linkMemory
+	linkMemory,
+	meetings,
+	hoveredMeeting
 };

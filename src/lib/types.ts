@@ -18,4 +18,21 @@ interface Info {
 	link: string;
 }
 
-export type { SlotData, Slots, Person, Info };
+interface MeetingData {
+	start: {
+		time: string;
+		slot: number;
+	}
+	end: {
+		time: string;
+		slot: number;
+	}
+}
+
+interface Meetings {
+	[day: string]: {
+		[length: string]: MeetingData[];
+	};
+}
+
+export type { SlotData, Slots, Person, Info, Meetings, MeetingData };

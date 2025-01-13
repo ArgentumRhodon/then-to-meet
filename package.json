@@ -34,7 +34,7 @@
   },
   "type": "module",
   "dependencies": {
-    "@floating-ui/dom": "^1.6.11",
+    "@floating-ui/dom": "^1.6.13",
     "luxon": "^3.5.0",
     "svelte-persisted-store": "^0.11.0"
   }

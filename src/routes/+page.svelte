@@ -71,7 +71,7 @@
 
 <div class="h-full lg:h-screen flex flex-col lg:flex-row">
 	<div
-		class="scroll-smooth bg-surface-900 lg:w-96 min-w-[20rem] h-min lg:h-full p-4 shadow-2xl space-y-4 lg:overflow-y-scroll"
+		class="scroll-smooth bg-surface-900 lg:w-72 min-w-[20rem] h-min lg:h-full p-4 shadow-2xl space-y-4 lg:overflow-y-scroll"
 		bind:this={scrollParent}
 	>
 		<h1 class="text-2xl font-bold">ThenToMeet</h1>

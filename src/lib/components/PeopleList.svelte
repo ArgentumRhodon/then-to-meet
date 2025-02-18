@@ -44,7 +44,7 @@
 					class:!variant-filled-secondary={$selectedPeople.has(person)}
 					on:click={() => togglePerson(person)}
 				>
-					{person.name}
+					{@html person.name}
 				</button>
 			</li>
 		{/each}

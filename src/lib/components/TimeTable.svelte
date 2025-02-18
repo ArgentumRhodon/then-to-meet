@@ -74,7 +74,7 @@
 			<span class="text-xl font-bold underline">Unavailable</span>
 			<ul>
 				{#each unavailablePeople as person}
-					<li><span>{person}</span></li>
+					<li><span>{@html person}</span></li>
 				{/each}
 			</ul>
 		</div>
@@ -87,7 +87,7 @@
 			<span class="text-xl font-bold underline">Available</span>
 			<ul>
 				{#each availablePeople as person}
-					<li><span>{person}</span></li>
+					<li><span>{@html person}</span></li>
 				{/each}
 			</ul>
 		</div>
@@ -95,7 +95,7 @@
 			<span class="text-xl font-bold underline">Unavailable</span>
 			<ul>
 				{#each unavailablePeople as person}
-					<li><span>{person}</span></li>
+					<li><span>{@html person}</span></li>
 				{/each}
 			</ul>
 		</div>

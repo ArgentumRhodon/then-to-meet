@@ -15,7 +15,7 @@
 		if ((match = meetingIDRegex.exec(inputLink)) !== null) {
 			try {
 				console.log(match[0]);
-				loadLink('?' + match[0]);
+				loadLink(match[0]);
 				goto(`/?${encodeURIComponent(match[0])}`);
 			} catch (e) {
 				throw new Error(

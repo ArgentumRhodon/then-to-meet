@@ -21,44 +21,41 @@
 	const targetScriptNum = 9;
 
 	const loadMeeting = async (link: string): Promise<void> => {
-		const meetingIDRegex: RegExp = /\?(\d+-\w+)/g;
-		let match;
-
-		if ((match = meetingIDRegex.exec(link)) !== null) {
-			try {
-				// Reset meeting stores
-				resetMeetingStores();
-
-				const meetingID = match[0];
-				const htmlRes = await fetch(`/api/w2m/${meetingID}`);
-				const html = await htmlRes.text();
-				// parse html response
-				const parser = new DOMParser();
-				const dom = parser.parseFromString(html, 'text/html');
-				const scriptContent = dom.scripts[targetScriptNum].innerHTML;
-				// update stores
-				$slots = getSlots(scriptContent);
-				$people = getPeople(scriptContent, $slots);
-				// Other info about the meeting
-				$info = {
-					title: dom.title.split(' - ')[0],
-					link
-				};
-				// If link hasn't been recorded, record it
-				linkMemory.update((arr) => {
-					if (arr.some((e) => e.title === $info.title)) {
-						return arr;
-					}
-
-					return [...arr, $info];
-				});
-			} catch (e) {
-				throw new Error(
-					'Failed to load link/ID. Ensure it is correct and check your network connection.'
-				);
-			}
-		} else {
+		if (!link) {
 			throw new Error('Bad link/ID.');
+		}
+
+		try {
+			// Reset meeting stores
+			resetMeetingStores();
+
+			const meetingID = link;
+			const htmlRes = await fetch(`/api/w2m/?${meetingID}`);
+			const html = await htmlRes.text();
+			// parse html response
+			const parser = new DOMParser();
+			const dom = parser.parseFromString(html, 'text/html');
+			const scriptContent = dom.scripts[targetScriptNum].innerHTML;
+			// update stores
+			$slots = getSlots(scriptContent);
+			$people = getPeople(scriptContent, $slots);
+			// Other info about the meeting
+			$info = {
+				title: dom.title.split(' - ')[0],
+				link
+			};
+			// If link hasn't been recorded, record it
+			linkMemory.update((arr) => {
+				if (arr.some((e) => e.title === $info.title)) {
+					return arr;
+				}
+
+				return [...arr, $info];
+			});
+		} catch (e) {
+			throw new Error(
+				'Failed to load link/ID. Ensure it is correct and check your network connection.'
+			);
 		}
 	};
 

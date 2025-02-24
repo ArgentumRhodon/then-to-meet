@@ -58,7 +58,7 @@
 				);
 			}
 		} else {
-			throw new Error('Bad link/ID.');
+			throw new Error('Bad link/ID. ');
 		}
 	};
 

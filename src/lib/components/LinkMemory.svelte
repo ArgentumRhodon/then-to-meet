@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { linkMemory } from '$lib';
+	import { goto } from '$app/navigation';
+	import { info, linkMemory } from '$lib';
 
 	export let loadLink: (link: string) => void;
 
@@ -8,8 +9,17 @@
 	const loadSelect = () => {
 		if (selectLink != '-1') {
 			loadLink(selectLink);
+			goto(`/?${encodeURIComponent(selectLink)}`);
 		}
 	};
+
+	info.subscribe((value) => {
+		if (!value) return;
+
+		if (selectLink !== value.link && value.link !== '') {
+			selectLink = value.link;
+		}
+	});
 </script>
 
 <select class="select p-4" name="linkMemory" id="" bind:value={selectLink} on:change={loadSelect}>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	// import { goto } from '$app/navigation';
 
 	export let loadLink: (link: string) => void;
 
@@ -14,7 +14,7 @@
 		if ((match = meetingIDRegex.exec(inputLink)) !== null) {
 			try {
 				loadLink(match[0]);
-				goto(`/?${encodeURIComponent(match[0])}`);
+				// goto(`/?${encodeURIComponent(match[0])}`);
 			} catch (e) {
 				throw new Error(
 					'Failed to load link/ID. Ensure it is correct and check your network connection.'

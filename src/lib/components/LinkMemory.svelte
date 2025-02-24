@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	// import { goto } from '$app/navigation';
 	import { linkMemory } from '$lib';
 	import { info } from '$lib';
 
@@ -10,7 +10,7 @@
 	const loadSelect = () => {
 		if (selectLink != '-1') {
 			loadLink(selectLink);
-			goto(`/?${encodeURIComponent(selectLink)}`);
+			// goto(`/?${encodeURIComponent(selectLink)}`);
 		}
 	};
 

@@ -71,6 +71,8 @@
 	let scrollParent;
 
 	onMount(() => {
+		if (!browser) return;
+
 		const search: string = page.url.search;
 
 		if (search) {

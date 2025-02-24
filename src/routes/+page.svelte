@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { page } from '$app/state';
 	import {
 		NoMeetingLoaded,
 		ErrorCard,
@@ -16,6 +17,7 @@
 	import PeopleList from '$lib/components/PeopleList.svelte';
 	import TimeTable from '$lib/components/TimeTable.svelte';
 	import { ProgressRadial } from '@skeletonlabs/skeleton';
+	import { onMount } from 'svelte';
 
 	let meetingPromise: Promise<void>;
 	const targetScriptNum = 9;
@@ -64,6 +66,15 @@
 	};
 
 	let scrollParent;
+
+	onMount(() => {
+		const search: string = page.url.search;
+
+		if (search) {
+			const meetingID = search.substring(1, search.length);
+			loadLink(meetingID);
+		}
+	});
 </script>
 
 <div class="h-full lg:h-screen flex flex-col lg:flex-row">

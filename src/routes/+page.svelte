@@ -64,14 +64,14 @@
 		meetingPromise = loadMeeting(link);
 	};
 
-	// onMount(() => {
-	// 	const search: string = page.url.search;
+	onMount(() => {
+		const search: string = page.url.search;
 
-	// 	if (search) {
-	// 		const meetingID = search.substring(1, search.length);
-	// 		loadLink(meetingID);
-	// 	}
-	// });
+		if (search) {
+			const meetingID = search.substring(1, search.length);
+			loadLink(meetingID);
+		}
+	});
 
 	let scrollParent;
 </script>
@@ -85,11 +85,11 @@
 
 		<hr />
 
-		<LinkForm {loadLink} />
+		<!-- <LinkForm {loadLink} />
 
 		{#if $linkMemory.length > 0}
 			<LinkMemory {loadLink} />
-		{/if}
+		{/if} -->
 
 		<div>
 			{#if meetingPromise !== undefined}

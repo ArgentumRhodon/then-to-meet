@@ -70,16 +70,14 @@
 
 	let scrollParent;
 
-	onMount(() => {
-		if (!browser) return;
+	// onMount(() => {
+	// 	const search: string = page.url.search;
 
-		const search: string = page.url.search;
-
-		if (search) {
-			const meetingID = search.substring(1, search.length);
-			loadLink(meetingID);
-		}
-	});
+	// 	if (search) {
+	// 		const meetingID = search.substring(1, search.length);
+	// 		loadLink(meetingID);
+	// 	}
+	// });
 </script>
 
 <div class="h-full lg:h-screen flex flex-col lg:flex-row">

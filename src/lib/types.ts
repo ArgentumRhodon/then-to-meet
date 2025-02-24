@@ -15,18 +15,18 @@ interface Person {
 
 interface Info {
 	title: string;
-	meetingID: string;
+	link: string;
 }
 
 interface MeetingData {
 	start: {
 		time: string;
 		slot: number;
-	};
+	}
 	end: {
 		time: string;
 		slot: number;
-	};
+	}
 }
 
 interface Meetings {

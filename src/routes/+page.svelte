@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { browser } from '$app/environment';
 	import { page } from '$app/state';
 	import {
 		NoMeetingLoaded,
@@ -23,6 +24,8 @@
 	const targetScriptNum = 9;
 
 	const loadMeeting = async (link: string): Promise<void> => {
+		if (!browser) return;
+
 		if (!link) {
 			throw new Error('Bad link/ID.');
 		}

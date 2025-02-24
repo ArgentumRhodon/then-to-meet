@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
-	import { page } from '$app/state';
+	// import { browser } from '$app/environment';
+	// import { page } from '$app/state';
 	import {
 		NoMeetingLoaded,
 		ErrorCard,
@@ -18,13 +18,13 @@
 	import PeopleList from '$lib/components/PeopleList.svelte';
 	import TimeTable from '$lib/components/TimeTable.svelte';
 	import { ProgressRadial } from '@skeletonlabs/skeleton';
-	import { onMount } from 'svelte';
+	// import { onMount } from 'svelte';
 
 	let meetingPromise: Promise<void>;
 	const targetScriptNum = 9;
 
 	const loadMeeting = async (link: string): Promise<void> => {
-		if (!browser) return;
+		// if (!browser) return;
 
 		if (!link) {
 			throw new Error('Bad link/ID.');

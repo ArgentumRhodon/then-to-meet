@@ -85,11 +85,11 @@
 
 		<hr />
 
-		<!-- <LinkForm {loadLink} />
+		<LinkForm {loadLink} />
 
 		{#if $linkMemory.length > 0}
 			<LinkMemory {loadLink} />
-		{/if} -->
+		{/if}
 
 		<div>
 			{#if meetingPromise !== undefined}

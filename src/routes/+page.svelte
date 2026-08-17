@@ -37,7 +37,6 @@
 			// parse html response
 			const parser = new DOMParser();
 			const dom = parser.parseFromString(html, 'text/html');
-			console.log(Array.from(dom.scripts).map((s) => s.innerHTML));
 			const scriptContent = dom.scripts[targetScriptNum].innerHTML;
 			// update stores
 			$slots = getSlots(scriptContent);

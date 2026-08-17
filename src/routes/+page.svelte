@@ -20,7 +20,7 @@
 	import { onMount } from 'svelte';
 
 	let meetingPromise: Promise<void>;
-	const targetScriptNum = 9;
+	const targetScriptNum = 5;
 
 	const loadMeeting = async (link: string): Promise<void> => {
 		if (!link) {
@@ -37,6 +37,7 @@
 			// parse html response
 			const parser = new DOMParser();
 			const dom = parser.parseFromString(html, 'text/html');
+			console.log(Array.from(dom.scripts).map((s) => s.innerHTML));
 			const scriptContent = dom.scripts[targetScriptNum].innerHTML;
 			// update stores
 			$slots = getSlots(scriptContent);

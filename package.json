@@ -33,6 +33,9 @@
     "vite-plugin-tailwind-purgecss": "0.3.3"
   },
   "type": "module",
+  "overrides": {
+    "esm-env": "^1.2.2"
+  },
   "dependencies": {
     "@floating-ui/dom": "^1.6.13",
     "luxon": "^3.5.0",

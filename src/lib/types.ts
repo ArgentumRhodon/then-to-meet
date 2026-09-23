@@ -1,38 +1,39 @@
-interface SlotData {
-	slot: number;
-	time: string;
-	available: number[];
-}
-
-interface Slots {
-	[day: string]: SlotData[];
-}
-
-interface Person {
+export interface Person {
 	id: number;
 	name: string;
 }
 
-interface Info {
+export interface Slot {
+	/** Unix seconds for the start of the slot. */
+	time: number;
+	/** IDs of the people available during this slot. */
+	available: number[];
+}
+
+export interface W2MEvent {
+	id: string;
 	title: string;
-	link: string;
+	/**
+	 * "Days of the week" events aren't tied to real dates. When2Meet stores them as
+	 * 1970s timestamps whose UTC wall-clock is the intended time, so they're always shown in UTC.
+	 */
+	weekly: boolean;
+	/** Length of one slot in seconds (15 minutes on When2Meet). */
+	slotSeconds: number;
+	/** Sorted by time. */
+	slots: Slot[];
+	/** Only people who marked at least one slot. */
+	people: Person[];
+	fetchedAt: number;
 }
 
-interface MeetingData {
-	start: {
-		time: string;
-		slot: number;
-	}
-	end: {
-		time: string;
-		slot: number;
-	}
-}
+export type Role = 'required' | 'optional' | 'skip';
 
-interface Meetings {
-	[day: string]: {
-		[length: string]: MeetingData[];
-	};
-}
+export type Roles = Record<number, Role>;
 
-export type { SlotData, Slots, Person, Info, Meetings, MeetingData };
+export interface PeopleGroup {
+	id: string;
+	name: string;
+	/** Person IDs, which are only stable within one poll, so groups belong to one event. */
+	members: number[];
+}

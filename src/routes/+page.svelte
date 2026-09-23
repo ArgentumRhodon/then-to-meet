@@ -1,119 +1,42 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import {
-		NoMeetingLoaded,
-		ErrorCard,
-		getPeople,
-		getSlots,
-		people,
-		slots,
-		info,
-		linkMemory,
-		resetMeetingStores,
-		LinkMemory,
-		LinkForm,
-		TimePrinter
-	} from '$lib';
-	import PeopleList from '$lib/components/PeopleList.svelte';
-	import TimeTable from '$lib/components/TimeTable.svelte';
-	import { ProgressRadial } from '@skeletonlabs/skeleton';
-	import { onMount } from 'svelte';
+	import { afterNavigate, replaceState } from '$app/navigation';
+	import { page } from '$app/state';
+	import Landing from '$lib/components/Landing.svelte';
+	import LoadingView from '$lib/components/LoadingView.svelte';
+	import Workspace from '$lib/components/Workspace.svelte';
+	import { readShareParams, shareSearch } from '$lib/share/url';
+	import { app } from '$lib/state/app.svelte';
 
-	let meetingPromise: Promise<void>;
-	const targetScriptNum = 5;
-
-	const loadMeeting = async (link: string): Promise<void> => {
-		if (!link) {
-			throw new Error('Bad link/ID.');
-		}
-
-		try {
-			// Reset meeting stores
-			resetMeetingStores();
-
-			const meetingID = link;
-			const htmlRes = await fetch(`/api/w2m/?${meetingID}`);
-			const html = await htmlRes.text();
-			// parse html response
-			const parser = new DOMParser();
-			const dom = parser.parseFromString(html, 'text/html');
-			const scriptContent = dom.scripts[targetScriptNum].innerHTML;
-			// update stores
-			$slots = getSlots(scriptContent);
-			$people = getPeople(scriptContent, $slots);
-			// Other info about the meeting
-			$info = {
-				title: dom.title.split(' - ')[0],
-				link
-			};
-			// If link hasn't been recorded, record it
-			linkMemory.update((arr) => {
-				if (arr.some((e) => e.title === $info.title)) {
-					return arr;
-				}
-
-				return [...arr, $info];
-			});
-		} catch (e) {
-			throw new Error(
-				'Failed to load link/ID. Ensure it is correct and check your network connection.'
-			);
-		}
-	};
-
-	const loadLink = (link: string): void => {
-		meetingPromise = loadMeeting(link);
-	};
-
-	let scrollParent;
-
-	onMount(() => {
-		const search: string = $page.url.search;
-
-		if (search) {
-			const meetingID = search.substring(1, search.length);
-			loadLink(meetingID);
+	// The URL is the source of truth for which event is open; everything else syncs back into it.
+	afterNavigate(({ to }) => {
+		const share = readShareParams(to?.url ?? page.url);
+		if (!share.id) {
+			app.reset();
+		} else if (share.id !== app.event?.id) {
+			app.load(share.id, share);
 		}
 	});
+
+	// Keep the address bar shareable and remember this event's setup.
+	$effect(() => {
+		if (!app.event || app.status !== 'ready') return;
+		const search = shareSearch(app.event.id, app.duration, app.effectiveRoles);
+		if (search !== page.url.search) replaceState(search, page.state);
+		app.persist();
+	});
+
+	const pendingId = $derived(readShareParams(page.url).id);
+	const title = $derived(app.event ? `${app.event.title} · ThenToMeet` : 'ThenToMeet');
 </script>
 
-<div class="h-full lg:h-screen flex flex-col lg:flex-row">
-	<div
-		class="scroll-smooth bg-surface-900 lg:w-72 min-w-[20rem] h-min lg:h-full p-4 shadow-2xl space-y-4 lg:overflow-y-scroll"
-		bind:this={scrollParent}
-	>
-		<h1 class="text-2xl font-bold">ThenToMeet</h1>
+<svelte:head>
+	<title>{title}</title>
+</svelte:head>
 
-		<hr />
-
-		<LinkForm {loadLink} />
-
-		{#if $linkMemory.length > 0}
-			<LinkMemory {loadLink} />
-		{/if}
-
-		<div>
-			{#if meetingPromise !== undefined}
-				{#await meetingPromise}
-					<ProgressRadial width="w-24" />
-				{:then res}
-					<div class="space-y-4">
-						<PeopleList />
-						<TimePrinter {scrollParent} />
-					</div>
-				{:catch error}
-					<ErrorCard {error} />
-				{/await}
-			{:else}
-				<NoMeetingLoaded />
-			{/if}
-		</div>
-	</div>
-	<div class="h-min flex-grow p-4 overflow-x-scroll">
-		{#if meetingPromise !== undefined}
-			{#await meetingPromise then res}
-				<TimeTable />
-			{/await}
-		{/if}
-	</div>
-</div>
+{#if app.event}
+	<Workspace />
+{:else if pendingId && app.status !== 'error'}
+	<LoadingView />
+{:else}
+	<Landing />
+{/if}

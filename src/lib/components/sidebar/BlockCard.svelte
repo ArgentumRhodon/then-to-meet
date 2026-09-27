@@ -6,28 +6,28 @@
 	import Link from '@lucide/svelte/icons/link';
 	import { page } from '$app/state';
 	import type { TimeBlock } from '$lib/analysis/bestTimes';
-	import { formatDay, formatDuration, formatTime, formatTimeRange } from '$lib/analysis/format';
+	import { formatDay, formatTime, formatTimeRange } from '$lib/analysis/format';
 	import { downloadIcs, googleCalendarUrl, meetingFor } from '$lib/share/calendar';
 	import { app } from '$lib/state/app.svelte';
 	import Avatar from '$lib/ui/Avatar.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
 	import { copyText } from '$lib/ui/toast.svelte';
 	import DayStrip from './DayStrip.svelte';
+	import MissingList from './MissingList.svelte';
 
 	let { block }: { block: TimeBlock } = $props();
+
+	const AVATARS = 5;
 
 	const event = $derived(app.event!);
 	const zone = $derived(app.grid!.zone);
 	const pinned = $derived(app.pinnedBlock?.id === block.id);
-	const minutes = $derived((block.end - block.start) / 60);
 	const names = $derived(new Map(event.people.map((p) => [p.id, p.name])));
 	const attendees = $derived(event.people.filter((p) => block.attendees.includes(p.id)));
-	const missing = $derived(
-		block.missing.map((id) => ({
-			id,
-			name: names.get(id) ?? '?',
-			optional: app.roleOf(id) === 'optional'
-		}))
+	const missingNames = $derived(
+		block.missing.map(
+			(id) => (names.get(id) ?? '?') + (app.roleOf(id) === 'optional' ? ' (optional)' : '')
+		)
 	);
 
 	// A long window fits the meeting at several start times; let the user pick one for export.
@@ -44,10 +44,6 @@
 	const end = $derived(start + app.duration * 60);
 	const meeting = $derived(meetingFor(event, start, end, app.zone));
 	const dayLabel = $derived(formatDay(block.start, zone, event.weekly));
-	const weeklyNote = $derived(
-		`Adds a weekly meeting starting ${formatDay(meeting.start, app.zone, false)}, ` +
-			`in ${app.zone.replaceAll('_', ' ')} time.`
-	);
 
 	const toggle = () => app.pinBlock(pinned ? null : block);
 
@@ -67,51 +63,39 @@
 	onpointerleave={() => (app.hoveredBlock = null)}
 >
 	<button
-		class="w-full px-3.5 py-3 text-left"
+		class="w-full px-3.5 py-2.5 text-left"
 		aria-expanded={pinned}
 		onclick={toggle}
 		onfocus={() => (app.hoveredBlock = block)}
 		onblur={() => (app.hoveredBlock = null)}
 	>
-		<span class="flex items-baseline justify-between gap-2">
+		<span class="flex items-center justify-between gap-2">
 			<span class="text-xs font-medium text-fg-2">{dayLabel}</span>
-			<span class="text-[11px] text-fg-3 tabular">{formatDuration(minutes)} window</span>
+			<ChevronDown
+				class="size-3.5 text-fg-3 transition-transform {pinned ? 'rotate-180' : ''}"
+				aria-hidden="true"
+			/>
 		</span>
-		<span class="mt-0.5 flex items-center justify-between gap-2">
+		<span class="mt-0.5 flex items-center justify-between gap-3">
 			<span class="text-[15px] font-semibold tracking-tight tabular">
 				{formatTimeRange(block.start, block.end, zone)}
 			</span>
-			<span
-				class="flex items-center gap-1 text-[11px] font-medium {pinned
-					? 'text-fg-2'
-					: 'text-accent-fg'}"
-			>
-				{#if !pinned}<CalendarPlus class="size-3.5" aria-hidden="true" />{/if}
-				<ChevronDown
-					class="size-3.5 transition-transform {pinned ? 'rotate-180' : ''}"
-					aria-hidden="true"
-				/>
-			</span>
-		</span>
-		<span class="mt-2 flex items-center gap-2">
-			<span class="flex -space-x-1.5">
-				{#each attendees.slice(0, 6) as person (person.id)}
-					<Avatar id={person.id} name={person.name} size={18} class="ring-2 ring-surface" />
-				{/each}
-			</span>
-			{#if attendees.length > 6}
-				<span class="text-[11px] text-fg-3">+{attendees.length - 6}</span>
-			{/if}
-			<span class="min-w-0 flex-1 truncate text-xs text-fg-3">
-				{#if missing.length}
-					Without {missing
-						.map((m) => m.name.split(' ')[0] + (m.optional ? ' (opt.)' : ''))
-						.join(', ')}
-				{:else}
-					All {attendees.length}
+			<span class="flex shrink-0 items-center gap-1">
+				<span class="flex -space-x-1.5">
+					{#each attendees.slice(0, AVATARS) as person (person.id)}
+						<Avatar id={person.id} name={person.name} size={18} class="ring-2 ring-surface" />
+					{/each}
+				</span>
+				{#if attendees.length > AVATARS}
+					<span class="text-[11px] text-fg-3 tabular">+{attendees.length - AVATARS}</span>
 				{/if}
 			</span>
 		</span>
+		{#if block.missing.length}
+			<span class="mt-1 block truncate text-xs text-fg-3">
+				Without {block.missing.map((id) => names.get(id)?.split(' ')[0]).join(', ')}
+			</span>
+		{/if}
 	</button>
 
 	{#if pinned}
@@ -119,19 +103,12 @@
 			{#if !layout.showHeatmap}
 				<DayStrip {block} />
 			{/if}
-			<p class="text-xs text-fg-2">
-				{missing.length ? 'Can make it' : 'Everyone can make it'}: {attendees
-					.map((p) => p.name)
-					.join(', ')}
-			</p>
-			{#if missing.length}
-				<p class="text-xs text-fg-2">
-					Can’t make it: {missing.map((m) => m.name + (m.optional ? ' (optional)' : '')).join(', ')}
-				</p>
+			{#if missingNames.length}
+				<MissingList names={missingNames} />
 			{/if}
 			{#if starts.length > 1}
 				<label class="flex items-center justify-between gap-2 text-xs text-fg-2">
-					Start the {formatDuration(app.duration)} meeting at
+					Start at
 					<select
 						class="h-7 rounded-md border border-line bg-surface px-2 text-xs text-fg tabular"
 						value={start}
@@ -144,11 +121,13 @@
 				</label>
 			{/if}
 			{#if event.weekly}
-				<p class="text-xs text-fg-3">{weeklyNote}</p>
+				<p class="text-xs text-fg-3">
+					Repeats weekly from {formatDay(meeting.start, app.zone, false)}
+				</p>
 			{/if}
-			<div class="flex flex-wrap gap-1.5">
+			<div class="flex items-center gap-1">
 				<a
-					class="btn btn-secondary btn-sm"
+					class="btn btn-secondary btn-sm mr-auto"
 					href={googleCalendarUrl(meeting)}
 					target="_blank"
 					rel="noopener noreferrer"
@@ -156,22 +135,30 @@
 					<CalendarPlus class="size-3.5" aria-hidden="true" />
 					Google Calendar
 				</a>
-				<button class="btn btn-secondary btn-sm" onclick={() => downloadIcs(meeting)}>
-					<Download class="size-3.5" aria-hidden="true" />
-					.ics
+				<button
+					class="btn btn-ghost btn-sm btn-icon"
+					onclick={() => downloadIcs(meeting)}
+					aria-label="Download .ics"
+					title="Download .ics for Apple Calendar, Outlook, and others"
+				>
+					<Download class="size-3.5" />
 				</button>
 				<button
-					class="btn btn-secondary btn-sm"
+					class="btn btn-ghost btn-sm btn-icon"
 					onclick={() =>
 						copyText(app.shareLink(page.url.origin, [{ start, end }]), 'Link to this time copied')}
-					title="Opens this event with this time highlighted"
+					aria-label="Copy link to this time"
+					title="Copy a link that opens this event with this time highlighted"
 				>
-					<Link class="size-3.5" aria-hidden="true" />
-					Link
+					<Link class="size-3.5" />
 				</button>
-				<button class="btn btn-secondary btn-sm" onclick={copy}>
-					<Copy class="size-3.5" aria-hidden="true" />
-					Copy
+				<button
+					class="btn btn-ghost btn-sm btn-icon"
+					onclick={copy}
+					aria-label="Copy as text"
+					title="Copy this time as text"
+				>
+					<Copy class="size-3.5" />
 				</button>
 			</div>
 		</div>

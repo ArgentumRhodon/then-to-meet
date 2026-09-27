@@ -61,7 +61,8 @@ export const readShareParams = (url: URL): ShareState => {
 
 	const state: ShareState = { id };
 	const duration = Number(params.get('d'));
-	if (Number.isFinite(duration) && duration > 0) state.duration = clampDuration(duration);
+	const hasDuration = Number.isFinite(duration) && duration > 0;
+	if (hasDuration) state.duration = clampDuration(duration);
 
 	// Full state links (from shareSearch) always carry `d`, so no opt/skip there means
 	// "everyone required". A bare `?e=` link falls back to the viewer's saved setup.
@@ -78,8 +79,9 @@ export const readShareParams = (url: URL): ShareState => {
 	const starts = idList(params.get('at')).slice(0, MAX_PICKS);
 	if (starts.length) {
 		const lengths = idList(params.get('len'));
+		// Picked times keep the length the link gave them, even one the length buttons don't offer.
 		state.picks = starts.map((start, i) => {
-			const len = Math.min(lengths[i] ?? state.duration ?? DEFAULT_DURATION, 24 * 60);
+			const len = Math.min(lengths[i] ?? (hasDuration ? duration : DEFAULT_DURATION), 24 * 60);
 			return { start, end: start + len * 60 };
 		});
 	}

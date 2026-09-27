@@ -100,9 +100,10 @@ describe('share URLs', () => {
 	});
 
 	it('clamps meeting lengths to what the app supports', () => {
-		expect(read('?e=123-abc&d=7').duration).toBe(15);
-		expect(read('?e=123-abc&d=50').duration).toBe(45);
-		expect(read('?e=123-abc&d=600').duration).toBe(480);
+		expect(read('?e=123-abc&d=7').duration).toBe(30);
+		expect(read('?e=123-abc&d=45').duration).toBe(60);
+		expect(read('?e=123-abc&d=100').duration).toBe(90);
+		expect(read('?e=123-abc&d=600').duration).toBe(180);
 		expect(read('?e=123-abc&d=abc').duration).toBeUndefined();
 		expect(read('?e=123-abc&d=-30').duration).toBeUndefined();
 	});

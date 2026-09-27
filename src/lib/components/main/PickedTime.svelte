@@ -147,18 +147,18 @@
 	<div class="mt-2.5 space-y-1.5">
 		<CalendarButtons {meetings} zone={app.zone}>
 			<button
-				class="btn btn-secondary btn-sm"
+				class="btn btn-ghost btn-sm btn-icon"
 				onclick={() =>
 					copyText(
 						app.shareLink(page.url.origin),
 						several ? 'Link to these times copied' : 'Link to this time copied'
 					)}
+				aria-label={several ? 'Copy link to these times' : 'Copy link to this time'}
 				title={several
-					? 'Opens this event with these times highlighted'
-					: 'Opens this event with this time highlighted'}
+					? 'Copy a link that opens this event with these times highlighted'
+					: 'Copy a link that opens this event with this time highlighted'}
 			>
-				<Link class="size-3.5" aria-hidden="true" />
-				Link
+				<Link class="size-3.5" />
 			</button>
 		</CalendarButtons>
 	</div>

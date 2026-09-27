@@ -3,7 +3,15 @@ import { describe, expect, it } from 'vitest';
 import type { Roles, W2MEvent } from '$lib/types';
 import { demoEventHtml } from '$lib/w2m/demo';
 import { parseEvent } from '$lib/w2m/parse';
-import { blockers, blockForSlots, findBestTimes, slotSpan, type TimeBlock } from './bestTimes';
+import {
+	blockers,
+	blockForSlots,
+	findBestTimes,
+	peopleFor,
+	slotSpan,
+	turnout,
+	type TimeBlock
+} from './bestTimes';
 import { buildGrid } from './grid';
 
 const ZONE = 'America/New_York';
@@ -187,6 +195,23 @@ describe('blockers', () => {
 		expect(near.length).toBeGreaterThan(0);
 		const counted = blockers(near);
 		expect(counted.reduce((n, b) => n + b.count, 0)).toBe(near.length);
+	});
+});
+
+describe('attendance filter', () => {
+	it('turns a share of people into a head count, rounding up', () => {
+		expect(peopleFor(2 / 3, 3)).toBe(2);
+		expect(peopleFor(2 / 3, 8)).toBe(6);
+		expect(peopleFor(0.75, 8)).toBe(6);
+		expect(peopleFor(6 / 7, 7)).toBe(6);
+		expect(peopleFor(0, 5)).toBe(1);
+		expect(peopleFor(1, 5)).toBe(5);
+		expect(peopleFor(0.5, 0)).toBe(0);
+	});
+
+	it('counts a set of meetings by its emptiest meeting', () => {
+		expect(turnout({ attendees: [1, 2, 3] })).toBe(3);
+		expect(turnout({ sessions: [{ attendees: [1, 2, 3] }, { attendees: [1, 2] }] })).toBe(2);
 	});
 });
 

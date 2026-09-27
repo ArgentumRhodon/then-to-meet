@@ -1,10 +1,13 @@
 import { browser } from '$app/environment';
 import {
 	blockForSlots,
+	DEFAULT_MIN_MATCH,
 	findBestTimes,
+	peopleFor,
 	roleOf,
 	slotAttendance,
 	slotSpan,
+	turnout,
 	type TimeBlock
 } from '$lib/analysis/bestTimes';
 import {
@@ -37,6 +40,8 @@ interface EventPrefs {
 	/** Everyone's times as of the last visit, to spot what changed since. */
 	seen?: Snapshot;
 	perWeek?: MeetingsPerWeek;
+	/** Share of people a best time needs, when it isn't the default. */
+	minMatch?: number;
 }
 
 export interface LoadOverrides {
@@ -79,6 +84,8 @@ class AppState {
 	duration = $state(DEFAULT_DURATION);
 	/** How many times a week to meet; two or three look for sets of matching times. */
 	perWeek = $state<MeetingsPerWeek>(1);
+	/** Share of people a best time needs; the list leaves out times fewer can make. */
+	minMatch = $state(DEFAULT_MIN_MATCH);
 	zone = $state(browser ? localZone() : 'UTC');
 
 	/** Slot under the pointer or keyboard focus in the heatmap. */
@@ -144,6 +151,8 @@ class AppState {
 			: null
 	);
 	attendance = $derived(this.event ? slotAttendance(this.event, this.effectiveRoles) : null);
+	/** How many people a best time needs, from `minMatch` and who's being counted. */
+	minPeople = $derived(peopleFor(this.minMatch, this.best?.considered ?? 0));
 	/** Who can make each picked time, recomputed as roles change. */
 	selectedBlocks = $derived.by(() => {
 		const { event, grid } = this;
@@ -198,6 +207,10 @@ class AppState {
 				: (overrides.group ?? null);
 			this.duration = clampDuration(overrides.duration ?? saved.duration ?? DEFAULT_DURATION);
 			this.perWeek = overrides.perWeek ?? saved.perWeek ?? 1;
+			this.minMatch =
+				typeof saved.minMatch === 'number' && saved.minMatch >= 0 && saved.minMatch <= 1
+					? saved.minMatch
+					: DEFAULT_MIN_MATCH;
 			this.zone = saved.zone ?? localZone();
 			this.clearHighlights();
 			// The demo is rebuilt for each week, so there's nothing meaningful to compare.
@@ -375,6 +388,13 @@ class AppState {
 		this.hoveredSet = null;
 	}
 
+	setMinMatch(share: number) {
+		this.minMatch = share;
+		// Let go of a pinned result the list no longer shows.
+		if (this.pinnedBlock && turnout(this.pinnedBlock) < this.minPeople) this.pinnedBlock = null;
+		if (this.pinnedSet && turnout(this.pinnedSet) < this.minPeople) this.pinnedSet = null;
+	}
+
 	setZone(zone: string) {
 		this.zone = zone;
 		// Blocks carry grid day indices, which shift with the timezone.
@@ -482,11 +502,12 @@ class AppState {
 			: '';
 	}
 
-	/** Saves this event's roles, group, duration, and timezone so they come back next visit. */
+	/** Saves this event's setup (roles, group, duration, and so on) so it comes back next visit. */
 	persist() {
 		if (!this.event) return;
 		const prefs: EventPrefs = { roles: this.roles, duration: this.duration };
 		if (this.perWeek > 1) prefs.perWeek = this.perWeek;
+		if (this.minMatch !== DEFAULT_MIN_MATCH) prefs.minMatch = this.minMatch;
 		if (this.zone !== localZone()) prefs.zone = this.zone;
 		if (this.group) prefs.group = this.group.id;
 		else if (this.sharedGroup) prefs.sharedGroup = this.sharedGroup;

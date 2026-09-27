@@ -1,11 +1,13 @@
 <script lang="ts">
-	import { blockers, type TimeBlock } from '$lib/analysis/bestTimes';
-	import { MIN_DURATION } from '$lib/analysis/duration';
+	import X from '@lucide/svelte/icons/x';
+	import { blockers, turnout, type TimeBlock } from '$lib/analysis/bestTimes';
+	import { DURATION_STEP, MIN_DURATION } from '$lib/analysis/duration';
 	import { formatDuration } from '$lib/analysis/format';
 	import type { MeetingSet, MeetingsPerWeek } from '$lib/analysis/meetingSets';
 	import { app } from '$lib/state/app.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
 	import PickedTime from '../main/PickedTime.svelte';
+	import AttendancePicker from './AttendancePicker.svelte';
 	import BlockCard from './BlockCard.svelte';
 	import DurationPicker from './DurationPicker.svelte';
 	import Section from './Section.svelte';
@@ -13,114 +15,68 @@
 
 	const LIMIT = 4;
 
-	type Sort = 'best' | 'earliest' | 'longest';
-	const SORTS: { value: Sort; label: string }[] = [
-		{ value: 'best', label: 'Best match' },
-		{ value: 'earliest', label: 'Earliest' },
-		{ value: 'longest', label: 'Longest' }
-	];
-
 	const PER_WEEK: { value: MeetingsPerWeek; label: string; phrase: string }[] = [
 		{ value: 1, label: 'Once', phrase: 'once a week' },
 		{ value: 2, label: 'Twice', phrase: 'twice a week' },
 		{ value: 3, label: '3 times', phrase: 'three times a week' }
 	];
 
-	let sort = $state<Sort>('best');
-	/** Grid day key to show, or '' for every day. */
-	let dayKey = $state('');
 	let expanded = $state<Record<string, boolean>>({});
 
-	const days = $derived(app.grid?.days ?? []);
 	/** Meeting two or three times a week lists sets of times instead of single ones. */
 	const sets = $derived(app.meetingSets);
 	const results = $derived(sets ?? app.best);
+	const considered = $derived(results?.considered ?? 0);
 	const phrase = $derived(PER_WEEK.find((p) => p.value === app.perWeek)!.phrase);
+
+	type Result = TimeBlock | MeetingSet;
 
 	interface Group {
 		key: string;
 		title: string;
-		hint: string;
-		items: (TimeBlock | MeetingSet)[];
+		items: Result[];
 	}
 
+	/** Every result, best group first, before the attendance cutoff. */
 	const groups = $derived.by(() => {
 		if (!results) return [];
 		const every = sets ? ', every time' : '';
-		const out: Group[] = [];
-		out.push({
-			key: 'everyone',
-			title:
-				results.requiredCount < results.considered
-					? `Everyone can make it${every}`
-					: `Everyone’s free${every}`,
-			hint: '',
-			items: results.everyone
-		});
-		if (results.requiredCount && results.requiredCount < results.considered) {
-			out.push({
-				key: 'required',
-				title: `All required people${every}`,
-				hint: sets ? 'Some optional people miss one.' : 'Some optional people can’t make it.',
-				items: results.required
-			});
-		}
-		const who = results.requiredCount ? 'one required person' : 'one person';
-		out.push({
-			key: 'near',
-			title: 'One person short',
-			hint: sets ? `Only ${who} misses any.` : `Missing ${who}.`,
-			items: results.near
-		});
-		// A tough poll still gets an answer: the options that fit the most people.
-		if (!results.everyone.length && !results.required.length && !results.near.length) {
-			out.push({
-				key: 'fewer',
-				title: 'Most people',
-				hint: 'Nothing fits everyone.',
-				items: results.fewer
-			});
-		}
-		return out.filter((g) => g.items.length);
-	});
-	const total = $derived(groups.reduce((n, g) => n + g.items.length, 0));
-
-	/** Days with at least one result, for the day filter (single meetings only). */
-	const dayOptions = $derived.by(() => {
-		if (sets) return [];
-		const counts = new Map<number, number>();
-		for (const group of groups) {
-			for (const block of group.items as TimeBlock[]) {
-				counts.set(block.day, (counts.get(block.day) ?? 0) + 1);
+		const out: Group[] = [
+			{
+				key: 'everyone',
+				title:
+					results.requiredCount < results.considered
+						? `Everyone can make it${every}`
+						: `Everyone’s free${every}`,
+				items: results.everyone
 			}
+		];
+		if (results.requiredCount && results.requiredCount < results.considered) {
+			out.push({ key: 'required', title: `All required people${every}`, items: results.required });
 		}
-		return [...counts]
-			.sort((a, b) => a[0] - b[0])
-			.map(([d, count]) => ({
-				key: days[d].key,
-				label: days[d].date ? `${days[d].weekday}, ${days[d].date}` : days[d].weekday,
-				count
-			}));
+		out.push({ key: 'near', title: 'One person short', items: results.near });
+		out.push({ key: 'fewer', title: '', items: results.fewer });
+		return out;
 	});
-	// Fall back to every day if the chosen one no longer has results.
-	const activeDay = $derived(dayOptions.some((o) => o.key === dayKey) ? dayKey : '');
 
 	const shown = $derived(
 		groups
 			.map((group) => {
-				if (sets) return group;
-				let blocks = group.items as TimeBlock[];
-				if (activeDay) blocks = blocks.filter((b) => days[b.day].key === activeDay);
-				if (sort === 'earliest') blocks = [...blocks].sort((a, b) => a.start - b.start);
-				if (sort === 'longest') {
-					blocks = [...blocks].sort(
-						(a, b) => b.end - b.start - (a.end - a.start) || a.start - b.start
-					);
-				}
-				return { ...group, items: blocks };
+				const items = group.items.filter((item) => turnout(item) >= app.minPeople);
+				// Two or more short: "most people" while that's over half, which a low cutoff can undo.
+				const title =
+					group.title ||
+					(items.every((item) => turnout(item) * 2 > considered) ? 'Most people' : 'Some people');
+				return { ...group, title, items };
 			})
 			.filter((group) => group.items.length)
 	);
+	const total = $derived(shown.reduce((n, g) => n + g.items.length, 0));
+	/** The most people any result gets, to offer when the cutoff hides everything. */
+	const mostPeople = $derived(
+		groups.reduce((most, g) => g.items.reduce((m, item) => Math.max(m, turnout(item)), most), 0)
+	);
+	const percentOf = (people: number) => Math.round((people / considered) * 100);
 
 	const names = $derived(new Map((app.event?.people ?? []).map((p) => [p.id, p.name])));
 	/** With no one required, a near miss is one optional person short; skipping them fixes it. */
@@ -129,12 +85,8 @@
 			? { role: 'optional' as const, label: 'Make optional' }
 			: { role: 'skip' as const, label: 'Skip' }
 	);
-	/** People who are the only one missing from at least two of the listed near misses. */
-	const topBlockers = (items: Group['items']) =>
-		blockers(items)
-			.filter((b) => b.count >= 2)
-			.slice(0, 3);
-	const anythingPinned = $derived(!!app.pinnedBlock || !!app.pinnedSet);
+	/** The person most often the only one missing, when that's two or more near misses. */
+	const topBlocker = (items: Result[]) => blockers(items).find((b) => b.count >= 2);
 </script>
 
 <Section title="Best times" count={total}>
@@ -144,7 +96,7 @@
 			<PickedTime />
 		{/if}
 
-		<div class="space-y-2.5">
+		<div class="space-y-3">
 			<DurationPicker />
 			<div class="flex items-center gap-2">
 				<span id="per-week-label" class="text-[13px] text-fg-2">Meetings a week</span>
@@ -167,133 +119,88 @@
 					{/each}
 				</div>
 			</div>
-			{#if sets}
-				<p class="text-xs text-fg-3">
-					About the same time each day, with a day off between, like Mon/Wed/Fri or Tue/Thu.
-				</p>
+			{#if considered > 1}
+				<AttendancePicker {considered} />
 			{/if}
 		</div>
 
 		{#if app.viewLabel}
-			<div class="flex items-center gap-2 rounded-lg bg-accent-soft/60 py-1.5 pr-1.5 pl-3 text-xs">
-				<span class="min-w-0 flex-1 truncate text-accent-fg">
-					Times for <strong class="font-semibold">{app.viewLabel}</strong> only
-				</span>
-				<button class="btn btn-ghost btn-sm" onclick={() => app.showEveryone()}>
-					Show everyone
-				</button>
-			</div>
+			<button
+				class="inline-flex h-7 max-w-full items-center gap-1 rounded-lg bg-accent-soft pr-2 pl-2.5 text-xs font-medium text-accent-fg"
+				onclick={() => app.showEveryone()}
+				title="Show times for everyone"
+			>
+				<span class="truncate">{app.viewLabel} only</span>
+				<X class="size-3.5 shrink-0" aria-hidden="true" />
+			</button>
 		{/if}
 
-		{#if results && results.considered === 0}
-			<p class="rounded-lg bg-subtle px-3 py-3 text-[13px] text-fg-2">
+		{#if results && considered === 0}
+			<p class="text-[13px] text-fg-2">
 				Everyone is skipped. Mark someone as required or optional to find times.
 			</p>
 		{:else if results && total === 0}
-			<div class="rounded-lg bg-subtle px-3 py-3 text-[13px] text-fg-2">
+			{@const shorter = Math.max(
+				MIN_DURATION,
+				Math.floor(app.duration / 2 / DURATION_STEP) * DURATION_STEP
+			)}
+			<div class="rounded-lg bg-subtle px-3 py-3 text-[13px]">
 				<p class="font-medium text-fg">
-					Nothing fits a {formatDuration(app.duration)} meeting{sets ? ` ${phrase}` : ''}
-				</p>
-				<p class="mt-1">
-					{#if sets}
-						Try a shorter meeting, meeting less often, or marking someone as optional.
-					{:else if results.requiredCount > 0}
-						Try a shorter meeting, or mark someone as optional.
+					{#if mostPeople}
+						No times with {percentOf(app.minPeople)}%+ attendance
 					{:else}
-						No one is required, so try a shorter meeting or skip someone who can’t make it.
+						Nothing fits a {formatDuration(app.duration)} meeting{sets ? ` ${phrase}` : ''}
 					{/if}
 				</p>
-				<div class="mt-2.5 flex flex-wrap gap-1.5">
-					{#if app.duration > MIN_DURATION}
-						<button
-							class="btn btn-secondary btn-sm"
-							onclick={() => app.setDuration(app.duration / 2)}
-						>
-							Try {formatDuration(Math.max(MIN_DURATION, Math.round(app.duration / 2 / 15) * 15))}
-						</button>
-					{/if}
-					{#if app.perWeek > 1}
-						{@const fewer = PER_WEEK[app.perWeek - 2]}
-						<button class="btn btn-secondary btn-sm" onclick={() => app.setPerWeek(fewer.value)}>
-							Try {fewer.phrase}
-						</button>
-					{/if}
-				</div>
-			</div>
-		{/if}
-
-		{#if total > 1 && !sets}
-			<div class="flex gap-2">
-				<label class="min-w-0 flex-1">
-					<span class="sr-only">Show day</span>
-					<select
-						class="h-8 w-full rounded-lg border border-line bg-surface px-2 text-[13px] text-fg"
-						bind:value={dayKey}
-					>
-						<option value="">All days ({total})</option>
-						{#each dayOptions as option (option.key)}
-							<option value={option.key}>{option.label} ({option.count})</option>
-						{/each}
-					</select>
-				</label>
-				<label>
-					<span class="sr-only">Sort by</span>
-					<select
-						class="h-8 rounded-lg border border-line bg-surface px-2 text-[13px] text-fg"
-						bind:value={sort}
-					>
-						{#each SORTS as option (option.value)}
-							<option value={option.value}>{option.label}</option>
-						{/each}
-					</select>
-				</label>
-			</div>
-		{/if}
-
-		{#if total && !anythingPinned}
-			<p class="text-xs text-fg-3">
-				{#if sets}
-					{layout.showHeatmap
-						? 'Click an option to see its meetings on the grid and add them to your calendar.'
-						: 'Tap an option to see who can make each meeting and add them to your calendar.'}
+				{#if mostPeople || app.duration > MIN_DURATION || app.perWeek > 1}
+					<div class="mt-2.5 flex flex-wrap gap-1.5">
+						{#if mostPeople}
+							<button
+								class="btn btn-secondary btn-sm"
+								onclick={() => app.setMinMatch(mostPeople / considered)}
+							>
+								Lower to {percentOf(mostPeople)}%
+							</button>
+						{/if}
+						{#if app.duration > MIN_DURATION}
+							<button class="btn btn-secondary btn-sm" onclick={() => app.setDuration(shorter)}>
+								Try {formatDuration(shorter)}
+							</button>
+						{/if}
+						{#if app.perWeek > 1}
+							{@const fewer = PER_WEEK[app.perWeek - 2]}
+							<button class="btn btn-secondary btn-sm" onclick={() => app.setPerWeek(fewer.value)}>
+								Try {fewer.phrase}
+							</button>
+						{/if}
+					</div>
 				{:else}
-					{layout.showHeatmap
-						? 'Click a time to see it on the grid and add it to Google Calendar.'
-						: 'Tap a time to see who can make it and add it to Google Calendar.'}
+					<p class="mt-1 text-fg-2">Try marking someone as optional.</p>
 				{/if}
-			</p>
+			</div>
 		{/if}
 
 		{#each shown as group (group.key)}
 			{@const open = expanded[group.key]}
+			{@const blocker = group.key === 'near' ? topBlocker(group.items) : undefined}
 			<div>
-				<div class="mb-2 flex items-baseline justify-between gap-2">
-					<h3 class="text-xs font-semibold text-fg">
-						{group.title}
-						<span class="ml-1 font-normal text-fg-3 tabular">{group.items.length}</span>
-					</h3>
-					{#if group.hint}<span class="truncate text-[11px] text-fg-3">{group.hint}</span>{/if}
-				</div>
-				{#if group.key === 'near'}
-					{@const blocking = topBlockers(group.items)}
-					{#if blocking.length}
-						<ul class="mb-2 space-y-0.5 rounded-lg bg-subtle py-1 pr-1 pl-3 text-xs text-fg-2">
-							{#each blocking as { id, count } (id)}
-								<li class="flex items-center gap-2">
-									<span class="min-w-0 flex-1">
-										<strong class="font-medium text-fg">{names.get(id)}</strong> is the only one
-										missing from <span class="tabular">{count}</span> of these
-									</span>
-									<button
-										class="btn btn-ghost btn-sm"
-										onclick={() => app.setRole(id, unblock.role)}
-									>
-										{unblock.label}
-									</button>
-								</li>
-							{/each}
-						</ul>
-					{/if}
+				<h3 class="mb-2 text-xs font-semibold text-fg">
+					{group.title}
+					<span class="ml-1 font-normal text-fg-3 tabular">{group.items.length}</span>
+				</h3>
+				{#if blocker}
+					<div class="mb-2 flex items-center gap-2 text-xs text-fg-2">
+						<span class="min-w-0 flex-1 truncate">
+							<strong class="font-medium text-fg">{names.get(blocker.id)}</strong>
+							is the one missing from <span class="tabular">{blocker.count}</span>
+						</span>
+						<button
+							class="btn btn-ghost btn-sm -my-1"
+							onclick={() => app.setRole(blocker.id, unblock.role)}
+						>
+							{unblock.label}
+						</button>
+					</div>
 				{/if}
 				<ul class="space-y-2">
 					{#each open ? group.items : group.items.slice(0, LIMIT) as item (item.id)}

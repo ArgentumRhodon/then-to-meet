@@ -6,7 +6,7 @@ A modern web application that helps groups find optimal meeting times by analyzi
 
 Paste a When2Meet link and ThenToMeet turns the poll into answers:
 
-- Ranks every time window that fits your meeting length, grouped into "everyone's free", "all required people", and "one person short"
+- Ranks every time window that fits your meeting length (half an hour to three hours), grouped into "everyone's free", "all required people", "one person short", and "fewer people", with an attendance slider to hide weaker matches
 - Plans meetings two or three times a week, at about the same time with a day off between (like Mon/Wed/Fri or Tue/Thu)
 - Lets you mark each person as required, optional, or skipped, one at a time or in bulk, and points out who's blocking the most near misses
 - Saves groups of people for each event, so a team is one click away
@@ -44,7 +44,7 @@ src/
 ## Key Features
 
 1. **When2Meet Integration** - Accepts full links or bare IDs, including v1 `/?<id>` links
-2. **Best Times** - Finds maximal windows for any meeting length, with near misses, a "most people" fallback when nothing fits everyone, and day and sort filters
+2. **Best Times** - Finds maximal windows for meetings of 30 minutes to 3 hours, with near misses and an attendance cutoff: a slider with a stop per person, starting at three-quarters, that hides anything fewer people can make (for a set of meetings, its emptiest one). When the cutoff hides everything, one click lowers it to the best there is
 3. **Meetings a Week** - Once, twice, or three times: sets of meetings on days with at least one day between them (counting the wrap into next week) that start within half an hour of each other, ranked by the worst meeting first. Each set highlights all its meetings on the grid, lets every meeting start later together when that keeps the same people, and exports meetings at the same time as one repeating calendar event (others get their own), each described with the full schedule and who can make which meeting
 4. **Required and Optional People** - Rankings respect who has to be there; skipped people are ignored. When the same person is the only one missing from several near misses, best times says so, with a one-click fix
 5. **Groups and Bulk Selection** - Check people (or click their names; shift-click for ranges) to see just their overlap right away, set roles together, or save them as a group; picking a group instantly shows the overlap for just its members

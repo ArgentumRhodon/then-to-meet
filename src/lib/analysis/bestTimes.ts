@@ -246,6 +246,27 @@ export const blockers = (
 	return [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
 };
 
+/**
+ * How many people a result is sure of: everyone who can make a single time, or for a set of
+ * meetings a week, the emptiest meeting.
+ */
+export const turnout = (
+	result: Pick<TimeBlock, 'attendees'> | { sessions: Pick<TimeBlock, 'attendees'>[] }
+): number =>
+	'sessions' in result
+		? Math.min(...result.sessions.map((s) => s.attendees.length))
+		: result.attendees.length;
+
+/**
+ * Best times starts out listing times at least three-quarters of people can make, which for most
+ * polls is everyone or one person short.
+ */
+export const DEFAULT_MIN_MATCH = 0.75;
+
+/** How many of `considered` people a share of them comes to, rounding up, and at least one. */
+export const peopleFor = (share: number, considered: number): number =>
+	Math.min(considered, Math.max(1, Math.ceil(share * considered - 1e-9)));
+
 /** Everyone considered who is free during a single slot. */
 export const slotAttendance = (event: W2MEvent, roles: Roles) => {
 	const considered = event.people.filter((p) => roleOf(roles, p.id) !== 'skip');

@@ -8,7 +8,10 @@ export const dismissable =
 			if (!node.contains(e.target as Node)) onDismiss();
 		};
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === 'Escape') onDismiss();
+			if (e.key !== 'Escape') return;
+			// Marks the key as used, so page-level Escape handlers leave their state alone.
+			e.preventDefault();
+			onDismiss();
 		};
 		document.addEventListener('pointerdown', onPointer, true);
 		document.addEventListener('keydown', onKey);

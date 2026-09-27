@@ -31,6 +31,32 @@ export const formatDay = (seconds: number, zone: string, weekly: boolean): strin
 		weekly ? { weekday: 'long' } : { weekday: 'short', month: 'short', day: 'numeric' }
 	);
 
+/** "Mon" */
+export const formatWeekday = (seconds: number, zone: string): string =>
+	DateTime.fromSeconds(seconds, { zone }).toLocaleString({ weekday: 'short' });
+
+/** "Mon, Wed, and Fri" */
+export const formatList = (items: string[]): string =>
+	new Intl.ListFormat(undefined, { style: 'long', type: 'conjunction' }).format(items);
+
+/**
+ * A set of meetings a week: the days ("Mon, Wed, and Fri") and the times, which read as one range
+ * when every meeting starts at the same time ("2:00 – 3:00 PM"), or each day's start otherwise
+ * ("Mon 2:00 PM, Wed 2:30 PM").
+ */
+export const formatMeetingSet = (
+	starts: number[],
+	minutes: number,
+	zone: string
+): { days: string; times: string } => {
+	const days = formatList(starts.map((t) => formatWeekday(t, zone)));
+	const sameTime = starts.every((t) => formatTime(t, zone) === formatTime(starts[0], zone));
+	const times = sameTime
+		? formatTimeRange(starts[0], starts[0] + minutes * 60, zone)
+		: starts.map((t) => `${formatWeekday(t, zone)} ${formatTime(t, zone)}`).join(', ');
+	return { days, times };
+};
+
 /** Row label for a minute of the day: "9 AM", or "9:30 AM" off the hour. */
 export const formatMinuteOfDay = (minute: number): string => {
 	const dt = DateTime.fromObject({ hour: Math.floor(minute / 60), minute: minute % 60 });

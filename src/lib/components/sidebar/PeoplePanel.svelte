@@ -1,12 +1,18 @@
 <script lang="ts">
 	import Eye from '@lucide/svelte/icons/eye';
+	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import Search from '@lucide/svelte/icons/search';
+	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import X from '@lucide/svelte/icons/x';
 	import { formatDuration } from '$lib/analysis/format';
+	import { splitSignIns } from '$lib/analysis/signIns';
+	import { buildReminder } from '$lib/share/reminder';
 	import { app } from '$lib/state/app.svelte';
 	import { groups, membersIn } from '$lib/state/groups.svelte';
 	import type { Role } from '$lib/types';
 	import Avatar from '$lib/ui/Avatar.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
+	import { copyText } from '$lib/ui/toast.svelte';
 	import GroupBar from './GroupBar.svelte';
 	import GroupEditor from './GroupEditor.svelte';
 	import Section from './Section.svelte';
@@ -56,8 +62,26 @@
 		return c;
 	});
 	const customized = $derived(people.some((p) => app.roleOf(p.id) !== 'required'));
+
+	const names = $derived(new Map(people.map((p) => [p.id, p.name])));
+	const added = $derived(new Set(app.changes.added));
+	const updated = $derived(new Set(app.changes.updated));
+	/** "Mei, Diego, and 2 others" */
+	const nameList = (ids: number[]) => {
+		const shown = ids.slice(0, ids.length > 3 ? 2 : 3).map((id) => names.get(id) ?? 'Someone');
+		const rest = ids.length - shown.length;
+		if (rest) shown.push(`${rest} other${rest === 1 ? '' : 's'}`);
+		return shown.length > 1
+			? `${shown.slice(0, -1).join(', ')}${shown.length > 2 ? ',' : ''} and ${shown.at(-1)}`
+			: shown[0];
+	};
+	const newCount = $derived(added.size + updated.size);
+	/** Who still needs to respond, minus empty sign-ins that look like someone who did. */
+	const signIns = $derived(splitSignIns(app.event?.noTimes ?? [], people));
+
 	const summary = $derived(
 		[
+			newCount && `${newCount} new`,
 			counts.required && `${counts.required} required`,
 			counts.optional && `${counts.optional} optional`,
 			counts.skip && `${counts.skip} skipped`,
@@ -96,12 +120,39 @@
 		{/if}
 	{/snippet}
 
+	{#if newCount}
+		<div
+			class="mx-3 mb-2 flex items-start gap-2 rounded-lg bg-accent-soft/60 py-2 pr-1.5 pl-3 text-xs text-accent-fg"
+			role="status"
+		>
+			<Sparkles class="mt-px size-3.5 shrink-0" aria-hidden="true" />
+			<p class="min-w-0 flex-1">
+				Since your last visit:
+				{#if added.size}
+					<strong class="font-semibold">{nameList(app.changes.added)}</strong>
+					responded{updated.size ? ';' : '.'}
+				{/if}
+				{#if updated.size}
+					<strong class="font-semibold">{nameList(app.changes.updated)}</strong>
+					changed their times.
+				{/if}
+			</p>
+			<button
+				class="-my-0.5 rounded p-0.5 hover:bg-accent/10"
+				onclick={() => app.dismissChanges()}
+				aria-label="Dismiss"
+			>
+				<X class="size-3.5" />
+			</button>
+		</div>
+	{/if}
+
 	<div class="px-4 text-xs">
 		<p class="text-fg-2">{summary}</p>
 		{#if !customized && !groups.items.length}
 			<p class="mt-0.5 text-fg-3">
 				{layout.showHeatmap
-					? 'Tap a role to change it. Hover a name to see just their times.'
+					? 'Tap a role to change it. Hover a name to preview their times, or use the eye to keep them on the grid.'
 					: 'Tap a role to change it, or tap names to change several at once.'}
 			</p>
 		{/if}
@@ -164,10 +215,10 @@
 			{@const selected = app.selected.has(person.id)}
 			{@const free = freeMinutes.get(person.id) ?? 0}
 			<li
-				class="group flex items-center gap-2.5 rounded-lg px-2 py-1.5 transition-colors {selected
-					? 'bg-accent-soft/50'
-					: pinned
-						? 'bg-subtle'
+				class="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {pinned
+					? 'bg-accent-soft/40 ring-1 ring-accent/60 ring-inset'
+					: selected
+						? 'bg-accent-soft/50'
 						: 'hover:bg-subtle'}"
 				onpointerenter={() => (app.hoveredPerson = person.id)}
 			>
@@ -178,24 +229,15 @@
 					onclick={(e) => check(e, index)}
 					aria-label="Select {person.name}"
 				/>
+				<!-- The name selects the person, like the checkbox. Showing only their times on the grid
+				     is the eye button's job, so a stray click never changes what the heatmap means. -->
 				<button
-					class="flex min-w-0 flex-1 items-center gap-2.5 text-left {role === 'skip'
+					class="ml-0.5 flex min-w-0 flex-1 items-center gap-2.5 text-left {role === 'skip'
 						? 'opacity-55'
 						: ''}"
-					aria-pressed={layout.showHeatmap ? pinned : selected}
-					title={layout.showHeatmap
-						? pinned
-							? 'Stop spotlighting'
-							: `Show only ${person.name}’s availability`
-						: undefined}
-					tabindex={layout.showHeatmap ? 0 : -1}
-					onclick={() => {
-						// With no grid to spotlight on, a tap on the name selects the person instead.
-						if (layout.showHeatmap) app.pinnedPerson = pinned ? null : person.id;
-						else app.toggleSelected(person.id);
-					}}
-					onfocus={() => (app.hoveredPerson = person.id)}
-					onblur={() => (app.hoveredPerson = null)}
+					aria-pressed={selected}
+					tabindex={-1}
+					onclick={(e) => check(e, index)}
 				>
 					<Avatar id={person.id} name={person.name} />
 					<span class="min-w-0 flex-1">
@@ -205,7 +247,17 @@
 							>
 								{person.name}
 							</span>
-							{#if pinned}<Eye class="size-3.5 shrink-0 text-accent-fg" aria-hidden="true" />{/if}
+							{#if added.has(person.id)}
+								<span
+									class="shrink-0 rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent-fg"
+									>New</span
+								>
+							{:else if updated.has(person.id)}
+								<span
+									class="shrink-0 rounded-full bg-warn-soft px-1.5 text-[10px] font-semibold text-warn"
+									>Updated</span
+								>
+							{/if}
 						</span>
 						<span class="mt-1 flex items-center gap-2">
 							<span class="h-1 w-12 overflow-hidden rounded-full bg-line">
@@ -218,6 +270,23 @@
 						</span>
 					</span>
 				</button>
+				{#if layout.showHeatmap}
+					<button
+						class="btn btn-sm btn-icon shrink-0 {pinned
+							? 'bg-accent text-on-accent hover:bg-accent-hover'
+							: 'btn-ghost pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100'}"
+						aria-pressed={pinned}
+						aria-label={pinned
+							? `Stop showing only ${person.name}’s times`
+							: `Show only ${person.name}’s times on the grid`}
+						title={pinned ? 'Show everyone again' : `Show only ${person.name}’s times`}
+						onclick={() => (app.pinnedPerson = pinned ? null : person.id)}
+						onfocus={() => (app.hoveredPerson = person.id)}
+						onblur={() => (app.hoveredPerson = null)}
+					>
+						<Eye class="size-3.5" aria-hidden="true" />
+					</button>
+				{/if}
 				<button
 					class="h-6 shrink-0 rounded-full border px-2.5 text-[11px] font-medium transition-colors hover:border-line-strong {CHIP[
 						role
@@ -243,4 +312,43 @@
 			</li>
 		{/each}
 	</ul>
+
+	{#if signIns.waiting.length || signIns.extras.length}
+		<div class="mx-4 mb-4 space-y-1.5 rounded-lg bg-subtle py-2 pr-1.5 pl-3 text-xs">
+			{#if signIns.waiting.length}
+				<div class="flex items-start gap-2">
+					<p class="min-w-0 flex-1 text-fg-3">
+						<span class="font-medium text-fg-2">Signed in without marking times:</span>
+						{signIns.waiting.map((p) => p.name).join(', ')}
+					</p>
+					<button
+						class="btn btn-secondary btn-sm shrink-0"
+						onclick={() => copyText(buildReminder(app.event!, signIns.waiting), 'Reminder copied')}
+						title="Copy a message asking them to add their times"
+					>
+						<MessageSquare class="size-3.5" aria-hidden="true" />
+						Copy reminder
+					</button>
+				</div>
+			{/if}
+			{#if signIns.extras.length}
+				<!-- Left out of the list and the reminder, but shown on request in case a match is wrong. -->
+				<details class="text-fg-3">
+					<summary class="cursor-pointer py-0.5 select-none hover:text-fg-2">
+						{signIns.extras.length} extra sign-in{signIns.extras.length === 1 ? '' : 's'} left out
+					</summary>
+					<p class="mt-1 mb-0.5 text-fg-3">
+						These signed in without marking times, but look like someone who did:
+					</p>
+					<ul class="space-y-0.5">
+						{#each signIns.extras as { person, like } (person.id)}
+							<li>
+								<span class="text-fg-2">{person.name}</span> → {like.name}
+							</li>
+						{/each}
+					</ul>
+				</details>
+			{/if}
+		</div>
+	{/if}
 </Section>

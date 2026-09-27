@@ -1,0 +1,23 @@
+# Reads a real When2Meet poll every day, so a change on When2Meet's end fails here (and emails
+# you) before users run into it. Set the W2M_LIVE_EVENT repository variable to the ID of a poll
+# you own with at least one response, like 12345678-AbCdE.
+name: When2Meet check
+
+on:
+  schedule:
+    - cron: '23 13 * * *'
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:live
+        env:
+          W2M_LIVE_EVENT: ${{ vars.W2M_LIVE_EVENT || '38870872-X4Rvz' }}

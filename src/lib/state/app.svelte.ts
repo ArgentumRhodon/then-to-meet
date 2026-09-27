@@ -1,8 +1,27 @@
 import { browser } from '$app/environment';
-import { findBestTimes, roleOf, slotAttendance, type TimeBlock } from '$lib/analysis/bestTimes';
+import {
+	blockForSlots,
+	findBestTimes,
+	roleOf,
+	slotAttendance,
+	slotSpan,
+	type TimeBlock
+} from '$lib/analysis/bestTimes';
+import {
+	changesSince,
+	mergeChanges,
+	NO_CHANGES,
+	snapshot,
+	type Changes,
+	type Snapshot
+} from '$lib/analysis/changes';
+import { clampDuration, DEFAULT_DURATION } from '$lib/analysis/duration';
 import { buildGrid } from '$lib/analysis/grid';
+import { findMeetingSets, type MeetingSet, type MeetingsPerWeek } from '$lib/analysis/meetingSets';
 import { sameRoles, withGroup } from '$lib/analysis/roles';
-import type { Role, Roles, W2MEvent } from '$lib/types';
+import { shareSearch } from '$lib/share/url';
+import type { Role, Roles, TimeRange, W2MEvent } from '$lib/types';
+import { DEMO_ID } from '$lib/w2m/id';
 import { groups } from './groups.svelte';
 import { recent } from './recent.svelte';
 import { readJson, writeJson } from './storage';
@@ -13,14 +32,25 @@ interface EventPrefs {
 	zone?: string;
 	/** The group being viewed, if any. */
 	group?: string;
+	/** Name of the group a shared link was showing, when it isn't one of the viewer's own. */
+	sharedGroup?: string;
+	/** Everyone's times as of the last visit, to spot what changed since. */
+	seen?: Snapshot;
+	perWeek?: MeetingsPerWeek;
 }
 
 export interface LoadOverrides {
 	roles?: Roles;
 	duration?: number;
+	/** Name of the group the link was made from. */
+	group?: string;
+	/** Times the link points at. */
+	picks?: TimeRange[];
+	perWeek?: MeetingsPerWeek;
+	/** The event itself, when the server already fetched it for this page. */
+	event?: W2MEvent | null;
 }
 
-const DEFAULT_DURATION = 60;
 const prefsKey = (id: string) => `ttm:event:${id}`;
 
 export const localZone = (): string => {
@@ -41,7 +71,14 @@ class AppState {
 	roles = $state.raw<Roles>({});
 	/** The group whose overlap is being shown, or null for everyone. */
 	groupId = $state<string | null>(null);
+	/**
+	 * Name of the group someone else's link was showing. Its members aren't known here, only who
+	 * the link skipped, so it's a label rather than a saved group.
+	 */
+	sharedGroup = $state<string | null>(null);
 	duration = $state(DEFAULT_DURATION);
+	/** How many times a week to meet; two or three look for sets of matching times. */
+	perWeek = $state<MeetingsPerWeek>(1);
 	zone = $state(browser ? localZone() : 'UTC');
 
 	/** Slot under the pointer or keyboard focus in the heatmap. */
@@ -52,10 +89,23 @@ class AppState {
 	/** Time block previewed from the sidebar, and the one clicked to keep highlighted. */
 	hoveredBlock = $state.raw<TimeBlock | null>(null);
 	pinnedBlock = $state.raw<TimeBlock | null>(null);
+	/** The same for a set of meetings a week. */
+	hoveredSet = $state.raw<MeetingSet | null>(null);
+	pinnedSet = $state.raw<MeetingSet | null>(null);
+	/**
+	 * Times picked on the heatmap (Shift adds more) or opened from a link, in time order. Kept as
+	 * times rather than slots so they survive refreshes.
+	 */
+	selection = $state.raw<TimeRange[]>([]);
 	/** People checked in the sidebar for bulk actions. */
 	selected = $state.raw<ReadonlySet<number>>(new Set());
+	/** Who responded or changed their times since the last visit. */
+	changes = $state.raw<Changes>(NO_CHANGES);
+	#seen: Snapshot | undefined;
 
 	group = $derived(groups.get(this.groupId));
+	/** The name of whichever group is narrowing the view, saved or shared. */
+	groupLabel = $derived(this.group?.name ?? this.sharedGroup);
 	/** The roles the heatmap and best times actually use. */
 	effectiveRoles = $derived(withGroup(this.roles, this.group, this.event?.people ?? []));
 	grid = $derived(this.event ? buildGrid(this.event, this.zone) : null);
@@ -64,9 +114,44 @@ class AppState {
 			? findBestTimes(this.event, this.grid, this.effectiveRoles, this.duration)
 			: null
 	);
+	/** Sets of meetings for two or three times a week, or null when meeting once. */
+	meetingSets = $derived(
+		this.event && this.grid && this.perWeek > 1
+			? findMeetingSets(
+					this.event,
+					this.grid,
+					this.effectiveRoles,
+					this.duration,
+					this.perWeek as 2 | 3
+				)
+			: null
+	);
 	attendance = $derived(this.event ? slotAttendance(this.event, this.effectiveRoles) : null);
+	/** Who can make each picked time, recomputed as roles change. */
+	selectedBlocks = $derived.by(() => {
+		const { event, grid } = this;
+		if (!event || !grid) return [];
+		return this.selection.flatMap((range) => {
+			const span = slotSpan(event, grid, range.start, range.end);
+			return span
+				? [blockForSlots(event, grid, this.effectiveRoles, span.startSlot, span.endSlot)]
+				: [];
+		});
+	});
 	spotlight = $derived(this.hoveredPerson ?? this.pinnedPerson);
-	activeBlock = $derived(this.hoveredBlock ?? this.pinnedBlock);
+	/** Blocks that stay highlighted: a pinned best time, a pinned set's meetings, or picked times. */
+	heldBlocks = $derived<TimeBlock[]>(
+		this.pinnedBlock
+			? [this.pinnedBlock]
+			: this.pinnedSet
+				? this.pinnedSet.sessions
+				: this.selectedBlocks
+	);
+	/** Blocks previewed by hovering a result in the sidebar, if any. */
+	previewBlocks = $derived<TimeBlock[] | null>(
+		this.hoveredBlock ? [this.hoveredBlock] : (this.hoveredSet?.sessions ?? null)
+	);
+	activeBlocks = $derived(this.previewBlocks ?? this.heldBlocks);
 
 	#loadToken = 0;
 
@@ -75,23 +160,34 @@ class AppState {
 		this.status = 'loading';
 		this.error = null;
 		try {
-			const event = await fetchEvent(id);
+			const event = overrides.event?.id === id ? overrides.event : await fetchEvent(id);
 			if (token !== this.#loadToken) return;
 			const saved = readJson<EventPrefs>(prefsKey(id), {});
 			groups.load(event.id);
 			const savedRoles = saved.roles ?? {};
 			const savedGroup = groups.get(saved.group ?? null);
 			// A link we wrote ourselves carries the group's view of the roles; restore the saved roles
-			// and group behind it. Anyone else's link is taken as-is, with no group.
+			// and group behind it. Anyone else's link is taken as-is, with its group as a label.
 			const ownLink =
 				!overrides.roles ||
 				sameRoles(overrides.roles, withGroup(savedRoles, savedGroup, event.people));
 			this.event = event;
 			this.roles = ownLink ? savedRoles : overrides.roles!;
 			this.groupId = ownLink ? (savedGroup?.id ?? null) : null;
-			this.duration = overrides.duration ?? saved.duration ?? DEFAULT_DURATION;
+			this.sharedGroup = ownLink
+				? savedGroup
+					? null
+					: (saved.sharedGroup ?? null)
+				: (overrides.group ?? null);
+			this.duration = clampDuration(overrides.duration ?? saved.duration ?? DEFAULT_DURATION);
+			this.perWeek = overrides.perWeek ?? saved.perWeek ?? 1;
 			this.zone = saved.zone ?? localZone();
 			this.clearHighlights();
+			// The demo is rebuilt for each week, so there's nothing meaningful to compare.
+			const tracked = event.id !== DEMO_ID;
+			this.changes = tracked ? changesSince(saved.seen, event) : NO_CHANGES;
+			this.#seen = tracked ? snapshot(event) : undefined;
+			for (const range of overrides.picks ?? []) this.pick(range.start, range.end, { add: true });
 			this.status = 'ready';
 			recent.remember(event);
 		} catch (e) {
@@ -102,23 +198,60 @@ class AppState {
 		}
 	}
 
-	async refresh() {
-		if (!this.event || this.refreshing) return;
-		const id = this.event.id;
+	/**
+	 * Pulls the latest responses, and returns what changed (null if it didn't finish). An `auto`
+	 * refresh takes a copy the server fetched moments ago and keeps quiet about errors.
+	 */
+	async refresh({ auto = false } = {}): Promise<Changes | null> {
+		if (!this.event || this.refreshing) return null;
+		const before = this.event;
 		this.refreshing = true;
 		try {
-			const event = await fetchEvent(id);
-			if (this.event?.id !== id) return;
+			const event = await fetchEvent(before.id, { fresh: !auto });
+			if (this.event?.id !== before.id) return null;
+			const fresh = this.#seen ? changesSince(this.#seen, event) : NO_CHANGES;
+			this.changes = mergeChanges(this.changes, fresh);
+			if (this.#seen) this.#seen = snapshot(event);
+			const blockId = this.pinnedBlock?.id;
+			const setId = this.pinnedSet?.id;
 			this.event = event;
-			// Slot indices can shift if the event changed, so drop anything pinned to them.
-			this.pinnedBlock = null;
 			this.hoveredBlock = null;
+			this.hoveredSet = null;
+			// Pins point at slot indices, which only hold if the poll's times didn't change. Then keep
+			// them if the same result still exists, so a background refresh doesn't close a card.
+			const sameSlots =
+				before.slots.length === event.slots.length &&
+				before.slots.every((slot, i) => slot.time === event.slots[i].time);
+			this.pinnedBlock = sameSlots && blockId ? this.#findBlock(blockId) : null;
+			this.pinnedSet = sameSlots && setId ? this.#findSet(setId) : null;
 			recent.remember(event);
+			return fresh;
 		} catch (e) {
-			this.error = e instanceof Error ? e.message : String(e);
+			if (!auto) this.error = e instanceof Error ? e.message : String(e);
+			return null;
 		} finally {
 			this.refreshing = false;
 		}
+	}
+
+	#findBlock(id: string): TimeBlock | null {
+		const best = this.best;
+		if (!best) return null;
+		const all = [...best.everyone, ...best.required, ...best.near, ...best.fewer];
+		return all.find((b) => b.id === id) ?? null;
+	}
+
+	#findSet(id: string): MeetingSet | null {
+		const sets = this.meetingSets;
+		if (!sets) return null;
+		const all = [...sets.everyone, ...sets.required, ...sets.near, ...sets.fewer];
+		return all.find((s) => s.id === id) ?? null;
+	}
+
+	/** Results change whenever the search's inputs do, so let go of anything pinned. */
+	#unpin() {
+		this.pinnedBlock = null;
+		this.pinnedSet = null;
 	}
 
 	reset() {
@@ -127,6 +260,9 @@ class AppState {
 		this.status = 'idle';
 		this.error = null;
 		this.groupId = null;
+		this.sharedGroup = null;
+		this.changes = NO_CHANGES;
+		this.#seen = undefined;
 		groups.load(null);
 		this.clearHighlights();
 	}
@@ -151,15 +287,29 @@ class AppState {
 			else next[id] = role;
 		}
 		this.roles = next;
-		this.pinnedBlock = null;
+		this.#unpin();
 	}
 
 	/** Shows the overlap for one group (or everyone, with null). */
 	setGroup(id: string | null) {
 		this.groupId = id;
+		this.sharedGroup = null;
 		this.selected = new Set();
-		this.pinnedBlock = null;
+		this.#unpin();
 		this.hoveredBlock = null;
+		this.hoveredSet = null;
+	}
+
+	/** Leaves any group view. For a shared link's group, everyone the link skipped counts again. */
+	showEveryone() {
+		if (this.sharedGroup && this.event) {
+			const skipped = this.event.people.filter((p) => this.roleOf(p.id) === 'skip');
+			this.setRoles(
+				skipped.map((p) => p.id),
+				'required'
+			);
+		}
+		this.setGroup(null);
 	}
 
 	toggleSelected(id: number) {
@@ -174,27 +324,131 @@ class AppState {
 
 	resetRoles() {
 		this.roles = {};
-		this.pinnedBlock = null;
+		this.sharedGroup = null;
+		this.#unpin();
 	}
 
 	setDuration(minutes: number) {
-		this.duration = Math.min(8 * 60, Math.max(15, Math.round(minutes / 15) * 15));
-		this.pinnedBlock = null;
+		this.duration = clampDuration(minutes);
+		this.#unpin();
+	}
+
+	setPerWeek(count: MeetingsPerWeek) {
+		this.perWeek = count;
+		this.#unpin();
+		this.hoveredBlock = null;
+		this.hoveredSet = null;
 	}
 
 	setZone(zone: string) {
 		this.zone = zone;
 		// Blocks carry grid day indices, which shift with the timezone.
-		this.pinnedBlock = null;
+		this.#unpin();
 		this.hoveredBlock = null;
+		this.hoveredSet = null;
+	}
+
+	/** Keeps a best-times block highlighted (or clears it), replacing any picked time. */
+	pinBlock(block: TimeBlock | null) {
+		this.#unpin();
+		this.pinnedBlock = block;
+		if (block) this.selection = [];
+	}
+
+	/** The same for a set of meetings a week. */
+	pinSet(set: MeetingSet | null) {
+		this.#unpin();
+		this.pinnedSet = set;
+		if (set) this.selection = [];
+	}
+
+	/**
+	 * Picks an exact time, trimmed to the run of back-to-back slots it starts in. With `add`, it
+	 * joins the times already picked (replacing any it overlaps) instead of replacing them all.
+	 */
+	pick(start: number, end: number, { add = false } = {}) {
+		if (!this.event || !this.grid) return;
+		const span = slotSpan(this.event, this.grid, start, end);
+		this.#unpin();
+		const range = span && {
+			start: this.event.slots[span.startSlot].time,
+			end: this.event.slots[span.endSlot].time + this.event.slotSeconds
+		};
+		if (add) {
+			if (range) this.selection = withRange(this.selection, range);
+		} else {
+			this.selection = range ? [range] : [];
+		}
+	}
+
+	/** Sets every picked time at once, for a drag still in progress. Ranges must fit the grid. */
+	setPicks(ranges: TimeRange[]) {
+		this.#unpin();
+		this.selection = [...ranges].sort((a, b) => a.start - b.start);
+	}
+
+	/** Drops the picked time that starts at `start`. */
+	unpick(start: number) {
+		this.selection = this.selection.filter((range) => range.start !== start);
+	}
+
+	clearPick() {
+		this.selection = [];
+	}
+
+	/**
+	 * Backs out one step, for Escape: the one-person view first, then a pinned result or the picked
+	 * times. Says which it left, or null when there was nothing to leave.
+	 */
+	back(): 'person' | 'selection' | null {
+		if (this.pinnedPerson !== null) {
+			this.pinnedPerson = null;
+			return 'person';
+		}
+		if (this.pinnedBlock || this.pinnedSet || this.selection.length) {
+			this.#unpin();
+			this.selection = [];
+			return 'selection';
+		}
+		return null;
+	}
+
+	dismissChanges() {
+		this.changes = NO_CHANGES;
+	}
+
+	/** The query string for this event as it's set up now. */
+	search({
+		withZone = false,
+		picks = this.selection
+	}: { withZone?: boolean; picks?: TimeRange[] } = {}) {
+		if (!this.event) return '';
+		return shareSearch({
+			id: this.event.id,
+			duration: this.duration,
+			roles: this.effectiveRoles,
+			group: this.groupLabel,
+			picks,
+			perWeek: this.perWeek,
+			// Only link previews use the zone; weekly polls have no zone to speak of.
+			zone: withZone && !this.event.weekly ? this.zone : null
+		});
+	}
+
+	/** A link to share, with the viewer's timezone so previews can spell out times. */
+	shareLink(origin: string, picks: TimeRange[] = this.selection): string {
+		return this.event ? `${origin}/${this.search({ withZone: true, picks })}` : '';
 	}
 
 	/** Saves this event's roles, group, duration, and timezone so they come back next visit. */
 	persist() {
 		if (!this.event) return;
 		const prefs: EventPrefs = { roles: this.roles, duration: this.duration };
+		if (this.perWeek > 1) prefs.perWeek = this.perWeek;
 		if (this.zone !== localZone()) prefs.zone = this.zone;
 		if (this.group) prefs.group = this.group.id;
+		else if (this.sharedGroup) prefs.sharedGroup = this.sharedGroup;
+		if (this.#seen) prefs.seen = this.#seen;
 		writeJson(prefsKey(this.event.id), prefs);
 	}
 
@@ -204,14 +458,23 @@ class AppState {
 		this.pinnedPerson = null;
 		this.hoveredBlock = null;
 		this.pinnedBlock = null;
+		this.hoveredSet = null;
+		this.pinnedSet = null;
+		this.selection = [];
 		this.selected = new Set();
 	}
 }
 
-const fetchEvent = async (id: string): Promise<W2MEvent> => {
+const overlaps = (a: TimeRange, b: TimeRange) => a.start < b.end && b.start < a.end;
+
+/** `ranges` plus `range`, minus any it overlaps, in time order. */
+export const withRange = (ranges: TimeRange[], range: TimeRange): TimeRange[] =>
+	[...ranges.filter((r) => !overlaps(r, range)), range].sort((a, b) => a.start - b.start);
+
+const fetchEvent = async (id: string, { fresh = false } = {}): Promise<W2MEvent> => {
 	let response: Response;
 	try {
-		response = await fetch(`/api/event/${encodeURIComponent(id)}`);
+		response = await fetch(`/api/event/${encodeURIComponent(id)}${fresh ? '?fresh=1' : ''}`);
 	} catch {
 		throw new Error("Couldn't connect. Check your internet connection and try again.");
 	}

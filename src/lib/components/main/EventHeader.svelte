@@ -6,6 +6,7 @@
 	import { DateTime } from 'luxon';
 	import { formatDay } from '$lib/analysis/format';
 	import { app } from '$lib/state/app.svelte';
+	import { toast } from '$lib/ui/toast.svelte';
 	import { DEMO_ID, eventUrl } from '$lib/w2m/id';
 	import ShareMenu from './ShareMenu.svelte';
 	import TimezonePicker from './TimezonePicker.svelte';
@@ -40,6 +41,42 @@
 			? 'just now'
 			: DateTime.fromMillis(event.fetchedAt).toRelative({ base: DateTime.fromMillis(now) })
 	);
+
+	/** When this page last pulled responses, by this device's clock (fetchedAt is the server's). */
+	let lastPulled = Date.now();
+
+	/** Pulls new responses. The button always reports back; a background check only speaks up. */
+	const refresh = async ({ auto = false } = {}) => {
+		lastPulled = Date.now();
+		const fresh = await app.refresh({ auto });
+		if (!fresh) return;
+		const parts = [
+			fresh.added.length &&
+				`${fresh.added.length} new ${fresh.added.length === 1 ? 'response' : 'responses'}`,
+			fresh.updated.length && `${fresh.updated.length} updated`
+		].filter(Boolean);
+		if (parts.length) toast.show(parts.join(', '));
+		else if (!auto) toast.show('No new responses');
+	};
+
+	// Keep responses current while the page is open and visible: pull a minute after the last
+	// pull, and on coming back to the tab after that long. The demo never changes, so skip it.
+	const AUTO_REFRESH_MS = 60_000;
+	const eventId = $derived(event.id);
+	$effect(() => {
+		if (eventId === DEMO_ID) return;
+		lastPulled = Date.now();
+		const check = () => {
+			if (document.visibilityState !== 'visible' || app.refreshing) return;
+			if (Date.now() - lastPulled >= AUTO_REFRESH_MS) refresh({ auto: true });
+		};
+		const timer = setInterval(check, 15_000);
+		document.addEventListener('visibilitychange', check);
+		return () => {
+			clearInterval(timer);
+			document.removeEventListener('visibilitychange', check);
+		};
+	});
 </script>
 
 <header class="border-b border-line px-4 py-3 sm:px-6 {className}">
@@ -64,7 +101,7 @@
 			<TimezonePicker />
 			<button
 				class="btn btn-ghost btn-icon size-8"
-				onclick={() => app.refresh()}
+				onclick={() => refresh()}
 				disabled={app.refreshing}
 				aria-label="Refresh responses"
 				title="Pull the latest responses"

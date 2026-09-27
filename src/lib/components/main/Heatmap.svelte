@@ -1,10 +1,16 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
 	import { tick } from 'svelte';
+	import type { TimeBlock } from '$lib/analysis/bestTimes';
 	import { formatDay, formatMinuteOfDay, formatTimeRange } from '$lib/analysis/format';
-	import { app } from '$lib/state/app.svelte';
+	import type { MeetingSet } from '$lib/analysis/meetingSets';
+	import { app, withRange } from '$lib/state/app.svelte';
+	import type { TimeRange } from '$lib/types';
+	import Avatar from '$lib/ui/Avatar.svelte';
 	import { heatColor, heatMix as mix } from '$lib/ui/heat';
 	import HeatPaletteMenu from '$lib/ui/HeatPaletteMenu.svelte';
+	import { isTyping } from '$lib/ui/keys';
+	import PickedTime from './PickedTime.svelte';
 	import SlotTooltip from './SlotTooltip.svelte';
 
 	let { class: className = '' }: { class?: string } = $props();
@@ -12,7 +18,9 @@
 	const event = $derived(app.event!);
 	const grid = $derived(app.grid!);
 	const free = $derived(event.slots.map((slot) => new Set(slot.available)));
-	const spotlightName = $derived(event.people.find((p) => p.id === app.spotlight)?.name ?? null);
+	const spotlit = $derived(event.people.find((p) => p.id === app.spotlight) ?? null);
+	/** Pinned from the sidebar, rather than a preview while hovering someone there. */
+	const spotlightPinned = $derived(!!spotlit && app.spotlight === app.pinnedPerson);
 
 	/** CSS grid line for each row, with a thin spacer row wherever the day has a gap. */
 	const layout = $derived.by(() => {
@@ -52,19 +60,22 @@
 		return Array.from({ length: steps + 1 }, (_, i) => heatColor(i, steps));
 	});
 
-	const active = $derived(app.activeBlock);
-	const pinned = $derived(app.pinnedBlock);
-	const activePos = $derived(
-		active && position[active.startSlot] && position[active.endSlot]
-			? { start: position[active.startSlot], end: position[active.endSlot] }
-			: null
+	const held = $derived(app.heldBlocks);
+	/** Outlines for the blocks in play: one for a single time, one per meeting for a set. */
+	const outlines = $derived(
+		app.activeBlocks.flatMap((block) => {
+			const start = position[block.startSlot];
+			const end = position[block.endSlot];
+			return start && end ? [{ key: `${block.startSlot}-${block.endSlot}`, start, end }] : [];
+		})
 	);
-	const inPinned = (slot: number) => !!pinned && slot >= pinned.startSlot && slot <= pinned.endSlot;
+	/** Hovering previews other blocks; otherwise the outlines are the held ones. */
+	const outlinesHeld = $derived(app.previewBlocks === null);
+	const inHeld = (slot: number) => held.some((b) => slot >= b.startSlot && slot <= b.endSlot);
 
 	// Tooltip placement, anchored to the hovered (or keyboard-focused) cell.
 	let scroller: HTMLDivElement;
 	let gridEl: HTMLDivElement;
-	let outline = $state<HTMLDivElement>();
 	/** True when the grid took focus because the mouse moved over it, not from Tab. */
 	let pointerFocused = $state(false);
 	let tipRect = $state<DOMRect | null>(null);
@@ -92,15 +103,108 @@
 		tipRect = null;
 	};
 
-	const isTyping = (el: Element | null) =>
-		el instanceof HTMLInputElement ||
-		el instanceof HTMLTextAreaElement ||
-		el instanceof HTMLSelectElement ||
-		(el instanceof HTMLElement && el.isContentEditable);
+	// Picking times: a click (or tap, or Enter) picks a meeting-length time starting at that slot,
+	// and a mouse drag picks exactly the slots it covers. Holding Shift adds to the times already
+	// picked instead of replacing them.
+	/** Slot a press started on, until the pointer comes back up. */
+	let pressed: number | null = null;
+	/** Whether the press turned into a drag. */
+	let dragged = $state(false);
+	/** Whether Shift was down at the press, and what was picked or pinned then. */
+	let adding = false;
+	let before: TimeRange[] = [];
+	let pinnedBefore: { block: TimeBlock | null; set: MeetingSet | null } = {
+		block: null,
+		set: null
+	};
+
+	/** Slots from `from` toward `to` in the same day, stopping at any break in time. */
+	const reach = (from: number, to: number): [number, number] => {
+		const step = to >= from ? 1 : -1;
+		let end = from;
+		while (end !== to) {
+			const next = end + step;
+			const gap = Math.abs(event.slots[next].time - event.slots[end].time);
+			if (gap !== event.slotSeconds || grid.dayOfSlot[next] !== grid.dayOfSlot[from]) break;
+			end = next;
+		}
+		return step > 0 ? [from, end] : [end, from];
+	};
+
+	/**
+	 * A click on a slot picks a meeting starting there. Clicking inside a picked time clears the
+	 * picks; with Shift, it adds a time, or drops just the picked time it lands in.
+	 */
+	const pickAt = (slot: number, add: boolean) => {
+		const hit = app.selectedBlocks.find((b) => slot >= b.startSlot && slot <= b.endSlot);
+		if (hit) return add ? app.unpick(hit.start) : app.clearPick();
+		const start = event.slots[slot].time;
+		app.pick(start, start + app.duration * 60, { add });
+	};
+
+	const stopPress = () => {
+		window.removeEventListener('pointerup', endPress);
+		window.removeEventListener('pointercancel', endPress);
+		window.removeEventListener('keydown', cancelPress, true);
+		pressed = null;
+		dragged = false;
+	};
+
+	const endPress = (e: PointerEvent) => {
+		const clicked = pressed !== null && !dragged && e.type === 'pointerup' ? pressed : null;
+		stopPress();
+		if (clicked !== null) pickAt(clicked, adding);
+	};
+
+	/** Escape mid-drag drops the drag and puts back whatever was picked or pinned before it. */
+	const cancelPress = (e: KeyboardEvent) => {
+		if (e.key !== 'Escape') return;
+		// Used up here, so the page doesn't also back out a step.
+		e.preventDefault();
+		if (dragged) {
+			app.setPicks(before);
+			if (pinnedBefore.block) app.pinBlock(pinnedBefore.block);
+			else if (pinnedBefore.set) app.pinSet(pinnedBefore.set);
+		}
+		stopPress();
+	};
+
+	const onpointerdown = (e: PointerEvent) => {
+		if (e.button !== 0) return;
+		const el = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
+		if (!el) return;
+		// Touch scrolls instead of dragging; a scroll cancels the pointer, so it won't pick.
+		if (e.pointerType === 'mouse') e.preventDefault();
+		pressed = Number(el.dataset.slot);
+		dragged = false;
+		adding = e.shiftKey;
+		before = app.selection;
+		pinnedBefore = { block: app.pinnedBlock, set: app.pinnedSet };
+		window.addEventListener('pointerup', endPress);
+		window.addEventListener('pointercancel', endPress);
+		// Capture, to get Escape before the page's own handler backs out a step.
+		window.addEventListener('keydown', cancelPress, true);
+	};
+
+	/** Extends a mouse drag to `slot`, counting a cell in another day as its row in the first one. */
+	const dragTo = (slot: number) => {
+		if (pressed === null) return;
+		const day = grid.days[position[pressed].day];
+		const target = day.slotByMinute.get(grid.rows[position[slot].row].minute);
+		if (target === undefined || (target === pressed && !dragged)) return;
+		dragged = true;
+		const [first, last] = reach(pressed, target);
+		const range = {
+			start: event.slots[first].time,
+			end: event.slots[last].time + event.slotSeconds
+		};
+		app.setPicks(adding ? withRange(before, range) : [range]);
+	};
 
 	const onpointerover = (e: PointerEvent) => {
 		const el = (e.target as HTMLElement).closest<HTMLElement>('[data-slot]');
 		if (!el) return;
+		if (e.pointerType === 'mouse') dragTo(Number(el.dataset.slot));
 		showTip(Number(el.dataset.slot), el);
 		// Take focus on hover so the arrow keys work right away, unless someone is mid-typing.
 		if (
@@ -136,7 +240,12 @@
 			ArrowLeft: [-1, 0],
 			ArrowRight: [1, 0]
 		};
+		// The workspace's handler takes it from here, backing out of whatever's pinned or picked.
 		if (e.key === 'Escape') return hideTip();
+		if ((e.key === 'Enter' || e.key === ' ') && app.hoveredSlot !== null) {
+			e.preventDefault();
+			return pickAt(app.hoveredSlot, e.shiftKey);
+		}
 		const move = moves[e.key];
 		if (!move) return;
 		e.preventDefault();
@@ -154,11 +263,13 @@
 		}
 	};
 
-	// Bring a block into view when it's picked in the sidebar.
+	// Bring a block (or a set's first meeting) into view when it's picked in the sidebar.
 	$effect(() => {
-		if (!pinned) return;
+		if (!app.pinnedBlock && !app.pinnedSet) return;
 		tick().then(() =>
-			outline?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+			gridEl
+				?.querySelector('.block-outline')
+				?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
 		);
 	});
 
@@ -175,21 +286,46 @@
 <!-- Always dark: color ramps read far better on a dark ground. In the light theme it sits in the
      page as a framed panel. -->
 <div
-	class="flex min-h-0 flex-col bg-page scheme-dark light:m-3 light:overflow-hidden light:rounded-2xl light:shadow-[0_12px_32px_-14px_rgb(14_42_53/0.45)] light:sm:m-4 {className}"
+	class="relative flex min-h-0 flex-col bg-page scheme-dark light:m-3 light:overflow-hidden light:rounded-2xl light:shadow-[0_12px_32px_-14px_rgb(14_42_53/0.45)] light:sm:m-4 {spotlightPinned
+		? 'ring-2 ring-accent/70 ring-inset'
+		: ''} {className}"
 >
 	<div
 		class="flex min-h-11 flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2 text-xs text-fg-2 sm:px-6"
 	>
-		{#if spotlightName}
-			<span class="flex items-center gap-2">
-				<span class="size-3 rounded-sm" style:background={mix(80)}></span>
-				Showing only <strong class="font-semibold text-fg">{spotlightName}</strong>’s availability
-			</span>
-			{#if app.pinnedPerson !== null}
-				<button class="btn btn-ghost btn-sm -my-1" onclick={() => (app.pinnedPerson = null)}>
-					<X class="size-3.5" aria-hidden="true" /> Clear
-				</button>
-			{/if}
+		{#if spotlit}
+			<!-- Loud on purpose: the grid switches to one color, and that needs explaining at a glance. -->
+			<div
+				class="-my-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border py-1 pr-1 pl-1 {spotlightPinned
+					? 'border-accent/60 bg-accent-soft'
+					: 'border-dashed border-line-strong bg-subtle pr-3'}"
+				role="status"
+			>
+				<span class="flex min-w-0 items-center gap-2">
+					<Avatar id={spotlit.id} name={spotlit.name} size={24} />
+					<span class="truncate text-[13px] text-fg">
+						{spotlightPinned ? 'Only' : 'Previewing'}
+						<strong class="font-semibold">{spotlit.name}</strong>’s times
+					</span>
+				</span>
+				<span class="flex items-center gap-2 text-fg-2" aria-hidden="true">
+					<span class="flex items-center gap-1">
+						<span class="size-3 rounded-sm" style:background={mix(80)}></span> Free
+					</span>
+					<span class="flex items-center gap-1">
+						<span class="size-3 rounded-sm bg-heat-0 ring-1 ring-line-strong"></span> Not free
+					</span>
+				</span>
+				{#if spotlightPinned}
+					<button
+						class="btn btn-primary btn-sm rounded-full"
+						onclick={() => (app.pinnedPerson = null)}
+						title="Back to everyone (Esc)"
+					>
+						<X class="size-3.5" aria-hidden="true" /> Show everyone
+					</button>
+				{/if}
+			</div>
 		{:else}
 			<span class="flex items-center gap-2">
 				<span>0</span>
@@ -202,7 +338,7 @@
 				<span class="tabular">{app.attendance?.total ?? 0} available</span>
 			</span>
 			<span class="hidden text-fg-3 sm:inline"
-				>Hover a cell for details, or use the arrow keys.</span
+				>Hover a cell for details. Click or drag to check any time, Shift to add more, Esc to clear.</span
 			>
 		{/if}
 		<div class="ml-auto">
@@ -221,16 +357,17 @@
 		<div
 			bind:this={gridEl}
 			class="heatmap relative grid"
-			class:dimmed={!!pinned}
+			class:dimmed={held.length > 0}
 			class:pointer-focused={pointerFocused}
 			style:--row="{rowHeight}px"
 			style:grid-template-columns="3.25rem repeat({grid.days.length}, minmax(2.75rem, 1fr))"
 			style:grid-template-rows={layout.template}
 			style:max-width="{3.25 + grid.days.length * 10}rem"
 			role="group"
-			aria-label="Availability by day and time. Use arrow keys to move between time slots."
+			aria-label="Availability by day and time. Use arrow keys to move between time slots, Enter to check a meeting starting at one, Shift+Enter to add another, and Escape to clear."
 			aria-describedby="heatmap-live"
 			tabindex="0"
+			{onpointerdown}
 			{onpointerover}
 			{onpointerleave}
 			{onkeydown}
@@ -294,7 +431,7 @@
 							class:half={!row.hour && row.minute % 30 === 0 && !segStart}
 							class:seg-start={segStart}
 							class:seg-end={segEnd}
-							class:in-pinned={inPinned(slot)}
+							class:in-held={inHeld(slot)}
 							class:hovered={hovered === slot}
 							data-slot={slot}
 							style:grid-row={layout.line[i]}
@@ -305,16 +442,26 @@
 				{/each}
 			{/each}
 
-			{#if active && activePos}
+			{#each outlines as box (box.key)}
 				<div
-					bind:this={outline}
-					class="block-outline {active === pinned ? 'is-pinned' : ''}"
-					style:grid-column={activePos.start.day + 2}
-					style:grid-row="{layout.line[activePos.start.row]} / {layout.line[activePos.end.row] + 1}"
+					class="block-outline {outlinesHeld ? 'is-held' : ''}"
+					style:grid-column={box.start.day + 2}
+					style:grid-row="{layout.line[box.start.row]} / {layout.line[box.end.row] + 1}"
 				></div>
-			{/if}
+			{/each}
 		</div>
 	</div>
+
+	{#if app.selectedBlocks.length}
+		<!-- Floats over the grid so picking a time doesn't shift the cells being dragged across. -->
+		<div
+			class="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-4 sm:px-6"
+		>
+			<div class="w-full max-w-md {dragged ? '' : 'pointer-events-auto'}">
+				<PickedTime />
+			</div>
+		</div>
+	{/if}
 </div>
 
 <p id="heatmap-live" class="sr-only" aria-live="polite">{liveLabel}</p>
@@ -334,6 +481,7 @@
 	.heatmap {
 		column-gap: 4px;
 		min-width: max-content;
+		user-select: none;
 	}
 	@media (min-width: 640px) {
 		.heatmap {
@@ -351,6 +499,9 @@
 	.cell {
 		position: relative;
 		transition: opacity 150ms;
+	}
+	.cell:not(.empty) {
+		cursor: pointer;
 	}
 	.cell.seg-start {
 		border-top-left-radius: 6px;
@@ -378,7 +529,7 @@
 		box-shadow: inset 0 0 0 2px var(--fg);
 		z-index: 1;
 	}
-	.dimmed .cell:not(.in-pinned):not(.empty) {
+	.dimmed .cell:not(.in-held):not(.empty) {
 		opacity: 0.45;
 	}
 	.block-outline {
@@ -390,7 +541,7 @@
 			0 0 0 4px var(--canvas);
 		opacity: 0.55;
 	}
-	.block-outline.is-pinned {
+	.block-outline.is-held {
 		opacity: 1;
 	}
 </style>

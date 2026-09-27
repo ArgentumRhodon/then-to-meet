@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { closeEvent } from '$lib/navigation';
 	import { app } from '$lib/state/app.svelte';
+	import { isTyping } from '$lib/ui/keys';
 	import { layout } from '$lib/ui/layout.svelte';
 	import ThemeMenu from '$lib/ui/ThemeMenu.svelte';
 	import EventHeader from './main/EventHeader.svelte';
@@ -8,7 +9,23 @@
 	import BestTimesPanel from './sidebar/BestTimesPanel.svelte';
 	import EventSwitcher from './sidebar/EventSwitcher.svelte';
 	import PeoplePanel from './sidebar/PeoplePanel.svelte';
+
+	/**
+	 * Escape anywhere backs out a step: the one-person view, then a pinned best time or the picked
+	 * times. A menu or text field that used the key first keeps it.
+	 */
+	const onkeydown = (e: KeyboardEvent) => {
+		if (e.key !== 'Escape' || e.defaultPrevented || isTyping(document.activeElement)) return;
+		const card = document.activeElement?.closest('[data-result]');
+		const left = app.back();
+		if (!left) return;
+		e.preventDefault();
+		// Unpinning folds the card away; keep focus on it rather than losing it with its details.
+		if (left === 'selection') card?.querySelector<HTMLElement>('[aria-expanded]')?.focus();
+	};
 </script>
+
+<svelte:window {onkeydown} />
 
 <div class="workspace grid min-h-dvh lg:h-dvh lg:overflow-hidden">
 	<!-- Above the sidebar (z-10) so the Events and theme menus open over it. -->

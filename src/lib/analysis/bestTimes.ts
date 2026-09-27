@@ -33,6 +33,13 @@ export interface BestTimes {
 
 export const roleOf = (roles: Roles, id: number) => roles[id] ?? 'required';
 
+/** Everyone who isn't skipped, and the required people among them. */
+export const whoCounts = (event: W2MEvent, roles: Roles) => {
+	const considered = event.people.map((p) => p.id).filter((id) => roleOf(roles, id) !== 'skip');
+	const required = considered.filter((id) => roleOf(roles, id) === 'required');
+	return { considered, required };
+};
+
 /**
  * Finds every time window at least `durationMinutes` long, grouped by how many people can make
  * it. Each block is the maximal stretch during which one particular group of people is all free,
@@ -44,8 +51,7 @@ export const findBestTimes = (
 	roles: Roles,
 	durationMinutes: number
 ): BestTimes => {
-	const considered = event.people.map((p) => p.id).filter((id) => roleOf(roles, id) !== 'skip');
-	const required = considered.filter((id) => roleOf(roles, id) === 'required');
+	const { considered, required } = whoCounts(event, roles);
 	const requiredSet = new Set(required);
 	const result: BestTimes = {
 		everyone: [],
@@ -128,7 +134,7 @@ export const findBestTimes = (
 	return result;
 };
 
-const classify = (missing: number, requiredMissing: number, requiredCount: number): Tier => {
+export const classify = (missing: number, requiredMissing: number, requiredCount: number): Tier => {
 	if (missing === 0) return 'everyone';
 	if (requiredCount > 0 && requiredMissing === 0) return 'required';
 	if (requiredCount >= 2 && requiredMissing === 1) return 'near';
@@ -137,7 +143,7 @@ const classify = (missing: number, requiredMissing: number, requiredCount: numbe
 };
 
 /** Splits slots into runs of back-to-back slots on the same displayed day. */
-const contiguousRuns = (event: W2MEvent, grid: Grid): number[][] => {
+export const contiguousRuns = (event: W2MEvent, grid: Grid): number[][] => {
 	const runs: number[][] = [];
 	let current: number[] = [];
 	event.slots.forEach((slot, i) => {
@@ -172,6 +178,72 @@ const dropDominated = (blocks: TimeBlock[]): TimeBlock[] => {
 			return block.attendees.every((p) => theirs.has(p));
 		});
 	});
+};
+
+/**
+ * The slots from `start` until `end` (Unix seconds, end exclusive), stopping early wherever the
+ * poll skips time or the displayed day changes. Null when no slot starts at `start`.
+ */
+export const slotSpan = (
+	event: W2MEvent,
+	grid: Grid,
+	start: number,
+	end: number
+): { startSlot: number; endSlot: number } | null => {
+	const startSlot = event.slots.findIndex((slot) => slot.time === start);
+	if (startSlot < 0) return null;
+	let endSlot = startSlot;
+	for (let next = startSlot + 1; next < event.slots.length; next++) {
+		const slot = event.slots[next];
+		if (slot.time + event.slotSeconds > end) break;
+		if (slot.time - event.slots[next - 1].time !== event.slotSeconds) break;
+		if (grid.dayOfSlot[next] !== grid.dayOfSlot[startSlot]) break;
+		endSlot = next;
+	}
+	return { startSlot, endSlot };
+};
+
+/** Who can make one exact stretch of slots, for a time picked by hand rather than found. */
+export const blockForSlots = (
+	event: W2MEvent,
+	grid: Grid,
+	roles: Roles,
+	startSlot: number,
+	endSlot: number
+): TimeBlock => {
+	const { considered, required } = whoCounts(event, roles);
+	const slots = event.slots.slice(startSlot, endSlot + 1).map((slot) => new Set(slot.available));
+	const attendees = considered.filter((p) => slots.every((free) => free.has(p)));
+	const inGroup = new Set(attendees);
+	const missing = considered.filter((p) => !inGroup.has(p));
+	const requiredMissing = missing.filter((p) => required.includes(p));
+	return {
+		id: `pick-${startSlot}-${endSlot}`,
+		tier: classify(missing.length, requiredMissing.length, required.length),
+		day: grid.dayOfSlot[startSlot],
+		startSlot,
+		endSlot,
+		start: event.slots[startSlot].time,
+		end: event.slots[endSlot].time + event.slotSeconds,
+		attendees,
+		missing,
+		requiredMissing
+	};
+};
+
+/**
+ * How many "one person short" blocks each person is the one missing from, most first. Making
+ * that person optional (or skipping them, when no one is required) opens those times up.
+ */
+export const blockers = (
+	near: Pick<TimeBlock, 'missing' | 'requiredMissing'>[]
+): { id: number; count: number }[] => {
+	const counts = new Map<number, number>();
+	for (const block of near) {
+		const id = block.requiredMissing[0] ?? block.missing[0];
+		if (id !== undefined) counts.set(id, (counts.get(id) ?? 0) + 1);
+	}
+	return [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
 };
 
 /** Everyone considered who is free during a single slot. */

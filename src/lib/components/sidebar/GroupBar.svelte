@@ -51,9 +51,24 @@
 
 <div class="px-4 pt-2">
 	<div class="flex flex-wrap gap-1.5" role="group" aria-label="Show a group">
-		<button class={chip(!active)} aria-pressed={!active} onclick={() => app.setGroup(null)}>
+		<button
+			class={chip(!app.groupLabel)}
+			aria-pressed={!app.groupLabel}
+			onclick={() => app.showEveryone()}
+		>
 			Everyone <span class="tabular opacity-60">{people.length}</span>
 		</button>
+		{#if app.sharedGroup}
+			<!-- A group from someone else's link: a view, not one of this viewer's saved groups. -->
+			<button
+				class={chip(true)}
+				aria-pressed="true"
+				onclick={() => app.showEveryone()}
+				title="From a shared link. Click to show everyone."
+			>
+				<span class="truncate">{app.sharedGroup}</span>
+			</button>
+		{/if}
 		{#each groups.items as group (group.id)}
 			<button
 				class={chip(active?.id === group.id)}

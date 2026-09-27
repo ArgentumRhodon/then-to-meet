@@ -1,6 +1,7 @@
 <script lang="ts">
 	import Minus from '@lucide/svelte/icons/minus';
 	import Plus from '@lucide/svelte/icons/plus';
+	import { MAX_DURATION, MIN_DURATION } from '$lib/analysis/duration';
 	import { formatDuration } from '$lib/analysis/format';
 	import { app } from '$lib/state/app.svelte';
 
@@ -18,7 +19,7 @@
 			<button
 				class="flex h-full w-8 items-center justify-center rounded-l-lg text-fg-2 hover:bg-subtle hover:text-fg disabled:opacity-40"
 				onclick={() => app.setDuration(app.duration - 15)}
-				disabled={app.duration <= 15}
+				disabled={app.duration <= MIN_DURATION}
 				aria-label="15 minutes shorter"
 			>
 				<Minus class="size-3.5" />
@@ -29,7 +30,7 @@
 			<button
 				class="flex h-full w-8 items-center justify-center rounded-r-lg text-fg-2 hover:bg-subtle hover:text-fg disabled:opacity-40"
 				onclick={() => app.setDuration(app.duration + 15)}
-				disabled={app.duration >= 480}
+				disabled={app.duration >= MAX_DURATION}
 				aria-label="15 minutes longer"
 			>
 				<Plus class="size-3.5" />

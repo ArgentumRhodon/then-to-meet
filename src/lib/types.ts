@@ -24,7 +24,15 @@ export interface W2MEvent {
 	slots: Slot[];
 	/** Only people who marked at least one slot. */
 	people: Person[];
+	/** People who signed in but haven't marked any times yet. */
+	noTimes: Person[];
 	fetchedAt: number;
+}
+
+/** A stretch of time as Unix seconds, `end` exclusive. */
+export interface TimeRange {
+	start: number;
+	end: number;
 }
 
 export type Role = 'required' | 'optional' | 'skip';

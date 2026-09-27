@@ -3,14 +3,15 @@
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Copy from '@lucide/svelte/icons/copy';
 	import Download from '@lucide/svelte/icons/download';
+	import Link from '@lucide/svelte/icons/link';
+	import { page } from '$app/state';
 	import type { TimeBlock } from '$lib/analysis/bestTimes';
 	import { formatDay, formatDuration, formatTime, formatTimeRange } from '$lib/analysis/format';
-	import { downloadIcs, googleCalendarUrl, nextWeeklyOccurrence } from '$lib/share/calendar';
+	import { downloadIcs, googleCalendarUrl, meetingFor } from '$lib/share/calendar';
 	import { app } from '$lib/state/app.svelte';
 	import Avatar from '$lib/ui/Avatar.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
 	import { copyText } from '$lib/ui/toast.svelte';
-	import { eventUrl } from '$lib/w2m/id';
 	import DayStrip from './DayStrip.svelte';
 
 	let { block }: { block: TimeBlock } = $props();
@@ -41,27 +42,14 @@
 		chosenStart !== null && starts.includes(chosenStart) ? chosenStart : block.start
 	);
 	const end = $derived(start + app.duration * 60);
-	// Weekly polls have no real dates, so export the next occurrence as a weekly repeating event
-	// in the viewer's own timezone.
-	const meeting = $derived.by(() => {
-		const at = event.weekly ? nextWeeklyOccurrence(start, app.zone) : start;
-		return {
-			title: event.title,
-			start: at,
-			end: at + app.duration * 60,
-			details: `Picked with ThenToMeet from ${event.id === 'demo' ? 'a demo poll' : eventUrl(event.id)}`,
-			repeatWeeklyIn: event.weekly ? app.zone : undefined
-		};
-	});
+	const meeting = $derived(meetingFor(event, start, end, app.zone));
 	const dayLabel = $derived(formatDay(block.start, zone, event.weekly));
 	const weeklyNote = $derived(
 		`Adds a weekly meeting starting ${formatDay(meeting.start, app.zone, false)}, ` +
 			`in ${app.zone.replaceAll('_', ' ')} time.`
 	);
 
-	const toggle = () => {
-		app.pinnedBlock = pinned ? null : block;
-	};
+	const toggle = () => app.pinBlock(pinned ? null : block);
 
 	const copy = () =>
 		copyText(
@@ -71,6 +59,7 @@
 </script>
 
 <li
+	data-result
 	class="rounded-xl border transition-colors {pinned
 		? 'border-accent bg-surface shadow-card'
 		: 'border-line bg-surface hover:border-line-strong'}"
@@ -170,6 +159,15 @@
 				<button class="btn btn-secondary btn-sm" onclick={() => downloadIcs(meeting)}>
 					<Download class="size-3.5" aria-hidden="true" />
 					.ics
+				</button>
+				<button
+					class="btn btn-secondary btn-sm"
+					onclick={() =>
+						copyText(app.shareLink(page.url.origin, [{ start, end }]), 'Link to this time copied')}
+					title="Opens this event with this time highlighted"
+				>
+					<Link class="size-3.5" aria-hidden="true" />
+					Link
 				</button>
 				<button class="btn btn-secondary btn-sm" onclick={copy}>
 					<Copy class="size-3.5" aria-hidden="true" />

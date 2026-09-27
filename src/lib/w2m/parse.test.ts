@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { demoEventHtml } from './demo';
 import { extractEventId } from './id';
-import { decodeText, EventNotFoundError, parseEvent } from './parse';
+import { decodeText, EventFormatError, EventNotFoundError, parseEvent } from './parse';
 
 const NOW = new Date('2026-09-23T12:00:00Z');
 
@@ -20,12 +20,13 @@ describe('parseEvent', () => {
 		}
 	});
 
-	it('decodes names and drops people with no availability', () => {
+	it('decodes names and sets aside people with no availability', () => {
 		const names = event.people.map((p) => p.name);
 		expect(names).toContain("Sam O'Connor");
 		expect(names).toContain('Diego Álvarez');
 		expect(names).not.toContain('Guest');
 		expect(event.people).toHaveLength(7);
+		expect(event.noTimes).toEqual([{ id: 90210008, name: 'Guest' }]);
 	});
 
 	it('detects dated events', () => {
@@ -48,10 +49,21 @@ describe('parseEvent', () => {
 		expect(parsed.title).toBe('Untitled event');
 	});
 
-	it('throws when the page has no event data', () => {
+	it('reports a missing event as not found', () => {
+		// What When2Meet actually serves for an ID that doesn't exist.
+		expect(() => parseEvent('<html><title> - When2meet</title></html>', 'x')).toThrow(
+			EventNotFoundError
+		);
 		expect(() => parseEvent('<html><title>When2meet</title></html>', 'x')).toThrow(
 			EventNotFoundError
 		);
+	});
+
+	it('reports a real event it cannot read as a format change', () => {
+		expect(() =>
+			parseEvent('<html><title>Team sync - When2meet</title><div id="grid"></div></html>', 'x')
+		).toThrow(EventFormatError);
+		expect(() => parseEvent('<html><body>new app</body></html>', 'x')).toThrow(EventFormatError);
 	});
 });
 

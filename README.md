@@ -7,10 +7,12 @@ A modern web application that helps groups find optimal meeting times by analyzi
 Paste a When2Meet link and ThenToMeet turns the poll into answers:
 
 - Ranks every time window that fits your meeting length, grouped into "everyone's free", "all required people", and "one person short"
-- Lets you mark each person as required, optional, or skipped, one at a time or in bulk
+- Plans meetings two or three times a week, at about the same time with a day off between (like Mon/Wed/Fri or Tue/Thu)
+- Lets you mark each person as required, optional, or skipped, one at a time or in bulk, and points out who's blocking the most near misses
 - Saves groups of people for each event, so a team is one click away
-- Shows the poll as a heatmap in any timezone, with per-slot details and a spotlight on any one person
-- Shares the result as a link, a Slack/Discord-ready summary, or a Google Calendar / .ics event
+- Shows the poll as a heatmap in any timezone, with per-slot details, a spotlight on any one person, and click-or-drag to check any time
+- Tells you who responded or changed their times since your last visit, keeps checking while the page is open, and writes the reminder for anyone who signed in without marking times
+- Shares the result as a link (with a real preview in Slack, Discord, and iMessage), a Slack/Discord-ready summary, or a Google Calendar / .ics event
 
 ## Tech Stack
 
@@ -25,11 +27,13 @@ Paste a When2Meet link and ThenToMeet turns the poll into answers:
 src/
 ├── routes/
 │   ├── +page.svelte              # Landing page and event workspace
+│   ├── +page.server.ts           # Link previews: fetches a shared event for its meta tags
 │   └── api/event/[id]/+server.ts # Fetches and parses a When2Meet event into JSON
 ├── lib/
+│   ├── server/                   # When2Meet fetching with a timeout and a short shared cache
 │   ├── w2m/                      # When2Meet parsing, link handling, demo event
-│   ├── analysis/                 # Heatmap grid and best-time search (unit tested)
-│   ├── share/                    # Share links, text summaries, calendar export
+│   ├── analysis/                 # Heatmap grid, best-time search, response changes (unit tested)
+│   ├── share/                    # Share links, link previews, text summaries, calendar export
 │   ├── state/                    # App state, recent events, groups, theme
 │   ├── components/               # Sidebar, heatmap, and landing UI
 │   └── ui/                       # Small shared UI pieces
@@ -39,11 +43,17 @@ src/
 
 1. **When2Meet Integration** - Accepts full links or bare IDs, including v1 `/?<id>` links
 2. **Best Times** - Finds maximal windows for any meeting length, with near misses, a "most people" fallback when nothing fits everyone, and day and sort filters
-3. **Required and Optional People** - Rankings respect who has to be there; skipped people are ignored
-4. **Groups and Bulk Selection** - Check people (shift-click for ranges) to set roles together or save them as a group; picking a group instantly shows the overlap for just its members
-5. **Interactive Heatmap** - Hover or arrow-key through slots, spotlight one person, pin a result
-6. **Timezones** - View any event in any IANA timezone
-7. **Share and Export** - Shareable state links, copyable summaries, Google Calendar and .ics (weekly polls export as a weekly repeating event)
-8. **Browser Persistence** - Remembers recent events and each event's groups, roles, length, and timezone
-9. **Colorblind-Friendly Heatmap** - Palettes tuned for deuteranopia, protanopia, and tritanopia, checked with a color vision deficiency simulation
-10. **Responsive Design** - Sidebar layout on desktop; on screens too narrow for the heatmap, best times takes over with a per-day availability strip. Dark (default), light, and system themes
+3. **Meetings a Week** - Once, twice, or three times: sets of meetings on days with at least one day between them (counting the wrap into next week) that start within half an hour of each other, ranked by the worst meeting first. Each set highlights all its meetings on the grid, lets every meeting start later together when that keeps the same people, and exports meetings at the same time as one repeating calendar event (others get their own), each described with the full schedule and who can make which meeting
+4. **Required and Optional People** - Rankings respect who has to be there; skipped people are ignored. When the same person is the only one missing from several near misses, best times says so, with a one-click fix
+5. **Groups and Bulk Selection** - Check people (or click their names; shift-click for ranges) to set roles together or save them as a group; picking a group instantly shows the overlap for just its members
+6. **Interactive Heatmap** - Hover or arrow-key through slots, pin a result, and preview anyone's times by hovering their name (the eye button keeps them on the grid, with a banner). Click a cell (or press Enter) to check a meeting starting there, or drag to check an exact range; hold Shift to add more times (or Shift-click one to drop it), see who can make every one, then export them. Esc backs out a step at a time: the one-person view, then a pinned result or picked times (or, mid-drag, the drag itself)
+7. **Timezones** - View any event in any IANA timezone
+8. **Share and Export** - Shareable state links (including a group's name, a specific time, and meetings a week), link previews that name the best time, copyable summaries, Google Calendar and .ics (weekly polls export as a weekly repeating event)
+9. **Response Tracking** - New and updated responses since your last visit are flagged, the page checks for more every minute while it's open, refresh reports what changed, and anyone who signed in without marking times is listed with a copyable reminder
+10. **Browser Persistence** - Remembers recent events and each event's groups, roles, length, meetings a week, and timezone
+11. **Colorblind-Friendly Heatmap** - Palettes tuned for deuteranopia, protanopia, and tritanopia, checked with a color vision deficiency simulation
+12. **Responsive Design** - Sidebar layout on desktop; on screens too narrow for the heatmap, best times takes over with a per-day availability strip. Dark (default), light, and system themes
+
+## Checks
+
+CI runs Prettier, `svelte-check`, and the unit tests on every push. A scheduled workflow also reads a real When2Meet poll each day (`npm run test:live`), so a change on When2Meet's end shows up there first. Point it at a poll you own by setting the `W2M_LIVE_EVENT` repository variable.

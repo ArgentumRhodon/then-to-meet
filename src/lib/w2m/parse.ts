@@ -18,6 +18,14 @@ export class EventNotFoundError extends Error {
 	}
 }
 
+/** The page is a real event, but not in a shape the parser knows: When2Meet likely changed. */
+export class EventFormatError extends Error {
+	constructor() {
+		super("When2Meet's event page changed, so it couldn't be read.");
+		this.name = 'EventFormatError';
+	}
+}
+
 const NAMED_ENTITIES: Record<string, string> = {
 	amp: '&',
 	lt: '<',
@@ -48,10 +56,22 @@ export const decodeText = (raw: string): string =>
 const matchAll = (html: string, pattern: RegExp): RegExpExecArray[] =>
 	Array.from(html.matchAll(new RegExp(pattern.source, pattern.flags)));
 
-const parseTitle = (html: string): string => {
-	const raw = html.match(TITLE)?.[1] ?? '';
-	const title = decodeText(raw).replace(/\s*-\s*When2meet\s*$/i, '');
-	return title || 'Untitled event';
+const eventName = (rawTitle: string): string =>
+	decodeText(rawTitle).replace(/\s*-\s*When2meet\s*$/i, '');
+
+const parseTitle = (html: string): string =>
+	eventName(html.match(TITLE)?.[1] ?? '') || 'Untitled event';
+
+/**
+ * Why a page has no slots. When2Meet answers a missing event with a normal page titled
+ * " - When2meet", so a page with a real event name but no slots means the format changed.
+ */
+const noSlotsError = (html: string): Error => {
+	const title = html.match(TITLE);
+	const name = title ? eventName(title[1]) : null;
+	return name === '' || (name && /^when2meet$/i.test(name))
+		? new EventNotFoundError()
+		: new EventFormatError();
 };
 
 /**
@@ -63,7 +83,7 @@ export const parseEvent = (html: string, id: string): W2MEvent => {
 	for (const [, index, time] of matchAll(html, TIME_OF_SLOT)) {
 		times.set(Number(index), Number(time));
 	}
-	if (times.size === 0) throw new EventNotFoundError();
+	if (times.size === 0) throw noSlotsError(html);
 
 	const available = new Map<number, Set<number>>();
 	for (const [, index] of matchAll(html, AVAILABLE_INIT)) {
@@ -85,11 +105,15 @@ export const parseEvent = (html: string, id: string): W2MEvent => {
 	}
 	const responded = new Set(slots.flatMap((slot) => slot.available));
 	const people: Person[] = [];
+	const noTimes: Person[] = [];
+	const listed = new Set<number>();
 	for (const [, index, personId] of matchAll(html, PEOPLE_ID)) {
 		const pid = Number(personId);
-		// When2Meet lists everyone who signed in; skip people who never marked a time.
-		if (!responded.has(pid) || people.some((p) => p.id === pid)) continue;
-		people.push({ id: pid, name: names.get(Number(index)) || `Person ${people.length + 1}` });
+		if (listed.has(pid)) continue;
+		listed.add(pid);
+		const person = { id: pid, name: names.get(Number(index)) || `Person ${listed.size}` };
+		// When2Meet lists everyone who signed in, including people who haven't marked a time yet.
+		(responded.has(pid) ? people : noTimes).push(person);
 	}
 
 	let slotSeconds = Infinity;
@@ -105,6 +129,7 @@ export const parseEvent = (html: string, id: string): W2MEvent => {
 		slotSeconds: Number.isFinite(slotSeconds) ? slotSeconds : DEFAULT_SLOT_SECONDS,
 		slots,
 		people,
+		noTimes,
 		fetchedAt: Date.now()
 	};
 };

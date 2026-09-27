@@ -3,7 +3,6 @@
 	import Link from '@lucide/svelte/icons/link';
 	import Share2 from '@lucide/svelte/icons/share-2';
 	import { page } from '$app/state';
-	import { shareSearch } from '$lib/share/url';
 	import { buildSummary } from '$lib/share/summary';
 	import { app } from '$lib/state/app.svelte';
 	import { dismissable } from '$lib/ui/dismissable';
@@ -11,10 +10,7 @@
 
 	let open = $state(false);
 
-	const link = () =>
-		app.event
-			? `${page.url.origin}/${shareSearch(app.event.id, app.duration, app.effectiveRoles)}`
-			: '';
+	const link = () => app.shareLink(page.url.origin);
 
 	const copyLink = () => {
 		copyText(link(), 'Link copied');
@@ -27,9 +23,11 @@
 			buildSummary({
 				event: app.event,
 				best: app.best,
+				sets: app.meetingSets,
+				perWeek: app.perWeek,
 				duration: app.duration,
 				zone: app.grid.zone,
-				group: app.group?.name,
+				group: app.groupLabel ?? undefined,
 				link: link()
 			}),
 			'Summary copied'
@@ -59,7 +57,9 @@
 				<span>
 					<span class="block text-[13px] font-medium">Copy link</span>
 					<span class="block text-xs text-fg-3"
-						>Opens this event with your roles and meeting length.</span
+						>Opens this event with your roles and meeting length{app.selection.length
+							? `, and your picked time${app.selection.length > 1 ? 's' : ''}`
+							: ''}.</span
 					>
 				</span>
 			</button>

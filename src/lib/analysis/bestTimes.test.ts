@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Roles, W2MEvent } from '$lib/types';
 import { demoEventHtml } from '$lib/w2m/demo';
 import { parseEvent } from '$lib/w2m/parse';
-import { findBestTimes, type TimeBlock } from './bestTimes';
+import { blockers, blockForSlots, findBestTimes, slotSpan, type TimeBlock } from './bestTimes';
 import { buildGrid } from './grid';
 
 const ZONE = 'America/New_York';
@@ -123,6 +123,70 @@ describe('findBestTimes', () => {
 		};
 		const result = findBestTimes(gappy, buildGrid(gappy, 'UTC'), {}, 30);
 		expect(result.everyone).toEqual([]);
+	});
+});
+
+/** Unix seconds for a wall-clock time in the demo's zone, like "2026-09-29T14:00". */
+const at = (iso: string) => DateTime.fromISO(iso, { zone: ZONE }).toSeconds();
+
+describe('picking a time by hand', () => {
+	// The demo event runs Mon Sep 28 – Fri Oct 2, 2026, 9 AM – 5 PM.
+	const pickBlock = (from: string, to: string, roles: Roles = {}) => {
+		const span = slotSpan(event, grid, at(from), at(to))!;
+		return blockForSlots(event, grid, roles, span.startSlot, span.endSlot);
+	};
+
+	it('covers the slots in the range', () => {
+		const span = slotSpan(event, grid, at('2026-09-29T14:00'), at('2026-09-29T15:00'))!;
+		expect(span.endSlot - span.startSlot + 1).toBe(4);
+		expect(describeBlock(pickBlock('2026-09-29T14:00', '2026-09-29T15:00'))).toBe(
+			'Tue 14:00-15:00'
+		);
+	});
+
+	it('stops at the end of the day', () => {
+		const block = pickBlock('2026-09-29T16:00', '2026-09-29T19:00');
+		expect(describeBlock(block)).toBe('Tue 16:00-17:00');
+	});
+
+	it('finds nothing when no slot starts at that time', () => {
+		expect(slotSpan(event, grid, at('2026-09-29T08:00'), at('2026-09-29T09:00'))).toBeNull();
+	});
+
+	it('says who can and can’t make it', () => {
+		expect(pickBlock('2026-09-29T14:00', '2026-09-29T15:00')).toMatchObject({
+			tier: 'everyone',
+			missing: []
+		});
+		const longer = pickBlock('2026-09-29T14:00', '2026-09-29T15:30');
+		expect(longer.tier).toBe('near');
+		expect(longer.missing).toEqual([byName('Taylor')]);
+		expect(longer.attendees).toHaveLength(6);
+	});
+
+	it('leaves skipped people out', () => {
+		const block = pickBlock('2026-09-29T14:00', '2026-09-29T15:30', {
+			[byName('Taylor')]: 'skip'
+		});
+		expect(block.tier).toBe('everyone');
+		expect(block.attendees).not.toContain(byName('Taylor'));
+	});
+});
+
+describe('blockers', () => {
+	it('counts who is the one person missing from near misses', () => {
+		expect(blockers(run().near)).toEqual([
+			{ id: byName('Taylor'), count: 2 },
+			{ id: byName('Sam'), count: 1 }
+		]);
+	});
+
+	it('works when no one is required', () => {
+		const allOptional: Roles = Object.fromEntries(event.people.map((p) => [p.id, 'optional']));
+		const near = run(allOptional).near;
+		expect(near.length).toBeGreaterThan(0);
+		const counted = blockers(near);
+		expect(counted.reduce((n, b) => n + b.count, 0)).toBe(near.length);
 	});
 });
 

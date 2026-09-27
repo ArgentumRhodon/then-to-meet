@@ -1,39 +1,22 @@
 import { json } from '@sveltejs/kit';
-import { demoEventHtml } from '$lib/w2m/demo';
-import { DEMO_ID, eventUrl, isEventId } from '$lib/w2m/id';
-import { EventNotFoundError, parseEvent } from '$lib/w2m/parse';
+import { EventLoadError, getEvent } from '$lib/server/w2m';
+import { isEventId } from '$lib/w2m/id';
 import type { RequestHandler } from './$types';
 
-const fail = (status: number, message: string) =>
-	json({ message }, { status, headers: { 'cache-control': 'no-store' } });
+const NO_STORE = { 'cache-control': 'no-store' };
 
-export const GET: RequestHandler = async ({ params, fetch }) => {
+const fail = (status: number, message: string) => json({ message }, { status, headers: NO_STORE });
+
+/** `?fresh=1` skips the short server cache, for the refresh button. */
+export const GET: RequestHandler = async ({ params, fetch, url }) => {
 	const { id } = params;
 	if (!isEventId(id)) return fail(400, "That doesn't look like a When2Meet link.");
 
-	let html: string;
-	if (id === DEMO_ID) {
-		html = demoEventHtml();
-	} else {
-		try {
-			const response = await fetch(eventUrl(id), {
-				headers: {
-					Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
-				}
-			});
-			if (!response.ok) return fail(502, `When2Meet responded with an error (${response.status}).`);
-			html = await response.text();
-		} catch {
-			return fail(502, "Couldn't reach When2Meet. Check your connection and try again.");
-		}
-	}
-
 	try {
-		return json(parseEvent(html, id), { headers: { 'cache-control': 'no-store' } });
+		const event = await getEvent(id, fetch, { fresh: url.searchParams.has('fresh') });
+		return json(event, { headers: NO_STORE });
 	} catch (e) {
-		if (e instanceof EventNotFoundError) {
-			return fail(404, 'No When2Meet event found at that link. Double-check it and try again.');
-		}
-		return fail(500, "That event loaded, but its format wasn't recognized.");
+		if (e instanceof EventLoadError) return fail(e.status, e.message);
+		return fail(500, 'Something went wrong loading that event. Try again.');
 	}
 };

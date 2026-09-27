@@ -28,6 +28,8 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 		});
 	} catch (e) {
 		if (e instanceof EventLoadError) return fail(e.status, e.message);
+		// Shows up in the host's function logs; the response only says it failed.
+		console.error('Preview image failed', e);
 		return fail(500, 'Couldn’t draw that event');
 	}
 };

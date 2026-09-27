@@ -1,6 +1,8 @@
 import inter500 from '@fontsource/inter/files/inter-latin-500-normal.woff?inline';
 import inter600 from '@fontsource/inter/files/inter-latin-600-normal.woff?inline';
 import { Resvg } from '@resvg/resvg-js';
+// Held at 0.32: 0.33 shapes text with harfbuzzjs, which reads its hb.wasm from a path built at
+// runtime. Vercel's file tracing can't see that path, leaves the file out, and every image fails.
 import satori from 'satori';
 import { slotAttendance, type TimeBlock } from '$lib/analysis/bestTimes';
 import { formatMinuteOfDay } from '$lib/analysis/format';

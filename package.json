@@ -42,6 +42,6 @@
 		"@lucide/svelte": "^1.47.0",
 		"@resvg/resvg-js": "^2.6.2",
 		"luxon": "^3.5.0",
-		"satori": "^0.33.5"
+		"satori": "^0.32.0"
 	}
 }

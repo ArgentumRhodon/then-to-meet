@@ -6,6 +6,7 @@
 	import { DateTime } from 'luxon';
 	import { formatDay } from '$lib/analysis/format';
 	import { app } from '$lib/state/app.svelte';
+	import ThemeMenu from '$lib/ui/ThemeMenu.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { DEMO_ID, eventUrl } from '$lib/w2m/id';
 	import ShareMenu from './ShareMenu.svelte';
@@ -85,10 +86,20 @@
 			<div class="flex items-center gap-2">
 				<h1 class="truncate text-lg font-semibold tracking-tight">{event.title}</h1>
 				{#if event.id === DEMO_ID}
-					<span class="rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn"
+					<span
+						class="shrink-0 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn"
 						>Demo</span
 					>
 				{/if}
+				<button
+					class="btn btn-ghost btn-icon size-7 shrink-0"
+					onclick={() => refresh()}
+					disabled={app.refreshing}
+					aria-label="Refresh responses"
+					title="Pull the latest responses"
+				>
+					<RefreshCw class="size-4 {app.refreshing ? 'animate-spin' : ''}" />
+				</button>
 			</div>
 			<p class="mt-0.5 text-[13px] text-fg-2 sm:truncate">
 				{event.people.length}
@@ -98,16 +109,11 @@
 			</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-1.5">
+			<!-- Narrow screens keep it in the top bar, where there's room (see Workspace). -->
+			<div class="hidden lg:block">
+				<ThemeMenu />
+			</div>
 			<TimezonePicker />
-			<button
-				class="btn btn-ghost btn-icon size-8"
-				onclick={() => refresh()}
-				disabled={app.refreshing}
-				aria-label="Refresh responses"
-				title="Pull the latest responses"
-			>
-				<RefreshCw class="size-4 {app.refreshing ? 'animate-spin' : ''}" />
-			</button>
 			{#if event.id !== DEMO_ID}
 				<a
 					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"

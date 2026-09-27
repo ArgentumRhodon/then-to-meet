@@ -5,6 +5,7 @@
 	import { formatOffset } from '$lib/analysis/format';
 	import { app, localZone } from '$lib/state/app.svelte';
 	import { dismissable } from '$lib/ui/dismissable';
+	import { keepInView } from '$lib/ui/keepInView';
 
 	let open = $state(false);
 	let query = $state('');
@@ -62,7 +63,10 @@
 	</button>
 
 	{#if open}
-		<div class="popover absolute top-full right-0 z-30 mt-1.5 w-72 overflow-hidden">
+		<div
+			class="popover absolute top-full right-0 z-30 mt-1.5 w-72 overflow-hidden"
+			{@attach keepInView}
+		>
 			<div class="border-b border-line p-2">
 				<input
 					class="input h-8 text-[13px]"

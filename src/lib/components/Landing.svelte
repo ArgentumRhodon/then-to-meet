@@ -1,6 +1,6 @@
 <script lang="ts">
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
-	import Globe from '@lucide/svelte/icons/globe';
+	import Share from '@lucide/svelte/icons/share';
 	import ListOrdered from '@lucide/svelte/icons/list-ordered';
 	import UserCheck from '@lucide/svelte/icons/user-check';
 	import { openEvent } from '$lib/navigation';
@@ -13,19 +13,19 @@
 
 	const features = [
 		{
-			icon: ListOrdered,
-			title: 'Ranked best times',
-			body: 'See every window that fits your meeting, plus near misses that are one person short.'
-		},
-		{
 			icon: UserCheck,
-			title: 'Required or optional',
+			title: "Choose who's required",
 			body: 'Mark who has to be there, who would be nice to have, and who to skip.'
 		},
 		{
-			icon: Globe,
-			title: 'Any timezone',
-			body: 'View the poll in your timezone or your team’s, then share a link or add it to a calendar.'
+			icon: ListOrdered,
+			title: 'Find the best times',
+			body: 'See every window that fits your meeting needs, plus near misses.'
+		},
+		{
+			icon: Share,
+			title: 'Share the results',
+			body: "Once you've found a meeting time that works for you, share it with others or add it to your calendar."
 		}
 	];
 </script>

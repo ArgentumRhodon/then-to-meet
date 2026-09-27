@@ -8,7 +8,6 @@
 	import type { TimeRange } from '$lib/types';
 	import Avatar from '$lib/ui/Avatar.svelte';
 	import { heatColor, heatMix as mix } from '$lib/ui/heat';
-	import HeatPaletteMenu from '$lib/ui/HeatPaletteMenu.svelte';
 	import { isTyping } from '$lib/ui/keys';
 	import PickedTime from './PickedTime.svelte';
 	import SlotTooltip from './SlotTooltip.svelte';
@@ -344,9 +343,6 @@
 				>Hover a cell for details. Click or drag to check any time, Shift to add more, Esc to clear.</span
 			>
 		{/if}
-		<div class="ml-auto">
-			<HeatPaletteMenu />
-		</div>
 	</div>
 
 	<!-- isolate keeps the sticky headers' z-index inside the grid, below the app's menus. -->

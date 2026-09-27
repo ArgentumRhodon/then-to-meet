@@ -28,7 +28,7 @@
 <svelte:window {onkeydown} />
 
 <div class="workspace grid min-h-dvh lg:h-dvh lg:overflow-hidden">
-	<!-- Above the sidebar (z-10) so the Events and theme menus open over it. -->
+	<!-- Above the sidebar (z-10) so its menus open over it. -->
 	<div
 		class="relative z-30 flex h-14 items-center gap-2 border-b border-line bg-panel px-4 [grid-area:brand] lg:h-auto lg:border-r"
 	>
@@ -45,7 +45,11 @@
 		</a>
 		<div class="ml-auto flex items-center gap-1.5">
 			<EventSwitcher />
-			<ThemeMenu />
+			<!-- On narrow screens this bar is the top of the page, so the theme menu sits here; the
+			     wide layout puts it in the event header, left of the timezone. -->
+			<div class="lg:hidden">
+				<ThemeMenu />
+			</div>
 		</div>
 	</div>
 
@@ -84,6 +88,9 @@
 <style>
 	.workspace {
 		grid-template-columns: minmax(0, 1fr);
+		/* When everything is folded away and the page is shorter than the screen, the spare height
+		   goes to the last row, not spread across the bars above it. */
+		grid-template-rows: auto auto auto 1fr;
 		grid-template-areas: 'brand' 'header' 'side' 'grid';
 	}
 	@media (min-width: 64rem) {

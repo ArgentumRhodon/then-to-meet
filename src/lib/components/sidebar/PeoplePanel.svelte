@@ -4,7 +4,6 @@
 	import Search from '@lucide/svelte/icons/search';
 	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import X from '@lucide/svelte/icons/x';
-	import { formatDuration } from '$lib/analysis/format';
 	import { splitSignIns } from '$lib/analysis/signIns';
 	import { buildReminder } from '$lib/share/reminder';
 	import { app } from '$lib/state/app.svelte';
@@ -44,17 +43,6 @@
 		const q = query.trim().toLowerCase();
 		return q ? inView.filter((p) => p.name.toLowerCase().includes(q)) : inView;
 	});
-
-	const freeMinutes = $derived.by(() => {
-		const map = new Map<number, number>();
-		const event = app.event;
-		if (!event) return map;
-		for (const slot of event.slots) {
-			for (const id of slot.available) map.set(id, (map.get(id) ?? 0) + event.slotSeconds / 60);
-		}
-		return map;
-	});
-	const maxFree = $derived(Math.max(1, ...freeMinutes.values()));
 
 	const counts = $derived.by(() => {
 		const c = { required: 0, optional: 0, skip: 0 };
@@ -214,7 +202,6 @@
 			{@const role = app.roleOf(person.id)}
 			{@const pinned = app.pinnedPerson === person.id}
 			{@const selected = app.selected.has(person.id)}
-			{@const free = freeMinutes.get(person.id) ?? 0}
 			<li
 				class="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {pinned
 					? 'bg-accent-soft/40 ring-1 ring-accent/60 ring-inset'
@@ -243,34 +230,21 @@
 					onclick={(e) => check(e, index)}
 				>
 					<Avatar id={person.id} name={person.name} />
-					<span class="min-w-0 flex-1">
-						<span class="flex items-center gap-1.5">
+					<span class="flex min-w-0 flex-1 items-center gap-1.5">
+						<span class="truncate text-[13px] font-medium {role === 'skip' ? 'line-through' : ''}">
+							{person.name}
+						</span>
+						{#if added.has(person.id)}
 							<span
-								class="truncate text-[13px] font-medium {role === 'skip' ? 'line-through' : ''}"
+								class="shrink-0 rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent-fg"
+								>New</span
 							>
-								{person.name}
-							</span>
-							{#if added.has(person.id)}
-								<span
-									class="shrink-0 rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent-fg"
-									>New</span
-								>
-							{:else if updated.has(person.id)}
-								<span
-									class="shrink-0 rounded-full bg-warn-soft px-1.5 text-[10px] font-semibold text-warn"
-									>Updated</span
-								>
-							{/if}
-						</span>
-						<span class="mt-1 flex items-center gap-2">
-							<span class="h-1 w-12 overflow-hidden rounded-full bg-line">
-								<span
-									class="block h-full rounded-full bg-accent/70"
-									style:width="{(free / maxFree) * 100}%"
-								></span>
-							</span>
-							<span class="text-[11px] text-fg-3 tabular">{formatDuration(free)} free</span>
-						</span>
+						{:else if updated.has(person.id)}
+							<span
+								class="shrink-0 rounded-full bg-warn-soft px-1.5 text-[10px] font-semibold text-warn"
+								>Updated</span
+							>
+						{/if}
 					</span>
 				</button>
 				{#if layout.showHeatmap}

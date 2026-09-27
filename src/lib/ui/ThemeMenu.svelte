@@ -6,6 +6,7 @@
 	import Sun from '@lucide/svelte/icons/sun';
 	import { theme, type ThemePref } from '$lib/state/theme.svelte';
 	import { dismissable } from './dismissable';
+	import { keepInView } from './keepInView';
 	import HeatPaletteOptions from './HeatPaletteOptions.svelte';
 
 	const OPTIONS = [
@@ -30,6 +31,7 @@
 		aria-haspopup="menu"
 		aria-expanded={open}
 		aria-label="Theme: {current.label}"
+		title="Theme and heatmap colors, including colorblind-friendly palettes"
 	>
 		<current.icon class="size-3.5 text-fg-2" aria-hidden="true" />
 		{current.label}
@@ -40,6 +42,7 @@
 			class="popover absolute top-full right-0 z-30 mt-1.5 w-72 p-1"
 			role="menu"
 			aria-label="Theme and heatmap colors"
+			{@attach keepInView}
 		>
 			<p class="eyebrow px-2.5 pt-1.5 pb-1">Theme</p>
 			{#each OPTIONS as option (option.value)}

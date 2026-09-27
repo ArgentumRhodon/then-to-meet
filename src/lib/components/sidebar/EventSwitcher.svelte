@@ -4,6 +4,7 @@
 	import { app } from '$lib/state/app.svelte';
 	import { recent } from '$lib/state/recent.svelte';
 	import { dismissable } from '$lib/ui/dismissable';
+	import { keepInView } from '$lib/ui/keepInView';
 	import LinkInput from '../LinkInput.svelte';
 	import RecentList from '../RecentList.svelte';
 
@@ -29,9 +30,12 @@
 		Events
 	</button>
 	{#if open}
+		<!-- Hangs left from the button in the top bar of narrow screens, and right from the top of
+		     the sidebar in the wide layout. -->
 		<div
-			class="popover absolute top-full left-0 z-30 mt-1.5 w-[min(20rem,calc(100vw-2rem))] p-3"
+			class="popover absolute top-full right-0 z-30 mt-1.5 w-[min(20rem,calc(100vw-2rem))] p-3 lg:right-auto lg:left-0"
 			role="dialog"
+			{@attach keepInView}
 			aria-label="Open another event"
 		>
 			<p class="mb-2 text-xs font-medium text-fg-2">Paste another When2Meet link</p>

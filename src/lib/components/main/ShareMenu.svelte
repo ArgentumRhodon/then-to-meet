@@ -6,6 +6,7 @@
 	import { buildSummary } from '$lib/share/summary';
 	import { app } from '$lib/state/app.svelte';
 	import { dismissable } from '$lib/ui/dismissable';
+	import { keepInView } from '$lib/ui/keepInView';
 	import { copyText } from '$lib/ui/toast.svelte';
 
 	let open = $state(false);
@@ -47,7 +48,11 @@
 		Share
 	</button>
 	{#if open}
-		<div class="popover absolute top-full right-0 z-30 mt-1.5 w-72 p-1" role="menu">
+		<div
+			class="popover absolute top-full right-0 z-30 mt-1.5 w-72 p-1"
+			role="menu"
+			{@attach keepInView}
+		>
 			<button
 				class="flex w-full gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-subtle"
 				role="menuitem"

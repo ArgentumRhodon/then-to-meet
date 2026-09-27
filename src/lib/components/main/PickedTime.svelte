@@ -117,13 +117,11 @@
 		{#if !considered}
 			Everyone is skipped.
 		{:else if !misses.length}
-			<span class="font-medium text-ok">
-				Everyone can make {several ? 'every one' : 'it'}
-			</span>
+			<span class="font-medium text-ok">Everyone can make it</span>
 			({considered})
 		{:else if several}
-			<span class="font-medium text-fg tabular">{always.length} of {considered}</span> can make
-			every one · {misses.map((m) => `${m.name} misses ${m.days}`).join('; ')}
+			<span class="font-medium text-fg tabular">{always.length} of {considered}</span> can make it
+			to every meeting · {misses.map((m) => `${m.name} misses ${m.days}`).join('; ')}
 		{:else}
 			<span class="font-medium text-fg tabular">{always.length} of {considered}</span> can make it ·
 			without {misses.map((m) => m.name).join(', ')}

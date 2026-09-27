@@ -62,9 +62,9 @@ export const buildPreview = ({
 		const missing = [...new Set(picks.flatMap((p) => p.missing))];
 		const always = best.considered - missing.length;
 		const without = missing.map((id) => names.get(id)).join(', ');
-		const it = picks.length > 1 ? 'every one' : 'it';
+		const it = picks.length > 1 ? 'it to every meeting' : 'it';
 		const who = !missing.length
-			? `Everyone can make ${it}.`
+			? 'Everyone can make it.'
 			: `${always} of ${best.considered} can make ${it}` +
 				(missing.length <= 3 ? ` (not ${without}).` : '.');
 		lead = `Proposed: ${formatList(picks.map(when))}. ${who}`;

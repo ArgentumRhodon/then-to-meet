@@ -52,7 +52,7 @@ describe('buildPreview', () => {
 		const picks = [pickUtc([29, 18, 0], [29, 19, 30]), pickUtc([32, 15, 0], [32, 16, 0])];
 		const { description } = preview(60, {}, { picks });
 		expect(description).toMatch(/^Proposed: Tue, Sep 29, .* and Fri, Oct 2, /);
-		expect(description).toContain('6 of 7 can make every one (not Taylor Brooks).');
+		expect(description).toContain('6 of 7 can make it to every meeting (not Taylor Brooks).');
 	});
 
 	it('names the group in the title', () => {

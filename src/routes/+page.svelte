@@ -49,7 +49,14 @@
 		content={data.preview?.description ??
 			'Find the best time to meet from any When2Meet poll: rank times, mark who’s required, and share the result.'}
 	/>
-	<meta name="twitter:card" content="summary" />
+	{#if data.image}
+		<meta property="og:image" content={data.image} />
+		<meta property="og:image:type" content="image/png" />
+		<meta property="og:image:width" content="1200" />
+		<meta property="og:image:height" content="630" />
+		<meta property="og:image:alt" content="Heatmap of when people are free" />
+	{/if}
+	<meta name="twitter:card" content={data.image ? 'summary_large_image' : 'summary'} />
 </svelte:head>
 
 {#if app.event}

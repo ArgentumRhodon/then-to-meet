@@ -99,6 +99,11 @@ class AppState {
 	selection = $state.raw<TimeRange[]>([]);
 	/** People checked in the sidebar for bulk actions. */
 	selected = $state.raw<ReadonlySet<number>>(new Set());
+	/**
+	 * Whether the view is narrowed to the checked people, like a group that isn't saved. Only true
+	 * while someone is checked, and never saved or put in the address bar: it's a quick look.
+	 */
+	onlySelected = $state(false);
 	/** Who responded or changed their times since the last visit. */
 	changes = $state.raw<Changes>(NO_CHANGES);
 	#seen: Snapshot | undefined;
@@ -106,8 +111,20 @@ class AppState {
 	group = $derived(groups.get(this.groupId));
 	/** The name of whichever group is narrowing the view, saved or shared. */
 	groupLabel = $derived(this.group?.name ?? this.sharedGroup);
+	/** Who the view is narrowed to, for labels: the checked people, a group, or null for everyone. */
+	viewLabel = $derived(
+		this.onlySelected
+			? `${this.selected.size} selected ${this.selected.size === 1 ? 'person' : 'people'}`
+			: this.groupLabel
+	);
+	/** Roles with the selected group applied, before any narrowing to the checked people. */
+	#groupRoles = $derived(withGroup(this.roles, this.group, this.event?.people ?? []));
 	/** The roles the heatmap and best times actually use. */
-	effectiveRoles = $derived(withGroup(this.roles, this.group, this.event?.people ?? []));
+	effectiveRoles = $derived(
+		this.onlySelected
+			? withGroup(this.#groupRoles, { members: [...this.selected] }, this.event?.people ?? [])
+			: this.#groupRoles
+	);
 	grid = $derived(this.event ? buildGrid(this.event, this.zone) : null);
 	best = $derived(
 		this.event && this.grid
@@ -295,13 +312,19 @@ class AppState {
 		this.groupId = id;
 		this.sharedGroup = null;
 		this.selected = new Set();
+		this.onlySelected = false;
 		this.#unpin();
 		this.hoveredBlock = null;
 		this.hoveredSet = null;
 	}
 
-	/** Leaves any group view. For a shared link's group, everyone the link skipped counts again. */
+	/**
+	 * Leaves any group view. For a shared link's group, everyone the link skipped counts again. A
+	 * narrowing to the checked people ends, but they stay checked.
+	 */
 	showEveryone() {
+		this.showOnlySelected(false);
+		if (!this.groupLabel) return;
 		if (this.sharedGroup && this.event) {
 			const skipped = this.event.people.filter((p) => this.roleOf(p.id) === 'skip');
 			this.setRoles(
@@ -315,11 +338,23 @@ class AppState {
 	toggleSelected(id: number) {
 		const next = new Set(this.selected);
 		if (!next.delete(id)) next.add(id);
-		this.selected = next;
+		this.setSelected(next);
 	}
 
 	setSelected(ids: Iterable<number>) {
 		this.selected = new Set(ids);
+		if (!this.onlySelected) return;
+		// Checking someone changes who the narrowed view shows; unchecking everyone ends it.
+		if (!this.selected.size) this.onlySelected = false;
+		this.#unpin();
+	}
+
+	/** Narrows the heatmap and best times to the checked people, or goes back. */
+	showOnlySelected(on: boolean) {
+		this.onlySelected = on && this.selected.size > 0;
+		this.#unpin();
+		this.hoveredBlock = null;
+		this.hoveredSet = null;
 	}
 
 	resetRoles() {
@@ -417,16 +452,21 @@ class AppState {
 		this.changes = NO_CHANGES;
 	}
 
-	/** The query string for this event as it's set up now. */
+	/**
+	 * The query string for this event as it's set up now. Links to share (`forSharing`) also carry
+	 * a narrowing to the checked people. The address bar leaves it out: opened again, a link whose
+	 * skips don't match the saved roles reads as someone else's, and those skips would stick.
+	 */
 	search({
 		withZone = false,
-		picks = this.selection
-	}: { withZone?: boolean; picks?: TimeRange[] } = {}) {
+		picks = this.selection,
+		forSharing = false
+	}: { withZone?: boolean; picks?: TimeRange[]; forSharing?: boolean } = {}) {
 		if (!this.event) return '';
 		return shareSearch({
 			id: this.event.id,
 			duration: this.duration,
-			roles: this.effectiveRoles,
+			roles: forSharing ? this.effectiveRoles : this.#groupRoles,
 			group: this.groupLabel,
 			picks,
 			perWeek: this.perWeek,
@@ -437,7 +477,9 @@ class AppState {
 
 	/** A link to share, with the viewer's timezone so previews can spell out times. */
 	shareLink(origin: string, picks: TimeRange[] = this.selection): string {
-		return this.event ? `${origin}/${this.search({ withZone: true, picks })}` : '';
+		return this.event
+			? `${origin}/${this.search({ withZone: true, picks, forSharing: true })}`
+			: '';
 	}
 
 	/** Saves this event's roles, group, duration, and timezone so they come back next visit. */
@@ -462,6 +504,7 @@ class AppState {
 		this.pinnedSet = null;
 		this.selection = [];
 		this.selected = new Set();
+		this.onlySelected = false;
 	}
 }
 

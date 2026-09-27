@@ -1,12 +1,13 @@
 import type { PeopleGroup, Person, Roles } from '$lib/types';
 
 /**
- * The roles the analysis should use while a group is selected: members keep their own role and
- * everyone else is treated as skipped. The saved roles themselves are left alone.
+ * The roles the analysis should use while a group is selected (saved, or just the people checked
+ * right now): members keep their own role and everyone else is treated as skipped. The saved roles
+ * themselves are left alone.
  */
 export const withGroup = (
 	roles: Roles,
-	group: PeopleGroup | undefined,
+	group: Pick<PeopleGroup, 'members'> | undefined,
 	people: Person[]
 ): Roles => {
 	if (!group) return roles;

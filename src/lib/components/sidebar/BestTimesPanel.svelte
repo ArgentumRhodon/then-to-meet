@@ -174,10 +174,10 @@
 			{/if}
 		</div>
 
-		{#if app.groupLabel}
+		{#if app.viewLabel}
 			<div class="flex items-center gap-2 rounded-lg bg-accent-soft/60 py-1.5 pr-1.5 pl-3 text-xs">
 				<span class="min-w-0 flex-1 truncate text-accent-fg">
-					Times for <strong class="font-semibold">{app.groupLabel}</strong> only
+					Times for <strong class="font-semibold">{app.viewLabel}</strong> only
 				</span>
 				<button class="btn btn-ghost btn-sm" onclick={() => app.showEveryone()}>
 					Show everyone

@@ -336,6 +336,9 @@
 					{/each}
 				</span>
 				<span class="tabular">{app.attendance?.total ?? 0} available</span>
+				{#if app.viewLabel}
+					<span class="text-fg-3">· only {app.viewLabel}</span>
+				{/if}
 			</span>
 			<span class="hidden text-fg-3 sm:inline"
 				>Hover a cell for details. Click or drag to check any time, Shift to add more, Esc to clear.</span

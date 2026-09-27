@@ -158,7 +158,7 @@
 					: 'Opens this event with this time highlighted'}
 			>
 				<Link class="size-3.5" aria-hidden="true" />
-				Copy link
+				Link
 			</button>
 		</CalendarButtons>
 	</div>

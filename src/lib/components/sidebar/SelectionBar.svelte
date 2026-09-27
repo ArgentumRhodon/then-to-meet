@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import FolderPlus from '@lucide/svelte/icons/folder-plus';
+	import Funnel from '@lucide/svelte/icons/funnel';
 	import X from '@lucide/svelte/icons/x';
 	import { app } from '$lib/state/app.svelte';
 	import { groups } from '$lib/state/groups.svelte';
@@ -83,34 +84,27 @@
 			Clear
 		</button>
 	{:else}
-		<span class="text-xs text-fg-3">Select people to change several at once</span>
+		<span class="text-xs text-fg-3"
+			>Select people to see just their times or change them together</span
+		>
 	{/if}
 </div>
 
 {#if count}
 	<div class="mx-3 mb-1 space-y-2 rounded-lg border border-accent/30 bg-accent-soft/40 p-2.5">
-		<div class="flex items-center gap-2">
-			<span class="text-xs text-fg-2">Make them</span>
-			<div
-				class="ml-auto flex rounded-lg bg-surface p-0.5 ring-1 ring-line"
-				role="group"
-				aria-label="Role for selected people"
-			>
-				{#each ROLES as role (role.value)}
-					<button
-						class="h-6 rounded-md px-2 text-[11px] font-medium transition-colors {sharedRole ===
-						role.value
-							? 'bg-accent text-on-accent'
-							: 'text-fg-2 hover:bg-subtle hover:text-fg'}"
-						aria-pressed={sharedRole === role.value}
-						onclick={() => app.setRoles(app.selected, role.value)}
-					>
-						{role.label}
-					</button>
-				{/each}
-			</div>
-		</div>
 		<div class="flex flex-wrap gap-1.5">
+			<!-- A quick look at just these people, like a group without saving one. -->
+			<button
+				class="btn btn-sm {app.onlySelected ? 'btn-primary' : 'btn-secondary'}"
+				aria-pressed={app.onlySelected}
+				onclick={() => app.showOnlySelected(!app.onlySelected)}
+				title={app.onlySelected
+					? 'Show everyone again'
+					: 'Narrow the heatmap and best times to just these people'}
+			>
+				<Funnel class="size-3.5" aria-hidden="true" />
+				Show only them
+			</button>
 			<div
 				class="relative"
 				{@attach groupMenu ? dismissable(() => (groupMenu = false)) : undefined}
@@ -155,6 +149,27 @@
 					Remove from {active.name}
 				</button>
 			{/if}
+		</div>
+		<div class="flex items-center gap-2">
+			<span class="text-xs text-fg-2">Make them</span>
+			<div
+				class="ml-auto flex rounded-lg bg-surface p-0.5 ring-1 ring-line"
+				role="group"
+				aria-label="Role for selected people"
+			>
+				{#each ROLES as role (role.value)}
+					<button
+						class="h-6 rounded-md px-2 text-[11px] font-medium transition-colors {sharedRole ===
+						role.value
+							? 'bg-accent text-on-accent'
+							: 'text-fg-2 hover:bg-subtle hover:text-fg'}"
+						aria-pressed={sharedRole === role.value}
+						onclick={() => app.setRoles(app.selected, role.value)}
+					>
+						{role.label}
+					</button>
+				{/each}
+			</div>
 		</div>
 	</div>
 {/if}

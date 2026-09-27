@@ -24,12 +24,14 @@
 
 	// Keep the address bar shareable and remember this event's setup. The URL is read untracked:
 	// navigating away changes it before afterNavigate closes the event, and rerunning then would
-	// write the old event's link back over the new page's.
+	// write the old event's link back over the new page's. It's compared with the address bar
+	// itself, since replaceState doesn't update page.url: going back to the setup the page opened
+	// with would otherwise look like no change and leave the last one showing.
 	$effect(() => {
 		if (!app.event || app.status !== 'ready') return;
 		const search = app.search();
 		untrack(() => {
-			if (search !== page.url.search) replaceState(search, page.state);
+			if (search !== location.search) replaceState(search, page.state);
 		});
 		app.persist();
 	});

@@ -2,6 +2,8 @@
 	import CalendarPlus from '@lucide/svelte/icons/calendar-plus';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import Copy from '@lucide/svelte/icons/copy';
+	import Link from '@lucide/svelte/icons/link';
+	import { page } from '$app/state';
 	import {
 		formatDay,
 		formatDuration,
@@ -212,6 +214,21 @@
 				</label>
 			{/if}
 			<CalendarButtons {meetings} zone={app.zone}>
+				<button
+					class="btn btn-secondary btn-sm"
+					onclick={() =>
+						copyText(
+							app.shareLink(
+								page.url.origin,
+								starts.map((t) => ({ start: t, end: t + length }))
+							),
+							'Link to these times copied'
+						)}
+					title="Opens this event with these times highlighted"
+				>
+					<Link class="size-3.5" aria-hidden="true" />
+					Link
+				</button>
 				<button class="btn btn-secondary btn-sm" onclick={copy}>
 					<Copy class="size-3.5" aria-hidden="true" />
 					Copy

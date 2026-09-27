@@ -87,7 +87,8 @@
 			counts.skip && `${counts.skip} skipped`,
 			app.group &&
 				people.length > inView.length &&
-				`${people.length - inView.length} outside ${app.group.name}`
+				`${people.length - inView.length} outside ${app.group.name}`,
+			app.onlySelected && `${inView.length - app.selected.size} not shown`
 		]
 			.filter(Boolean)
 			.join(' · ')
@@ -231,8 +232,10 @@
 				/>
 				<!-- The name selects the person, like the checkbox. Showing only their times on the grid
 				     is the eye button's job, so a stray click never changes what the heatmap means. -->
+				<!-- Dimmed when skipped, or left out of a view of just the selected people. -->
 				<button
-					class="ml-0.5 flex min-w-0 flex-1 items-center gap-2.5 text-left {role === 'skip'
+					class="ml-0.5 flex min-w-0 flex-1 items-center gap-2.5 text-left {role === 'skip' ||
+					(app.onlySelected && !selected)
 						? 'opacity-55'
 						: ''}"
 					aria-pressed={selected}

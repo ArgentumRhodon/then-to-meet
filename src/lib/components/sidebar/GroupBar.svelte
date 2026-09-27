@@ -1,6 +1,8 @@
 <script lang="ts">
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
+	import FolderPlus from '@lucide/svelte/icons/folder-plus';
 	import Plus from '@lucide/svelte/icons/plus';
+	import { formatList } from '$lib/analysis/format';
 	import { app } from '$lib/state/app.svelte';
 	import { groups, membersIn } from '$lib/state/groups.svelte';
 	import type { Person } from '$lib/types';
@@ -24,6 +26,14 @@
 	let confirmDelete = $state(false);
 
 	const present = $derived(active ? membersIn(active, people) : []);
+	/** "Alex Rivera, Priya Natarajan, and 2 others", for a view of just the checked people. */
+	const checkedNames = $derived.by(() => {
+		const names = people.filter((p) => app.selected.has(p.id)).map((p) => p.name);
+		const shown = names.slice(0, names.length > 3 ? 2 : 3);
+		const rest = names.length - shown.length;
+		return formatList(rest ? [...shown, `${rest} other${rest === 1 ? '' : 's'}`] : shown);
+	});
+	const peopleCount = (n: number) => (n === 1 ? 'this 1 person' : `these ${n} people`);
 
 	const chip = (on: boolean) =>
 		`inline-flex h-7 max-w-full items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors ${
@@ -52,12 +62,23 @@
 <div class="px-4 pt-2">
 	<div class="flex flex-wrap gap-1.5" role="group" aria-label="Show a group">
 		<button
-			class={chip(!app.groupLabel)}
-			aria-pressed={!app.groupLabel}
+			class={chip(!app.viewLabel)}
+			aria-pressed={!app.viewLabel}
 			onclick={() => app.showEveryone()}
 		>
 			Everyone <span class="tabular opacity-60">{people.length}</span>
 		</button>
+		{#if app.onlySelected}
+			<!-- Just the checked people: a group that isn't saved. -->
+			<button
+				class={chip(true)}
+				aria-pressed="true"
+				onclick={() => app.showOnlySelected(false)}
+				title="Just the people you selected. Click to show everyone."
+			>
+				Selected <span class="tabular opacity-60">{app.selected.size}</span>
+			</button>
+		{/if}
 		{#if app.sharedGroup}
 			<!-- A group from someone else's link: a view, not one of this viewer's saved groups. -->
 			<button
@@ -88,14 +109,25 @@
 		</button>
 	</div>
 
-	{#if active}
+	{#if app.onlySelected}
+		<div class="mt-2 flex items-center gap-2 rounded-lg bg-subtle py-1.5 pr-1.5 pl-3">
+			<div class="min-w-0 flex-1">
+				<p class="truncate text-[13px] font-medium">{checkedNames}</p>
+				<p class="text-[11px] text-fg-3">
+					Showing overlap for {peopleCount(app.selected.size)}, not saved
+				</p>
+			</div>
+			<button class="btn btn-secondary btn-sm shrink-0" onclick={oncreate}>
+				<FolderPlus class="size-3.5" aria-hidden="true" />
+				Save as group
+			</button>
+		</div>
+	{:else if active}
 		<div class="mt-2 flex items-center gap-2 rounded-lg bg-subtle py-1.5 pr-1.5 pl-3">
 			<div class="min-w-0 flex-1">
 				<p class="truncate text-[13px] font-medium">{active.name}</p>
 				<p class="text-[11px] text-fg-3">
-					Showing overlap for {present.length === 1
-						? 'this 1 person'
-						: `these ${present.length} people`}
+					Showing overlap for {peopleCount(present.length)}
 				</p>
 			</div>
 			<div class="relative" {@attach menuOpen ? dismissable(closeMenu) : undefined}>

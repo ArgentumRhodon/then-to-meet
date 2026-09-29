@@ -103,10 +103,15 @@ describe('buildPreview', () => {
 
 describe('buildSummary with meeting sets', () => {
 	it('lists sets and who misses which meeting', () => {
+		const optional: Roles = Object.fromEntries(
+			event.people
+				.filter((p) => ['Alex', 'Diego'].some((name) => p.name.startsWith(name)))
+				.map((p) => [p.id, 'optional'])
+		);
 		const text = buildSummary({
 			event,
-			best: findBestTimes(event, grid, {}, 60),
-			sets: findMeetingSets(event, grid, {}, 60, 2),
+			best: findBestTimes(event, grid, optional, 60),
+			sets: findMeetingSets(event, grid, optional, 60, 2),
 			perWeek: 2,
 			duration: 60,
 			zone: ZONE,
@@ -115,7 +120,7 @@ describe('buildSummary with meeting sets', () => {
 		expect(text).toMatch(
 			/^Design team sync: best times for 1h twice a week · times in America\/New York/
 		);
-		expect(text).toContain('Most people (nothing fits everyone)');
+		expect(text).toContain('All required people, every time');
 		expect(text).toMatch(
 			/• Tue and Thu · 2:00.*\(without Alex Rivera on Thu; Diego Álvarez on Thu\)/
 		);

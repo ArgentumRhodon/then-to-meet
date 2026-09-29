@@ -11,7 +11,7 @@
 
 {#each HEAT_PALETTES as palette (palette.value)}
 	<button
-		class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle"
+		class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle pointer-coarse:py-2.5"
 		role="menuitemradio"
 		aria-checked={heatPalette.current === palette.value}
 		onclick={() => {
@@ -37,7 +37,7 @@
 			<span class="block text-[11px] text-fg-3">{palette.hint}</span>
 		</span>
 		<Check
-			class="size-3.5 shrink-0 {heatPalette.current === palette.value
+			class="size-3.5 shrink-0 pointer-coarse:size-4.5 {heatPalette.current === palette.value
 				? 'text-accent'
 				: 'invisible'}"
 			aria-hidden="true"

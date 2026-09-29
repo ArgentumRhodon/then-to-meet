@@ -98,7 +98,7 @@
 					aria-label="Refresh responses"
 					title="Pull the latest responses"
 				>
-					<RefreshCw class="size-4 {app.refreshing ? 'animate-spin' : ''}" />
+					<RefreshCw class="size-4 pointer-coarse:size-5 {app.refreshing ? 'animate-spin' : ''}" />
 				</button>
 			</div>
 			<p class="mt-0.5 text-[13px] text-fg-2 sm:truncate">
@@ -120,10 +120,10 @@
 					href={eventUrl(event.id)}
 					target="_blank"
 					rel="noopener noreferrer"
-					aria-label="Open in When2Meet"
+					aria-label="W2M: open in When2Meet"
 					title="Open in When2Meet"
 				>
-					<ExternalLink class="size-3.5 text-fg-2" aria-hidden="true" />
+					<ExternalLink class="size-3.5 text-fg-2 pointer-coarse:size-4.5" aria-hidden="true" />
 					W2M
 				</a>
 			{/if}
@@ -139,11 +139,11 @@
 			<CircleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
 			<span class="flex-1">{app.error}</span>
 			<button
-				class="-my-0.5 rounded p-0.5 hover:bg-danger/10"
+				class="-my-1 -mr-1.5 flex size-6 shrink-0 items-center justify-center rounded hover:bg-danger/10 pointer-coarse:-my-2 pointer-coarse:size-9"
 				onclick={() => (app.error = null)}
 				aria-label="Dismiss"
 			>
-				<X class="size-3.5" />
+				<X class="size-3.5 pointer-coarse:size-4.5" />
 			</button>
 		</div>
 	{/if}

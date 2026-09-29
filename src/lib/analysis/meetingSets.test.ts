@@ -1,6 +1,6 @@
 import { DateTime } from 'luxon';
 import { describe, expect, it } from 'vitest';
-import type { W2MEvent } from '$lib/types';
+import type { Roles, W2MEvent } from '$lib/types';
 import { blockers } from './bestTimes';
 import { buildGrid } from './grid';
 import { dayCombos, findMeetingSets, type MeetingSet } from './meetingSets';
@@ -148,11 +148,13 @@ describe('findMeetingSets', () => {
 			});
 		}
 		const event = poll(free, 21);
+		// Two required and the rest optional, so the fewest starts are ruled out early.
+		const roles: Roles = {};
+		for (let p = 3; p <= 30; p++) roles[p] = 'optional';
 		const started = performance.now();
-		const found = sets(event, 3);
+		const found = findMeetingSets(event, buildGrid(event, 'UTC'), roles, 60, 3);
 		expect(performance.now() - started).toBeLessThan(1500);
-		const total =
-			found.everyone.length + found.required.length + found.near.length + found.fewer.length;
+		const total = found.everyone.length + found.required.length + found.near.length;
 		expect(total).toBeGreaterThan(0);
 	});
 });

@@ -62,7 +62,7 @@
 		/>
 		<button class="btn btn-primary {size === 'lg' ? 'h-12 px-5 text-base' : ''}" type="submit">
 			Load
-			<ArrowRight class="size-4" aria-hidden="true" />
+			<ArrowRight class="size-4 pointer-coarse:size-5" aria-hidden="true" />
 		</button>
 	</div>
 	{#if invalid}

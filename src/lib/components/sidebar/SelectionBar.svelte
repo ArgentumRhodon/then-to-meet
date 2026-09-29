@@ -78,10 +78,10 @@
 	};
 </script>
 
-<div class="flex h-9 items-center gap-2.5 px-4">
+<div class="flex h-9 items-center gap-2.5 px-4 pointer-coarse:h-11">
 	<input
 		type="checkbox"
-		class="size-4 shrink-0 cursor-pointer accent-accent"
+		class="size-4 shrink-0 cursor-pointer accent-accent pointer-coarse:size-5"
 		checked={allVisible}
 		onchange={toggleAll}
 		disabled={!visible.length}
@@ -91,7 +91,7 @@
 	{#if count}
 		<span class="text-xs font-medium text-fg tabular">{count} selected</span>
 		<button class="btn btn-ghost btn-sm ml-auto" onclick={() => app.setSelected([])}>
-			<X class="size-3.5" aria-hidden="true" />
+			<X class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 			Clear
 		</button>
 	{:else}
@@ -113,7 +113,7 @@
 					? 'Show everyone again'
 					: 'Narrow the heatmap and best times to just these people'}
 			>
-				<Funnel class="size-3.5" aria-hidden="true" />
+				<Funnel class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 				Just them
 			</button>
 			<div
@@ -126,26 +126,28 @@
 					aria-haspopup="menu"
 					aria-expanded={groupMenu}
 				>
-					<FolderPlus class="size-3.5" aria-hidden="true" />
+					<FolderPlus class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 					Group
-					<ChevronDown class="size-3 text-fg-3" aria-hidden="true" />
+					<ChevronDown class="size-3 text-fg-3 pointer-coarse:size-3.5" aria-hidden="true" />
 				</button>
 				{#if groupMenu}
 					<div class="popover absolute top-full left-0 z-30 mt-1 w-56 p-1" role="menu">
 						{#each groups.items as group (group.id)}
 							{@const n = inGroup(group)}
 							<button
-								class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] hover:bg-subtle"
+								class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] hover:bg-subtle pointer-coarse:py-2.5"
 								role="menuitemcheckbox"
 								aria-checked={n === count ? 'true' : n ? 'mixed' : 'false'}
 								onclick={() => toggleIn(group)}
 								title={n === count ? `Take them out of ${group.name}` : `Add them to ${group.name}`}
 							>
-								<span class="flex size-3.5 shrink-0 items-center justify-center text-accent-fg">
+								<span
+									class="flex size-3.5 shrink-0 items-center justify-center text-accent-fg pointer-coarse:size-4.5"
+								>
 									{#if n === count}
-										<Check class="size-3.5" aria-hidden="true" />
+										<Check class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 									{:else if n}
-										<Minus class="size-3.5" aria-hidden="true" />
+										<Minus class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 									{/if}
 								</span>
 								<span class="truncate">{group.name}</span>
@@ -153,14 +155,14 @@
 						{/each}
 						{#if groups.items.length}<div class="my-1 border-t border-line"></div>{/if}
 						<button
-							class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-accent-fg hover:bg-subtle"
+							class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-accent-fg hover:bg-subtle pointer-coarse:py-2.5"
 							role="menuitem"
 							onclick={() => {
 								groupMenu = false;
 								app.newGroup();
 							}}
 						>
-							<Plus class="size-3.5 shrink-0" aria-hidden="true" />
+							<Plus class="size-3.5 shrink-0 pointer-coarse:size-4.5" aria-hidden="true" />
 							<span class="truncate">
 								New group with {count === 1 ? selectedPeople[0]?.name : `these ${count}`}
 							</span>
@@ -177,7 +179,7 @@
 			>
 				{#each ROLES as role (role.value)}
 					<button
-						class="h-6 rounded-md px-2 text-[11px] font-medium transition-colors {sharedRole ===
+						class="h-6 rounded-md px-2 text-[11px] font-medium transition-colors pointer-coarse:h-9 pointer-coarse:px-3 pointer-coarse:text-xs {sharedRole ===
 						role.value
 							? 'bg-accent text-on-accent'
 							: 'text-fg-2 hover:bg-subtle hover:text-fg'}"

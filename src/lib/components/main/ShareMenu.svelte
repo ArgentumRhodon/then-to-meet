@@ -44,7 +44,7 @@
 		aria-haspopup="menu"
 		aria-expanded={open}
 	>
-		<Share2 class="size-3.5" aria-hidden="true" />
+		<Share2 class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 		Share
 	</button>
 	{#if open}

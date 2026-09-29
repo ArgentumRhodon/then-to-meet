@@ -34,7 +34,7 @@
 	>
 		<a
 			href="/"
-			class="rounded-md text-[15px] font-semibold tracking-tight"
+			class="flex h-10 items-center rounded-md text-[15px] font-semibold tracking-tight"
 			onclick={(e) => {
 				e.preventDefault();
 				closeEvent();

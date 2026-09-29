@@ -146,11 +146,11 @@
 				{/if}
 			</p>
 			<button
-				class="-my-0.5 rounded p-0.5 hover:bg-accent/10"
+				class="-my-1 flex size-6 shrink-0 items-center justify-center rounded hover:bg-accent/10 pointer-coarse:-my-2 pointer-coarse:size-9"
 				onclick={() => app.dismissChanges()}
 				aria-label="Dismiss"
 			>
-				<X class="size-3.5" />
+				<X class="size-3.5 pointer-coarse:size-4.5" />
 			</button>
 		</div>
 	{/if}
@@ -175,7 +175,7 @@
 				aria-hidden="true"
 			/>
 			<input
-				class="input h-8 pl-8 text-[13px]"
+				class="input h-8 pl-8 text-[13px] pointer-coarse:text-base"
 				type="search"
 				placeholder="Find a person"
 				aria-label="Find a person"
@@ -189,7 +189,7 @@
 			<div class="flex h-9 items-center gap-2.5 px-4">
 				<input
 					type="checkbox"
-					class="size-4 shrink-0 cursor-pointer accent-accent"
+					class="size-4 shrink-0 cursor-pointer accent-accent pointer-coarse:size-5"
 					checked={allMembers}
 					onchange={() =>
 						setChecked(
@@ -230,7 +230,7 @@
 			>
 				<input
 					type="checkbox"
-					class="size-4 shrink-0 cursor-pointer accent-accent"
+					class="size-4 shrink-0 cursor-pointer accent-accent pointer-coarse:size-5"
 					checked={selected}
 					onclick={(e) => check(e, index)}
 					aria-label={editing ? `${person.name} is in ${editing.name}` : `Select ${person.name}`}
@@ -240,7 +240,7 @@
 				<!-- Dimmed when skipped, left out of a view of just the selected people, or outside the
 				     group being edited. -->
 				<button
-					class="ml-0.5 flex min-w-0 flex-1 items-center gap-2.5 text-left {(
+					class="ml-0.5 flex min-w-0 flex-1 items-center gap-2.5 self-stretch text-left pointer-coarse:-my-1.5 {(
 						editing ? !selected : role === 'skip' || (app.onlySelected && !selected)
 					)
 						? 'opacity-55'
@@ -260,12 +260,12 @@
 						</span>
 						{#if added.has(person.id)}
 							<span
-								class="shrink-0 rounded-full bg-accent-soft px-1.5 text-[10px] font-semibold text-accent-fg"
+								class="shrink-0 rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent-fg"
 								>New</span
 							>
 						{:else if updated.has(person.id)}
 							<span
-								class="shrink-0 rounded-full bg-warn-soft px-1.5 text-[10px] font-semibold text-warn"
+								class="shrink-0 rounded-full bg-warn-soft px-1.5 text-[11px] font-semibold text-warn"
 								>Updated</span
 							>
 						{/if}
@@ -285,13 +285,13 @@
 						onfocus={() => (app.hoveredPerson = person.id)}
 						onblur={() => (app.hoveredPerson = null)}
 					>
-						<Eye class="size-3.5" aria-hidden="true" />
+						<Eye class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 					</button>
 				{/if}
 				<!-- Roles step aside while a group is edited, so every click in the list is about who's in it. -->
 				{#if !editing}
 					<button
-						class="h-6 shrink-0 rounded-full border px-2.5 text-[11px] font-medium transition-colors hover:border-line-strong {CHIP[
+						class="h-6 shrink-0 rounded-full border px-2.5 text-[11px] font-medium transition-colors hover:border-line-strong pointer-coarse:h-8 pointer-coarse:px-3 pointer-coarse:text-xs {CHIP[
 							role
 						]}"
 						onclick={() => app.setRole(person.id, NEXT[role])}
@@ -330,7 +330,7 @@
 						onclick={() => copyText(buildReminder(app.event!, signIns.waiting), 'Reminder copied')}
 						title="Copy a message asking them to add their times"
 					>
-						<MessageSquare class="size-3.5" aria-hidden="true" />
+						<MessageSquare class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 						Copy reminder
 					</button>
 				</div>
@@ -338,7 +338,7 @@
 			{#if signIns.extras.length}
 				<!-- Left out of the list and the reminder, but shown on request in case a match is wrong. -->
 				<details class="text-fg-3">
-					<summary class="cursor-pointer py-0.5 select-none hover:text-fg-2">
+					<summary class="cursor-pointer py-0.5 select-none hover:text-fg-2 pointer-coarse:py-2">
 						{signIns.extras.length} extra sign-in{signIns.extras.length === 1 ? '' : 's'} left out
 					</summary>
 					<p class="mt-1 mb-0.5 text-fg-3">

@@ -16,14 +16,16 @@
 
 <div class="text-xs">
 	<button
-		class="-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 font-medium text-fg-2 hover:text-fg"
+		class="-mx-1 inline-flex items-center gap-1 rounded px-1 py-0.5 font-medium text-fg-2 hover:text-fg pointer-coarse:py-2"
 		aria-expanded={open}
 		onclick={() => (open = !open)}
 	>
 		See who can’t make it
 		<span class="font-normal text-fg-3 tabular">({people.length}/{total})</span>
 		<ChevronDown
-			class="size-3.5 text-fg-3 transition-transform {open ? 'rotate-180' : ''}"
+			class="size-3.5 text-fg-3 transition-transform pointer-coarse:size-4 {open
+				? 'rotate-180'
+				: ''}"
 			aria-hidden="true"
 		/>
 	</button>

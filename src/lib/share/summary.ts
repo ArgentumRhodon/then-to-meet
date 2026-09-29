@@ -72,16 +72,12 @@ export const buildSummary = ({
 		if (!sets.everyone.length && !sets.required.length) {
 			section('One person short', sets.near, (s) => setLine(s, true));
 		}
-		if (out.length === 1)
-			section('Most people (nothing fits everyone)', sets.fewer, (s) => setLine(s, true));
 	} else {
 		section('Everyone can make it', best.everyone, (b) => line(b));
 		section('All required people', best.required, (b) => line(b, missing(b)));
 		if (!best.everyone.length && !best.required.length) {
 			section('One person short', best.near, (b) => line(b, missing(b)));
 		}
-		if (out.length === 1)
-			section('Most people (nothing fits everyone)', best.fewer, (b) => line(b, missing(b)));
 	}
 	if (out.length === 1) out.push('', 'No time works for everyone yet.');
 

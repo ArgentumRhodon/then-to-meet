@@ -1,13 +1,10 @@
 import { browser } from '$app/environment';
 import {
 	blockForSlots,
-	DEFAULT_MIN_MATCH,
 	findBestTimes,
-	peopleFor,
 	roleOf,
 	slotAttendance,
 	slotSpan,
-	turnout,
 	type TimeBlock
 } from '$lib/analysis/bestTimes';
 import {
@@ -40,8 +37,6 @@ interface EventPrefs {
 	/** Everyone's times as of the last visit, to spot what changed since. */
 	seen?: Snapshot;
 	perWeek?: MeetingsPerWeek;
-	/** Share of people a best time needs, when it isn't the default. */
-	minMatch?: number;
 }
 
 export interface LoadOverrides {
@@ -86,8 +81,6 @@ class AppState {
 	duration = $state(DEFAULT_DURATION);
 	/** How many times a week to meet; two or three look for sets of matching times. */
 	perWeek = $state<MeetingsPerWeek>(1);
-	/** Share of people a best time needs; the list leaves out times fewer can make. */
-	minMatch = $state(DEFAULT_MIN_MATCH);
 	zone = $state(browser ? localZone() : 'UTC');
 
 	/** Slot under the pointer or keyboard focus in the heatmap. */
@@ -160,8 +153,6 @@ class AppState {
 			: null
 	);
 	attendance = $derived(this.event ? slotAttendance(this.event, this.effectiveRoles) : null);
-	/** How many people a best time needs, from `minMatch` and who's being counted. */
-	minPeople = $derived(peopleFor(this.minMatch, this.best?.considered ?? 0));
 	/** Who can make each picked time, recomputed as roles change. */
 	selectedBlocks = $derived.by(() => {
 		const { event, grid } = this;
@@ -243,10 +234,6 @@ class AppState {
 				: (overrides.group ?? null);
 			this.duration = clampDuration(overrides.duration ?? saved.duration ?? DEFAULT_DURATION);
 			this.perWeek = overrides.perWeek ?? saved.perWeek ?? 1;
-			this.minMatch =
-				typeof saved.minMatch === 'number' && saved.minMatch >= 0 && saved.minMatch <= 1
-					? saved.minMatch
-					: DEFAULT_MIN_MATCH;
 			this.zone = saved.zone ?? localZone();
 			this.clearHighlights();
 			// The demo is rebuilt for each week, so there's nothing meaningful to compare.
@@ -303,14 +290,14 @@ class AppState {
 	#findBlock(id: string): TimeBlock | null {
 		const best = this.best;
 		if (!best) return null;
-		const all = [...best.everyone, ...best.required, ...best.near, ...best.fewer];
+		const all = [...best.everyone, ...best.required];
 		return all.find((b) => b.id === id) ?? null;
 	}
 
 	#findSet(id: string): MeetingSet | null {
 		const sets = this.meetingSets;
 		if (!sets) return null;
-		const all = [...sets.everyone, ...sets.required, ...sets.near, ...sets.fewer];
+		const all = [...sets.everyone, ...sets.required];
 		return all.find((s) => s.id === id) ?? null;
 	}
 
@@ -319,12 +306,6 @@ class AppState {
 		this.pinnedBlock = null;
 		this.pinnedSet = null;
 		this.pinShift = 0;
-	}
-
-	/** A new search: pins let go, and the attendance cutoff goes back to the best there is. */
-	#searchChanged() {
-		this.minMatch = DEFAULT_MIN_MATCH;
-		this.#unpin();
 	}
 
 	reset() {
@@ -368,7 +349,7 @@ class AppState {
 	#setActiveRoles(roles: Roles) {
 		if (this.group) groups.setRoles(this.group.id, roles);
 		else this.roles = roles;
-		this.#searchChanged();
+		this.#unpin();
 	}
 
 	/** Shows the overlap for one group (or everyone, with null). */
@@ -378,7 +359,7 @@ class AppState {
 		this.sharedGroup = null;
 		this.selected = new Set();
 		this.onlySelected = false;
-		this.#searchChanged();
+		this.#unpin();
 		this.hoveredBlock = null;
 		this.hoveredSet = null;
 	}
@@ -424,13 +405,13 @@ class AppState {
 		if (!this.onlySelected) return;
 		// Checking someone changes who the narrowed view shows; unchecking everyone ends it.
 		if (!this.selected.size) this.onlySelected = false;
-		this.#searchChanged();
+		this.#unpin();
 	}
 
 	/** Narrows the heatmap and best times to the checked people, or goes back. */
 	showOnlySelected(on: boolean) {
 		this.onlySelected = on && this.selected.size > 0;
-		this.#searchChanged();
+		this.#unpin();
 		this.hoveredBlock = null;
 		this.hoveredSet = null;
 	}
@@ -443,12 +424,12 @@ class AppState {
 
 	setDuration(minutes: number) {
 		this.duration = clampDuration(minutes);
-		this.#searchChanged();
+		this.#unpin();
 	}
 
 	setPerWeek(count: MeetingsPerWeek) {
 		this.perWeek = count;
-		this.#searchChanged();
+		this.#unpin();
 		this.hoveredBlock = null;
 		this.hoveredSet = null;
 	}
@@ -460,17 +441,10 @@ class AppState {
 		this.pinShift = Math.min(Math.max(0, this.shiftFor(window) + delta), this.shiftRoom(window));
 	}
 
-	setMinMatch(share: number) {
-		this.minMatch = share;
-		// Let go of a pinned result the list no longer shows.
-		if (this.pinnedBlock && turnout(this.pinnedBlock) < this.minPeople) this.#unpin();
-		if (this.pinnedSet && turnout(this.pinnedSet) < this.minPeople) this.#unpin();
-	}
-
 	setZone(zone: string) {
 		this.zone = zone;
 		// Blocks carry grid day indices, which shift with the timezone.
-		this.#searchChanged();
+		this.#unpin();
 		this.hoveredBlock = null;
 		this.hoveredSet = null;
 	}
@@ -579,7 +553,6 @@ class AppState {
 		if (!this.event) return;
 		const prefs: EventPrefs = { roles: this.roles, duration: this.duration };
 		if (this.perWeek > 1) prefs.perWeek = this.perWeek;
-		if (this.minMatch !== DEFAULT_MIN_MATCH) prefs.minMatch = this.minMatch;
 		if (this.zone !== localZone()) prefs.zone = this.zone;
 		if (this.group) prefs.group = this.group.id;
 		else if (this.sharedGroup) prefs.sharedGroup = this.sharedGroup;

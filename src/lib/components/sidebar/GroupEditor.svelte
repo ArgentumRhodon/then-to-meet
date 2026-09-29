@@ -54,7 +54,7 @@
 <div class="mt-2 rounded-lg bg-subtle p-1.5 pl-2">
 	<div class="flex items-center gap-1.5">
 		<input
-			class="input h-8 min-w-0 flex-1 text-[13px] font-medium"
+			class="input h-8 min-w-0 flex-1 text-[13px] font-medium pointer-coarse:text-base"
 			aria-label="Group name"
 			maxlength="40"
 			bind:value={name}
@@ -72,7 +72,7 @@
 			aria-label="Delete {group.name}"
 			title="Delete group"
 		>
-			<Trash2 class="size-3.5" />
+			<Trash2 class="size-3.5 pointer-coarse:size-4.5" />
 		</button>
 		<button class="btn btn-primary btn-sm shrink-0" onclick={done}>Done</button>
 	</div>

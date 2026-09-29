@@ -52,13 +52,13 @@
 			? 'Weekly events aren’t tied to a timezone'
 			: `Times shown in ${app.zone.replaceAll('_', ' ')}`}
 	>
-		<Globe class="size-3.5 shrink-0 text-fg-2" aria-hidden="true" />
+		<Globe class="size-3.5 shrink-0 text-fg-2 pointer-coarse:size-4.5" aria-hidden="true" />
 		{#if weekly}
 			<span>No timezone</span>
 		{:else}
 			<span class="truncate">{place(app.zone)}</span>
 			<span class="text-fg-3 tabular">{formatOffset(app.zone)}</span>
-			<ChevronDown class="size-3.5 shrink-0 text-fg-3" aria-hidden="true" />
+			<ChevronDown class="size-3.5 shrink-0 text-fg-3 pointer-coarse:size-4" aria-hidden="true" />
 		{/if}
 	</button>
 
@@ -69,7 +69,7 @@
 		>
 			<div class="border-b border-line p-2">
 				<input
-					class="input h-8 text-[13px]"
+					class="input h-8 text-[13px] pointer-coarse:text-base"
 					type="search"
 					placeholder="Search city or region"
 					aria-label="Search timezones"
@@ -84,7 +84,7 @@
 				{#each results as zone (zone)}
 					<li role="option" aria-selected={zone === app.zone}>
 						<button
-							class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle"
+							class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle pointer-coarse:py-2.5"
 							onclick={() => choose(zone)}
 						>
 							<span class="min-w-0 flex-1">
@@ -100,7 +100,9 @@
 							</span>
 							<span class="text-[11px] text-fg-3 tabular">{formatOffset(zone)}</span>
 							<Check
-								class="size-3.5 shrink-0 {zone === app.zone ? 'text-accent' : 'invisible'}"
+								class="size-3.5 shrink-0 pointer-coarse:size-4.5 {zone === app.zone
+									? 'text-accent'
+									: 'invisible'}"
 								aria-hidden="true"
 							/>
 						</button>

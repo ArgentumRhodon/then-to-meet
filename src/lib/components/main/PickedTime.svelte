@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Copy from '@lucide/svelte/icons/copy';
 	import Link from '@lucide/svelte/icons/link';
 	import X from '@lucide/svelte/icons/x';
 	import { page } from '$app/state';
@@ -43,6 +44,18 @@
 		}))
 	);
 
+	/** The picked times as plain text, one per line when there are several. */
+	const copySummary = () => {
+		const when = (b: (typeof blocks)[number]) =>
+			`${formatDay(b.start, zone, event.weekly)} · ${formatTimeRange(b.start, b.end, zone)}`;
+		const where = event.weekly ? '' : ` (${zone.replaceAll('_', ' ')})`;
+		const lines = blocks.map((b) => `- ${when(b)}`).join('\n');
+		copyText(
+			several ? `${event.title}${where}:\n${lines}` : `${event.title}: ${when(blocks[0])}${where}`,
+			several ? 'Times copied' : 'Time copied'
+		);
+	};
+
 	/** Weekly polls always repeat; several dated times can also become a weekly pattern. */
 	let repeat = $state(false);
 	const meetings = $derived(
@@ -82,50 +95,54 @@
 			aria-label={several ? 'Clear picked times' : 'Clear picked time'}
 			title="Clear (Esc)"
 		>
-			<X class="size-4" />
+			<X class="size-4 pointer-coarse:size-5" />
 		</button>
 	</div>
 
 	{#if several}
-		<ul class="mt-2 space-y-1">
+		<!-- Each time in its own row; only the ones someone misses say so. -->
+		<ul class="mt-2.5 divide-y divide-line rounded-lg border border-line bg-subtle/40">
 			{#each blocks as block (block.start)}
-				<li class="flex items-center gap-2 text-xs">
-					<span class="min-w-0 flex-1">
-						<span class="text-fg">
+				<li class="px-2.5 py-2 text-xs">
+					<div class="flex items-center gap-2">
+						<span class="min-w-0 flex-1 text-fg">
 							{formatDay(block.start, zone, event.weekly)} ·
 							<span class="tabular">{formatTimeRange(block.start, block.end, zone)}</span>
 						</span>
-						<span class="block truncate text-fg-3">
-							{block.missing.length
-								? `${block.missing.length} can’t make it`
-								: 'Everyone can make it'}
-						</span>
-					</span>
-					<button
-						class="btn btn-ghost btn-sm btn-icon shrink-0"
-						onclick={() => app.unpick(block.start)}
-						aria-label="Remove {formatDay(block.start, zone, event.weekly)}"
-						title="Remove this time"
-					>
-						<X class="size-3.5" />
-					</button>
+						<button
+							class="btn btn-ghost btn-sm btn-icon -my-1 -mr-1 shrink-0"
+							onclick={() => app.unpick(block.start)}
+							aria-label="Remove {formatDay(block.start, zone, event.weekly)}"
+							title="Remove this time"
+						>
+							<X class="size-3.5 pointer-coarse:size-4.5" />
+						</button>
+					</div>
+					{#if block.missing.length}
+						<MissingList
+							people={block.missing.map((id) => ({
+								name: names.get(id) ?? '?',
+								role: app.roleOf(id)
+							}))}
+							total={block.attendees.length + block.missing.length}
+						/>
+					{/if}
 				</li>
 			{/each}
 		</ul>
 	{/if}
 
-	<div class="mt-1.5">
-		{#if !considered}
-			<p class="text-xs text-fg-2">Everyone is skipped.</p>
-		{:else if !misses.length}
-			<p class="text-xs font-medium text-ok">Everyone can make it</p>
-		{:else}
-			<MissingList
-				people={several ? misses.map((m) => ({ ...m, note: `misses ${m.days}` })) : misses}
-				total={considered}
-			/>
-		{/if}
-	</div>
+	{#if !considered}
+		<p class="mt-1.5 text-xs text-fg-2">Everyone is skipped.</p>
+	{:else if !misses.length}
+		<p class="mt-1.5 text-xs font-medium text-ok">
+			Everyone can make {several ? 'every time' : 'it'}
+		</p>
+	{:else if !several}
+		<div class="mt-1.5">
+			<MissingList people={misses} total={considered} />
+		</div>
+	{/if}
 	{#if event.weekly}
 		<p class="mt-1 text-xs text-fg-3">
 			Adds {several ? 'weekly meetings' : 'a weekly meeting'} starting {formatDay(
@@ -135,8 +152,12 @@
 			)}, in {app.zone.replaceAll('_', ' ')} time.
 		</p>
 	{:else if several}
-		<label class="mt-1.5 flex items-center gap-2 text-xs text-fg-2">
-			<input type="checkbox" class="size-3.5 accent-accent" bind:checked={repeat} />
+		<label class="mt-1.5 flex items-center gap-2 text-xs text-fg-2 pointer-coarse:min-h-9">
+			<input
+				type="checkbox"
+				class="size-3.5 accent-accent pointer-coarse:size-4"
+				bind:checked={repeat}
+			/>
 			Repeat every week in the calendar
 		</label>
 	{:else if layout.showHeatmap}
@@ -157,7 +178,15 @@
 					? 'Copy a link that opens this event with these times highlighted'
 					: 'Copy a link that opens this event with this time highlighted'}
 			>
-				<Link class="size-3.5" />
+				<Link class="size-3.5 pointer-coarse:size-4.5" />
+			</button>
+			<button
+				class="btn btn-ghost btn-sm btn-icon"
+				onclick={copySummary}
+				aria-label="Copy as text"
+				title={several ? 'Copy these times as text' : 'Copy this time as text'}
+			>
+				<Copy class="size-3.5 pointer-coarse:size-4.5" />
 			</button>
 		</CalendarButtons>
 	</div>

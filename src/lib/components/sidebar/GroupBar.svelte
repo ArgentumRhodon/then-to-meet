@@ -25,7 +25,7 @@
 	const peopleCount = (n: number) => (n === 1 ? 'this 1 person' : `these ${n} people`);
 
 	const chip = (on: boolean) =>
-		`inline-flex h-7 max-w-full items-center gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors ${
+		`inline-flex h-7 max-w-full items-center pointer-coarse:h-9 gap-1.5 rounded-full px-2.5 text-xs font-medium transition-colors ${
 			on ? 'bg-accent text-on-accent' : 'bg-subtle text-fg-2 hover:text-fg'
 		}`;
 </script>
@@ -72,13 +72,13 @@
 			</button>
 		{/each}
 		<button
-			class="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-line-strong px-2.5 text-xs font-medium text-fg-2 hover:border-fg-3 hover:text-fg"
+			class="inline-flex h-7 items-center gap-1 rounded-full border border-dashed border-line-strong px-2.5 text-xs font-medium text-fg-2 hover:border-fg-3 hover:text-fg pointer-coarse:h-9"
 			onclick={() => app.newGroup()}
 			title={app.selected.size
 				? 'Start a group with the people you selected'
 				: 'Start a group, then check who’s in it'}
 		>
-			<Plus class="size-3" aria-hidden="true" />
+			<Plus class="size-3 pointer-coarse:size-3.5" aria-hidden="true" />
 			New group
 		</button>
 	</div>
@@ -96,7 +96,7 @@
 				</p>
 			</div>
 			<button class="btn btn-secondary btn-sm shrink-0" onclick={() => app.newGroup()}>
-				<FolderPlus class="size-3.5" aria-hidden="true" />
+				<FolderPlus class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 				Save as group
 			</button>
 		</div>
@@ -109,11 +109,12 @@
 				</p>
 			</div>
 			<button
-				class="btn btn-ghost btn-sm shrink-0"
-				aria-label="Edit group"
+				class="btn btn-ghost btn-sm btn-icon shrink-0"
+				aria-label="Edit {active.name}"
+				title="Edit group"
 				onclick={() => app.editGroup(true)}
 			>
-				<Pencil class="size-3.5" aria-hidden="true" />
+				<Pencil class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 			</button>
 		</div>
 	{/if}

@@ -145,8 +145,12 @@
 				{/each}
 			</ul>
 			{#if !event.weekly}
-				<label class="flex items-center gap-2 text-xs text-fg-2">
-					<input type="checkbox" class="size-3.5 accent-accent" bind:checked={repeat} />
+				<label class="flex items-center gap-2 text-xs text-fg-2 pointer-coarse:min-h-9">
+					<input
+						type="checkbox"
+						class="size-3.5 accent-accent pointer-coarse:size-4"
+						bind:checked={repeat}
+					/>
 					Repeat weekly
 				</label>
 			{/if}
@@ -164,7 +168,7 @@
 					aria-label="Copy link to these times"
 					title="Copy a link that opens this event with these times highlighted"
 				>
-					<Link class="size-3.5" />
+					<Link class="size-3.5 pointer-coarse:size-4.5" />
 				</button>
 				<button
 					class="btn btn-ghost btn-sm btn-icon"
@@ -172,7 +176,7 @@
 					aria-label="Copy as text"
 					title="Copy these times as text"
 				>
-					<Copy class="size-3.5" />
+					<Copy class="size-3.5 pointer-coarse:size-4.5" />
 				</button>
 			</CalendarButtons>
 		</div>

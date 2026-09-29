@@ -33,9 +33,9 @@
 		aria-label="Theme: {current.label}"
 		title="Theme and heatmap colors, including colorblind-friendly palettes"
 	>
-		<current.icon class="size-3.5 text-fg-2" aria-hidden="true" />
+		<current.icon class="size-3.5 text-fg-2 pointer-coarse:size-4.5" aria-hidden="true" />
 		{current.label}
-		<ChevronDown class="size-3.5 text-fg-3" aria-hidden="true" />
+		<ChevronDown class="size-3.5 text-fg-3 pointer-coarse:size-4" aria-hidden="true" />
 	</button>
 	{#if open}
 		<div
@@ -47,19 +47,21 @@
 			<p class="eyebrow px-2.5 pt-1.5 pb-1">Theme</p>
 			{#each OPTIONS as option (option.value)}
 				<button
-					class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle"
+					class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle pointer-coarse:py-2.5"
 					role="menuitemradio"
 					aria-checked={theme.pref === option.value}
 					onclick={() => choose(option.value)}
 				>
-					<option.icon class="size-4 shrink-0 text-fg-2" aria-hidden="true" />
+					<option.icon class="size-4 shrink-0 text-fg-2 pointer-coarse:size-5" aria-hidden="true" />
 					<span class="flex-1">
 						<span class="block text-[13px]">{option.label}</span>
 						{#if 'hint' in option}<span class="block text-[11px] text-fg-3">{option.hint}</span
 							>{/if}
 					</span>
 					<Check
-						class="size-3.5 shrink-0 {theme.pref === option.value ? 'text-accent' : 'invisible'}"
+						class="size-3.5 shrink-0 pointer-coarse:size-4.5 {theme.pref === option.value
+							? 'text-accent'
+							: 'invisible'}"
 						aria-hidden="true"
 					/>
 				</button>

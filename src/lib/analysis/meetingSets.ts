@@ -41,10 +41,8 @@ export interface MeetingSets {
 	everyone: MeetingSet[];
 	/** Every required person at every meeting, but some optional people miss one. */
 	required: MeetingSet[];
-	/** One person misses one or more meetings. */
+	/** One person misses one or more meetings. Not listed, but counted to suggest who to make optional. */
 	near: MeetingSet[];
-	/** Everything else with at least two people at each meeting. A fallback for tough polls. */
-	fewer: MeetingSet[];
 	considered: number;
 	requiredCount: number;
 }
@@ -91,7 +89,6 @@ export const findMeetingSets = (
 		everyone: [],
 		required: [],
 		near: [],
-		fewer: [],
 		considered: considered.length,
 		requiredCount: required.length
 	};
@@ -106,7 +103,8 @@ export const findMeetingSets = (
 	const found: Candidate[] = [];
 	const extend = (days: number[], chosen: Option[]) => {
 		if (chosen.length === days.length) {
-			found.push(evaluate(days, chosen, requiredSet, required.length));
+			const candidate = evaluate(days, chosen, requiredSet, required.length);
+			if (candidate.tier !== 'fewer') found.push(candidate);
 			return;
 		}
 		const options = byDay[days[chosen.length]];
@@ -135,11 +133,14 @@ export const findMeetingSets = (
 		if (kept.length >= MAX_RESULTS) break;
 		if (!kept.some((other) => overlaps(set, other))) kept.push(set);
 	}
-	for (const set of kept) result[set.tier].push(set);
+	for (const set of kept) if (set.tier !== 'fewer') result[set.tier].push(set);
 	return result;
 };
 
-/** Every place a meeting fits, per grid day, keyed by its start minute. */
+/**
+ * Every place a meeting fits, per grid day, keyed by its start minute. A start already too many
+ * people short can't be part of a listed set, so it's left out.
+ */
 const optionsByDay = (
 	event: W2MEvent,
 	grid: Grid,
@@ -164,6 +165,8 @@ const optionsByDay = (
 			const attendees = considered.filter((p) => streak.get(p)![s] >= k);
 			const inGroup = new Set(attendees);
 			const missing = considered.filter((p) => !inGroup.has(p));
+			const requiredMissing = missing.filter((p) => requiredSet.has(p));
+			if (classify(missing.length, requiredMissing.length, requiredSet.size) === 'fewer') continue;
 			const start = DateTime.fromSeconds(event.slots[slot].time, { zone: grid.zone });
 			const minute = start.hour * 60 + start.minute;
 			byDay[grid.dayOfSlot[slot]].set(minute, {
@@ -171,7 +174,7 @@ const optionsByDay = (
 				minute,
 				attendees,
 				missing,
-				requiredMissing: missing.filter((p) => requiredSet.has(p))
+				requiredMissing
 			});
 		}
 	}

@@ -40,7 +40,7 @@
 					aria-label="Remove {item.title} from recent events"
 					title="Remove from recent"
 				>
-					<X class="size-3.5" />
+					<X class="size-3.5 pointer-coarse:size-4.5" />
 				</button>
 			</li>
 		{/each}

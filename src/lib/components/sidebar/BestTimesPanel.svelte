@@ -1,13 +1,12 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
-	import { blockers, turnout, type TimeBlock } from '$lib/analysis/bestTimes';
+	import { blockers, type TimeBlock } from '$lib/analysis/bestTimes';
 	import { DURATION_STEP, MIN_DURATION } from '$lib/analysis/duration';
 	import { formatDuration } from '$lib/analysis/format';
 	import type { MeetingSet, MeetingsPerWeek } from '$lib/analysis/meetingSets';
 	import { app } from '$lib/state/app.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
 	import PickedTime from '../main/PickedTime.svelte';
-	import AttendancePicker from './AttendancePicker.svelte';
 	import BlockCard from './BlockCard.svelte';
 	import DurationPicker from './DurationPicker.svelte';
 	import Section from './Section.svelte';
@@ -37,47 +36,18 @@
 		items: Result[];
 	}
 
-	/** Every result, best group first, before the attendance cutoff. */
-	const groups = $derived.by(() => {
+	/**
+	 * Only results that work for everyone, or for every required person when some are optional. For
+	 * two or three meetings a week, that's at every meeting.
+	 */
+	const shown = $derived.by(() => {
 		if (!results) return [];
-		const every = sets ? ', every time' : '';
-		const out: Group[] = [
-			{
-				key: 'everyone',
-				title:
-					results.requiredCount < results.considered
-						? `Everyone can make it${every}`
-						: `Everyone’s free${every}`,
-				items: results.everyone
-			}
-		];
+		const out: Group[] = [{ key: 'everyone', title: 'Everyone', items: results.everyone }];
 		if (results.requiredCount && results.requiredCount < results.considered) {
-			out.push({ key: 'required', title: `All required people${every}`, items: results.required });
+			out.push({ key: 'required', title: 'All required people', items: results.required });
 		}
-		out.push({ key: 'near', title: 'One person short', items: results.near });
-		out.push({ key: 'fewer', title: '', items: results.fewer });
-		return out;
+		return out.filter((group) => group.items.length);
 	});
-
-	/** The fewest and most people any result gets: the slider spans that, since no time is outside. */
-	const turnouts = $derived(groups.flatMap((g) => g.items.map(turnout)));
-	const leastPeople = $derived(turnouts.length ? Math.min(...turnouts) : 0);
-	const mostPeople = $derived(turnouts.length ? Math.max(...turnouts) : 0);
-	/** The saved cutoff, held within what's possible, so the best times always show. */
-	const need = $derived(Math.min(Math.max(app.minPeople, leastPeople), mostPeople));
-
-	const shown = $derived(
-		groups
-			.map((group) => {
-				const items = group.items.filter((item) => turnout(item) >= need);
-				// Two or more short: "most people" while that's over half, which a low cutoff can undo.
-				const title =
-					group.title ||
-					(items.every((item) => turnout(item) * 2 > considered) ? 'Most people' : 'Some people');
-				return { ...group, title, items };
-			})
-			.filter((group) => group.items.length)
-	);
 	const total = $derived(shown.reduce((n, g) => n + g.items.length, 0));
 
 	const names = $derived(new Map((app.event?.people ?? []).map((p) => [p.id, p.name])));
@@ -87,8 +57,24 @@
 			? { role: 'optional' as const, label: 'Make optional' }
 			: { role: 'skip' as const, label: 'Skip' }
 	);
-	/** The person most often the only one missing, when that's two or more near misses. */
-	const topBlocker = (items: Result[]) => blockers(items).find((b) => b.count >= 2);
+	/** When nothing fits, the people who are the only one missing from the most near misses. */
+	const suggestions = $derived(results ? blockers(results.near).slice(0, 3) : []);
+	const who = $derived(
+		results?.requiredCount && results.requiredCount < results.considered
+			? 'all required people'
+			: 'everyone'
+	);
+	/** What to try with roles when no one person is to blame, given who's already optional. */
+	const roleHint = $derived.by(() => {
+		if (!results) return '';
+		const required = results.requiredCount;
+		if (!required) return 'No one is required. Mark who has to be there as required.';
+		if (required === results.considered) return 'Try marking someone as optional.';
+		if (required > 1) return 'Try marking someone else as optional.';
+		const only = app.event?.people.find((p) => app.effectiveRoleOf(p.id) === 'required');
+		return `Nothing fits ${only?.name ?? 'the one required person'} either.`;
+	});
+	const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 </script>
 
 <Section title="Best times" count={total}>
@@ -109,7 +95,7 @@
 				>
 					{#each PER_WEEK as option (option.value)}
 						<button
-							class="h-7 rounded-md px-2.5 text-xs font-medium transition-colors {app.perWeek ===
+							class="h-7 rounded-md px-2.5 text-xs font-medium transition-colors pointer-coarse:h-9 pointer-coarse:px-3 {app.perWeek ===
 							option.value
 								? 'bg-accent text-on-accent'
 								: 'text-fg-2 hover:text-fg'}"
@@ -121,19 +107,16 @@
 					{/each}
 				</div>
 			</div>
-			{#if mostPeople > leastPeople}
-				<AttendancePicker {considered} min={leastPeople} max={mostPeople} {need} />
-			{/if}
 		</div>
 
 		{#if app.viewLabel}
 			<button
-				class="inline-flex h-7 max-w-full items-center gap-1 rounded-lg bg-accent-soft pr-2 pl-2.5 text-xs font-medium text-accent-fg"
+				class="inline-flex h-7 max-w-full items-center gap-1 rounded-lg bg-accent-soft pr-2 pl-2.5 text-xs font-medium text-accent-fg pointer-coarse:h-9"
 				onclick={() => app.showEveryone()}
 				title="Show times for everyone"
 			>
 				<span class="truncate">{app.viewLabel} only</span>
-				<X class="size-3.5 shrink-0" aria-hidden="true" />
+				<X class="size-3.5 shrink-0 pointer-coarse:size-4.5" aria-hidden="true" />
 			</button>
 		{/if}
 
@@ -148,8 +131,29 @@
 			)}
 			<div class="rounded-lg bg-subtle px-3 py-3 text-[13px]">
 				<p class="font-medium text-fg">
-					Nothing fits a {formatDuration(app.duration)} meeting{sets ? ` ${phrase}` : ''}
+					Nothing fits {who} for a {formatDuration(app.duration)} meeting{sets ? ` ${phrase}` : ''}
 				</p>
+				{#if suggestions.length}
+					<ul class="mt-2 space-y-2">
+						{#each suggestions as blocker (blocker.id)}
+							<li class="flex items-center gap-2 text-xs text-fg-2">
+								<span class="min-w-0 flex-1 leading-snug text-pretty">
+									<strong class="font-medium text-fg">{names.get(blocker.id)}</strong>
+									is the only {who === 'everyone' ? 'one' : 'required person'} missing from
+									<span class="tabular">{plural(blocker.count, sets ? 'option' : 'time')}</span>
+								</span>
+								<button
+									class="btn btn-ghost btn-sm shrink-0"
+									onclick={() => app.setRole(blocker.id, unblock.role)}
+								>
+									{unblock.label}
+								</button>
+							</li>
+						{/each}
+					</ul>
+				{:else}
+					<p class="mt-1 text-fg-2">{roleHint}</p>
+				{/if}
 				{#if app.duration > MIN_DURATION || app.perWeek > 1}
 					<div class="mt-2.5 flex flex-wrap gap-1.5">
 						{#if app.duration > MIN_DURATION}
@@ -164,34 +168,17 @@
 							</button>
 						{/if}
 					</div>
-				{:else}
-					<p class="mt-1 text-fg-2">Try marking someone as optional.</p>
 				{/if}
 			</div>
 		{/if}
 
 		{#each shown as group (group.key)}
 			{@const open = expanded[group.key]}
-			{@const blocker = group.key === 'near' ? topBlocker(group.items) : undefined}
 			<div>
 				<h3 class="mb-2 text-xs font-semibold text-fg">
 					{group.title}
 					<span class="ml-1 font-normal text-fg-3 tabular">{group.items.length}</span>
 				</h3>
-				{#if blocker}
-					<div class="mb-2 flex items-center gap-2 text-xs text-fg-2">
-						<span class="min-w-0 flex-1 truncate">
-							<strong class="font-medium text-fg">{names.get(blocker.id)}</strong>
-							is the one missing from <span class="tabular">{blocker.count}</span>
-						</span>
-						<button
-							class="btn btn-ghost btn-sm -my-1"
-							onclick={() => app.setRole(blocker.id, unblock.role)}
-						>
-							{unblock.label}
-						</button>
-					</div>
-				{/if}
 				<ul class="space-y-2">
 					{#each open ? group.items : group.items.slice(0, LIMIT) as item (item.id)}
 						{#if sets}

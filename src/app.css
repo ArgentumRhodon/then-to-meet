@@ -15,7 +15,7 @@
 	--line-strong: light-dark(#c3d1d9, #5a687d);
 	--fg: light-dark(#0e2a35, #cdf0f6);
 	--fg-2: light-dark(#44606c, #c1c7d1);
-	--fg-3: light-dark(#6a8591, #939eae);
+	--fg-3: light-dark(#56717d, #aab3c0);
 	/* Primary: cyan with black text, as in v1's buttons. */
 	--accent: #06b6d4;
 	--accent-hover: light-dark(#1ac3df, #51cce1);
@@ -31,7 +31,7 @@
 	   lightness, so fading a color keeps its hue. */
 	--heat-0: #3a434f;
 	--heat-fade: oklch(0.38 0 none);
-	--warn: light-dark(#9a6b00, #f4c12a);
+	--warn: light-dark(#8a5f00, #f4c12a);
 	--warn-soft: light-dark(#fdf3d3, #54513f);
 	--danger: light-dark(#b52c55, #e2557c);
 	--danger-soft: light-dark(#fbe4ec, #4f3647);
@@ -147,6 +147,17 @@
 	::selection {
 		background: var(--accent-soft);
 	}
+
+	@media (prefers-reduced-motion: reduce) {
+		*,
+		::before,
+		::after {
+			animation-duration: 0.01ms !important;
+			animation-iteration-count: 1 !important;
+			transition-duration: 0.01ms !important;
+			scroll-behavior: auto !important;
+		}
+	}
 }
 
 /* Styles that apply only in the light theme (pinned, or following a light system setting). */
@@ -203,8 +214,20 @@
 	.btn-sm.btn-icon {
 		@apply size-7 px-0;
 	}
+	/* Fingers need bigger targets than the dense desktop sizes. A minimum rather than a height, so
+	   it also lifts buttons that set their own smaller height, and leaves bigger ones alone. */
+	@media (pointer: coarse) {
+		.btn {
+			min-height: 2.5rem;
+		}
+		.btn-icon {
+			min-width: 2.5rem;
+		}
+	}
+	/* On touch, 16px text: iOS zooms into any smaller field when it's focused. Fields that set a
+	   smaller size themselves repeat pointer-coarse:text-base, since their utility wins over this. */
 	.input {
-		@apply h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg transition-colors outline-none placeholder:text-fg-3 hover:border-line-strong focus:border-accent focus:ring-3 focus:ring-accent/20;
+		@apply h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg transition-colors outline-none placeholder:text-fg-3 hover:border-line-strong focus:border-accent focus:ring-3 focus:ring-accent/20 pointer-coarse:min-h-11 pointer-coarse:text-base;
 	}
 	.card {
 		@apply rounded-xl border border-line bg-surface;

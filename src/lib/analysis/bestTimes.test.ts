@@ -3,15 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Roles, W2MEvent } from '$lib/types';
 import { demoEventHtml } from '$lib/w2m/demo';
 import { parseEvent } from '$lib/w2m/parse';
-import {
-	blockers,
-	blockForSlots,
-	findBestTimes,
-	peopleFor,
-	slotSpan,
-	turnout,
-	type TimeBlock
-} from './bestTimes';
+import { blockers, blockForSlots, findBestTimes, slotSpan, type TimeBlock } from './bestTimes';
 import { buildGrid } from './grid';
 
 const ZONE = 'America/New_York';
@@ -103,21 +95,10 @@ describe('findBestTimes', () => {
 		expect(result.everyone).toEqual([]);
 	});
 
-	it('falls back to the windows that fit the most people', () => {
-		const result = run({}, 240);
-		expect(result.near).toEqual([]);
-		expect(result.fewer.length).toBeGreaterThan(0);
-		expect(result.fewer.every((b) => b.attendees.length >= 2)).toBe(true);
-		// Biggest groups first.
-		const missing = result.fewer.map((b) => b.missing.length);
-		expect(missing).toEqual([...missing].sort((a, b) => a - b));
-	});
-
-	it('keeps the fallback out of the way when better tiers exist', () => {
+	it('leaves out times two or more required people miss', () => {
 		const result = run();
-		expect(result.everyone.length).toBeGreaterThan(0);
-		// The UI only shows `fewer` when the other tiers are empty, but it's still computed.
-		expect(result.fewer.every((b) => b.requiredMissing.length >= 2)).toBe(true);
+		const all = [...result.everyone, ...result.required, ...result.near];
+		expect(all.every((b) => b.requiredMissing.length <= 1)).toBe(true);
 	});
 
 	it('does not merge windows across a gap in the day', () => {
@@ -195,23 +176,6 @@ describe('blockers', () => {
 		expect(near.length).toBeGreaterThan(0);
 		const counted = blockers(near);
 		expect(counted.reduce((n, b) => n + b.count, 0)).toBe(near.length);
-	});
-});
-
-describe('attendance filter', () => {
-	it('turns a share of people into a head count, rounding up', () => {
-		expect(peopleFor(2 / 3, 3)).toBe(2);
-		expect(peopleFor(2 / 3, 8)).toBe(6);
-		expect(peopleFor(0.75, 8)).toBe(6);
-		expect(peopleFor(6 / 7, 7)).toBe(6);
-		expect(peopleFor(0, 5)).toBe(1);
-		expect(peopleFor(1, 5)).toBe(5);
-		expect(peopleFor(0.5, 0)).toBe(0);
-	});
-
-	it('counts a set of meetings by its emptiest meeting', () => {
-		expect(turnout({ attendees: [1, 2, 3] })).toBe(3);
-		expect(turnout({ sessions: [{ attendees: [1, 2, 3] }, { attendees: [1, 2] }] })).toBe(2);
 	});
 });
 

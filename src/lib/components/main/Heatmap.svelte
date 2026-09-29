@@ -263,6 +263,9 @@
 		}
 	};
 
+	/** Height of the sticky day header, so scrolling a slot into view stops below it. */
+	let headerHeight = $state(0);
+
 	// Bring a block (or a set's first meeting) into view when it's picked in the sidebar.
 	$effect(() => {
 		if (!app.pinnedBlock && !app.pinnedSet) return;
@@ -400,7 +403,7 @@
 						onclick={() => (app.pinnedPerson = null)}
 						title="Back to everyone (Esc)"
 					>
-						<X class="size-3.5" aria-hidden="true" /> Show everyone
+						<X class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" /> Show everyone
 					</button>
 				{/if}
 			</div>
@@ -428,6 +431,8 @@
 	<div
 		bind:this={scroller}
 		class="relative isolate max-h-[75dvh] min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-6 sm:px-6 lg:max-h-none"
+		style:scroll-padding-top="{headerHeight}px"
+		style:scroll-padding-left="3.25rem"
 		onscroll={() => {
 			if (tipRect) hideTip();
 			queuePlaceCard();
@@ -457,7 +462,14 @@
 				pointerFocused = false;
 			}}
 		>
+			<!-- Backs the header across the column gaps and grid edges, where an outline's glow would show. -->
 			<div
+				class="sticky top-0 z-[9] -mx-1.5 bg-page"
+				style:grid-row="1"
+				style:grid-column="1 / -1"
+			></div>
+			<div
+				bind:offsetHeight={headerHeight}
 				class="corner sticky top-0 left-0 z-20 bg-page"
 				style:grid-row="1"
 				style:grid-column="1"

@@ -40,7 +40,7 @@
 				? `Add the ${label(meeting)} meeting to Google Calendar`
 				: 'Add to Google Calendar'}
 		>
-			<CalendarPlus class="size-3.5" aria-hidden="true" />
+			<CalendarPlus class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 			{meetings.length > 1 ? label(meeting) : 'Google Calendar'}
 		</a>
 	{/each}
@@ -53,7 +53,7 @@
 				? 'Download every meeting in one .ics for Apple Calendar, Outlook, and others'
 				: 'Download .ics for Apple Calendar, Outlook, and others'}
 		>
-			<Download class="size-3.5" />
+			<Download class="size-3.5 pointer-coarse:size-4.5" />
 		</button>
 		{@render children?.()}
 	</span>

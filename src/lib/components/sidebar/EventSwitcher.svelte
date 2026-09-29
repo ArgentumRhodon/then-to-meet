@@ -26,7 +26,7 @@
 		aria-haspopup="dialog"
 		title="Open another event"
 	>
-		<ArrowLeftRight class="size-3.5" aria-hidden="true" />
+		<ArrowLeftRight class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 		Events
 	</button>
 	{#if open}

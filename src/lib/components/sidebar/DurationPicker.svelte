@@ -13,7 +13,7 @@
 	>
 		{#each DURATIONS as minutes (minutes)}
 			<button
-				class="h-7 rounded-md text-xs font-medium whitespace-nowrap tabular transition-colors {app.duration ===
+				class="h-7 rounded-md text-xs font-medium whitespace-nowrap tabular transition-colors pointer-coarse:h-9 {app.duration ===
 				minutes
 					? 'bg-accent text-on-accent'
 					: 'text-fg-2 hover:text-fg'}"

@@ -1,6 +1,7 @@
 import type { Roles, W2MEvent } from '$lib/types';
 import type { Grid } from './grid';
 
+/** How close a time comes to working. Searches drop `fewer`; a hand-picked time can be any. */
 export type Tier = 'everyone' | 'required' | 'near' | 'fewer';
 
 export interface TimeBlock {
@@ -23,10 +24,11 @@ export interface BestTimes {
 	everyone: TimeBlock[];
 	/** All required people, but some optional ones can't make it. */
 	required: TimeBlock[];
-	/** Exactly one person short (one required person, or one of an all-optional group). */
+	/**
+	 * Exactly one person short (one required person, or one of an all-optional group). Not listed,
+	 * but counted to suggest who to make optional.
+	 */
 	near: TimeBlock[];
-	/** Everything else with at least two people, most people first. A fallback for tough polls. */
-	fewer: TimeBlock[];
 	considered: number;
 	requiredCount: number;
 }
@@ -57,7 +59,6 @@ export const findBestTimes = (
 		everyone: [],
 		required: [],
 		near: [],
-		fewer: [],
 		considered: considered.length,
 		requiredCount: required.length
 	};
@@ -91,7 +92,7 @@ export const findBestTimes = (
 			const missing = considered.filter((p) => !inGroup.has(p));
 			const requiredMissing = missing.filter((p) => requiredSet.has(p));
 			const tier = classify(missing.length, requiredMissing.length, required.length);
-			if (tier === 'fewer' && group.length < 2) continue;
+			if (tier === 'fewer') continue;
 
 			// Maximal stretches where the whole group is free, at least k slots long.
 			let from = 0;
@@ -118,19 +119,15 @@ export const findBestTimes = (
 			}
 		}
 
-		for (const block of dropDominated(blocks)) result[block.tier].push(block);
+		for (const block of dropDominated(blocks)) {
+			if (block.tier !== 'fewer') result[block.tier].push(block);
+		}
 	}
 
 	const byStart = (a: TimeBlock, b: TimeBlock) => a.start - b.start || b.end - a.end;
 	result.everyone.sort(byStart);
 	result.required.sort((a, b) => a.missing.length - b.missing.length || byStart(a, b));
 	result.near.sort(byStart);
-	result.fewer.sort(
-		(a, b) =>
-			a.requiredMissing.length - b.requiredMissing.length ||
-			a.missing.length - b.missing.length ||
-			byStart(a, b)
-	);
 	return result;
 };
 
@@ -245,27 +242,6 @@ export const blockers = (
 	}
 	return [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
 };
-
-/**
- * How many people a result is sure of: everyone who can make a single time, or for a set of
- * meetings a week, the emptiest meeting.
- */
-export const turnout = (
-	result: Pick<TimeBlock, 'attendees'> | { sessions: Pick<TimeBlock, 'attendees'>[] }
-): number =>
-	'sessions' in result
-		? Math.min(...result.sessions.map((s) => s.attendees.length))
-		: result.attendees.length;
-
-/**
- * The attendance cutoff starts at everyone, which the list holds down to the most people any time
- * gets, so it opens on the best matches. Any change to the search puts it back there.
- */
-export const DEFAULT_MIN_MATCH = 1;
-
-/** How many of `considered` people a share of them comes to, rounding up, and at least one. */
-export const peopleFor = (share: number, considered: number): number =>
-	Math.min(considered, Math.max(1, Math.ceil(share * considered - 1e-9)));
 
 /** Everyone considered who is free during a single slot. */
 export const slotAttendance = (event: W2MEvent, roles: Roles) => {

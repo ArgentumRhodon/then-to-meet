@@ -100,7 +100,7 @@
 					target="_blank"
 					rel="noopener noreferrer"
 				>
-					<CalendarPlus class="size-3.5" aria-hidden="true" />
+					<CalendarPlus class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 					Google Calendar
 				</a>
 				<button
@@ -109,7 +109,7 @@
 					aria-label="Download .ics"
 					title="Download .ics for Apple Calendar, Outlook, and others"
 				>
-					<Download class="size-3.5" />
+					<Download class="size-3.5 pointer-coarse:size-4.5" />
 				</button>
 				<button
 					class="btn btn-ghost btn-sm btn-icon"
@@ -118,7 +118,7 @@
 					aria-label="Copy link to this time"
 					title="Copy a link that opens this event with this time highlighted"
 				>
-					<Link class="size-3.5" />
+					<Link class="size-3.5 pointer-coarse:size-4.5" />
 				</button>
 				<button
 					class="btn btn-ghost btn-sm btn-icon"
@@ -126,7 +126,7 @@
 					aria-label="Copy as text"
 					title="Copy this time as text"
 				>
-					<Copy class="size-3.5" />
+					<Copy class="size-3.5 pointer-coarse:size-4.5" />
 				</button>
 			</div>
 		</div>

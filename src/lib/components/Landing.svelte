@@ -63,7 +63,7 @@
 			<p class="mt-3 text-center text-sm text-fg-3">
 				No link handy?
 				<button
-					class="font-medium text-accent-fg underline-offset-4 hover:underline"
+					class="font-medium text-accent-fg underline-offset-4 hover:underline pointer-coarse:py-2"
 					onclick={() => openEvent(DEMO_ID)}
 				>
 					Try a demo event

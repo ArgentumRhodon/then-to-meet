@@ -15,10 +15,10 @@
 	import { layout } from '$lib/ui/layout.svelte';
 	import { copyText } from '$lib/ui/toast.svelte';
 	import CalendarButtons from '../sidebar/CalendarButtons.svelte';
+	import MissingList from '../sidebar/MissingList.svelte';
 
 	/**
-	 * Times picked on the heatmap or opened from a shared link: who can make each one, who can make
-	 * all of them, and exports. Shift-clicking the heatmap adds more.
+	 * Times picked on the heatmap or opened from a shared link: who can't make them, and exports. Shift-clicking the heatmap adds more.
 	 */
 	const blocks = $derived(app.selectedBlocks);
 	const several = $derived(blocks.length > 1);
@@ -35,7 +35,8 @@
 	const considered = $derived(blocks[0].attendees.length + blocks[0].missing.length);
 	const misses = $derived(
 		[...new Set(blocks.flatMap((b) => b.missing))].map((id) => ({
-			name: nameOf(id),
+			name: names.get(id) ?? '?',
+			role: app.roleOf(id),
 			days: formatList(
 				blocks.filter((b) => b.missing.includes(id)).map((b) => formatWeekday(b.start, zone))
 			)
@@ -96,7 +97,7 @@
 						</span>
 						<span class="block truncate text-fg-3">
 							{block.missing.length
-								? `Without ${block.missing.map(nameOf).join(', ')}`
+								? `${block.missing.length} can’t make it`
 								: 'Everyone can make it'}
 						</span>
 					</span>
@@ -113,20 +114,18 @@
 		</ul>
 	{/if}
 
-	<p class="mt-1.5 text-xs text-fg-2">
+	<div class="mt-1.5">
 		{#if !considered}
-			Everyone is skipped.
+			<p class="text-xs text-fg-2">Everyone is skipped.</p>
 		{:else if !misses.length}
-			<span class="font-medium text-ok">Everyone can make it</span>
-			({considered})
-		{:else if several}
-			<span class="font-medium text-fg tabular">{always.length} of {considered}</span> can make it
-			to every meeting · {misses.map((m) => `${m.name} misses ${m.days}`).join('; ')}
+			<p class="text-xs font-medium text-ok">Everyone can make it</p>
 		{:else}
-			<span class="font-medium text-fg tabular">{always.length} of {considered}</span> can make it ·
-			without {misses.map((m) => m.name).join(', ')}
+			<MissingList
+				people={several ? misses.map((m) => ({ ...m, note: `misses ${m.days}` })) : misses}
+				total={considered}
+			/>
 		{/if}
-	</p>
+	</div>
 	{#if event.weekly}
 		<p class="mt-1 text-xs text-fg-3">
 			Adds {several ? 'weekly meetings' : 'a weekly meeting'} starting {formatDay(

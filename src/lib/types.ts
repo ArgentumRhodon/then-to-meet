@@ -44,4 +44,6 @@ export interface PeopleGroup {
 	name: string;
 	/** Person IDs, which are only stable within one poll, so groups belong to one event. */
 	members: number[];
+	/** Each member's role while this group is viewed; like the event's own roles, missing means required. */
+	roles?: Roles;
 }

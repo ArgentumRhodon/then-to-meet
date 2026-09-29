@@ -1,11 +1,25 @@
+export interface ToastAction {
+	label: string;
+	run: () => void;
+}
+
 class Toast {
 	message = $state<string | null>(null);
+	action = $state.raw<ToastAction | null>(null);
 	#timer: ReturnType<typeof setTimeout> | undefined;
 
-	show(message: string) {
+	/** Shows a message, with an optional button (like Undo) that stays up a little longer. */
+	show(message: string, action: ToastAction | null = null) {
 		this.message = message;
+		this.action = action;
 		clearTimeout(this.#timer);
-		this.#timer = setTimeout(() => (this.message = null), 2200);
+		this.#timer = setTimeout(() => this.hide(), action ? 5000 : 2200);
+	}
+
+	hide() {
+		clearTimeout(this.#timer);
+		this.message = null;
+		this.action = null;
 	}
 }
 

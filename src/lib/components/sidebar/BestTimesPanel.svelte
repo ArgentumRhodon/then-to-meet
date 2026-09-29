@@ -59,10 +59,17 @@
 		return out;
 	});
 
+	/** The fewest and most people any result gets: the slider spans that, since no time is outside. */
+	const turnouts = $derived(groups.flatMap((g) => g.items.map(turnout)));
+	const leastPeople = $derived(turnouts.length ? Math.min(...turnouts) : 0);
+	const mostPeople = $derived(turnouts.length ? Math.max(...turnouts) : 0);
+	/** The saved cutoff, held within what's possible, so the best times always show. */
+	const need = $derived(Math.min(Math.max(app.minPeople, leastPeople), mostPeople));
+
 	const shown = $derived(
 		groups
 			.map((group) => {
-				const items = group.items.filter((item) => turnout(item) >= app.minPeople);
+				const items = group.items.filter((item) => turnout(item) >= need);
 				// Two or more short: "most people" while that's over half, which a low cutoff can undo.
 				const title =
 					group.title ||
@@ -72,11 +79,6 @@
 			.filter((group) => group.items.length)
 	);
 	const total = $derived(shown.reduce((n, g) => n + g.items.length, 0));
-	/** The most people any result gets, to offer when the cutoff hides everything. */
-	const mostPeople = $derived(
-		groups.reduce((most, g) => g.items.reduce((m, item) => Math.max(m, turnout(item)), most), 0)
-	);
-	const percentOf = (people: number) => Math.round((people / considered) * 100);
 
 	const names = $derived(new Map((app.event?.people ?? []).map((p) => [p.id, p.name])));
 	/** With no one required, a near miss is one optional person short; skipping them fixes it. */
@@ -119,8 +121,8 @@
 					{/each}
 				</div>
 			</div>
-			{#if considered > 1}
-				<AttendancePicker {considered} />
+			{#if mostPeople > leastPeople}
+				<AttendancePicker {considered} min={leastPeople} max={mostPeople} {need} />
 			{/if}
 		</div>
 
@@ -146,22 +148,10 @@
 			)}
 			<div class="rounded-lg bg-subtle px-3 py-3 text-[13px]">
 				<p class="font-medium text-fg">
-					{#if mostPeople}
-						No times with {percentOf(app.minPeople)}%+ attendance
-					{:else}
-						Nothing fits a {formatDuration(app.duration)} meeting{sets ? ` ${phrase}` : ''}
-					{/if}
+					Nothing fits a {formatDuration(app.duration)} meeting{sets ? ` ${phrase}` : ''}
 				</p>
-				{#if mostPeople || app.duration > MIN_DURATION || app.perWeek > 1}
+				{#if app.duration > MIN_DURATION || app.perWeek > 1}
 					<div class="mt-2.5 flex flex-wrap gap-1.5">
-						{#if mostPeople}
-							<button
-								class="btn btn-secondary btn-sm"
-								onclick={() => app.setMinMatch(mostPeople / considered)}
-							>
-								Lower to {percentOf(mostPeople)}%
-							</button>
-						{/if}
 						{#if app.duration > MIN_DURATION}
 							<button class="btn btn-secondary btn-sm" onclick={() => app.setDuration(shorter)}>
 								Try {formatDuration(shorter)}

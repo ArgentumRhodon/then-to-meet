@@ -1,123 +1,84 @@
 <script lang="ts">
+	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import { app } from '$lib/state/app.svelte';
 	import { groups, membersIn } from '$lib/state/groups.svelte';
 	import type { PeopleGroup, Person } from '$lib/types';
-	import Avatar from '$lib/ui/Avatar.svelte';
-	import { dismissable } from '$lib/ui/dismissable';
 	import { toast } from '$lib/ui/toast.svelte';
 
-	let {
-		people,
-		group,
-		preset = [],
-		onclose,
-		onsaved
-	}: {
-		people: Person[];
-		/** The group being edited; omit to create a new one. */
-		group?: PeopleGroup;
-		/** People to start checked when creating. */
-		preset?: number[];
-		onclose: () => void;
-		onsaved: (id: string) => void;
-	} = $props();
+	let { group, people }: { group: PeopleGroup; people: Person[] } = $props();
 
-	const id = $props.id();
-	// Seeded once from props: this popover is remounted for every group it edits.
+	// Seeded once: the editor is remounted for each group, and the name saves as it's typed.
 	// svelte-ignore state_referenced_locally
-	let name = $state(group?.name ?? '');
-	// svelte-ignore state_referenced_locally
-	let checked = $state(new Set(group ? membersIn(group, people).map((p) => p.id) : preset));
-	let error = $state('');
+	const original = group.name;
+	let name = $state(original);
 
-	const toggle = (pid: number) => {
-		const next = new Set(checked);
-		if (!next.delete(pid)) next.add(pid);
-		checked = next;
+	const present = $derived(membersIn(group, people).length);
+
+	/** Deletes right away; the toast offers it back. */
+	const remove = (message = `Deleted ${group.name}`) => {
+		const { id } = group;
+		const undo = groups.remove(id);
+		app.setGroup(null);
+		toast.show(message, {
+			label: 'Undo',
+			run: () => {
+				undo();
+				app.setGroup(id);
+			}
+		});
 	};
 
-	const save = (e: SubmitEvent) => {
+	/** A group left with no one in it isn't worth keeping. */
+	const done = () => {
+		if (!present) remove(`Deleted ${group.name}, it was empty`);
+		else app.editGroup(false);
+	};
+
+	const onkeydown = (e: KeyboardEvent & { currentTarget: HTMLInputElement }) => {
+		if (e.key === 'Enter') e.currentTarget.blur();
+		if (e.key !== 'Escape') return;
 		e.preventDefault();
-		if (!name.trim()) {
-			error = 'Give the group a name.';
-			return;
-		}
-		const members = people.filter((p) => checked.has(p.id)).map((p) => p.id);
-		if (!members.length) {
-			error = 'Check at least one person.';
-			return;
-		}
-		if (group) {
-			groups.rename(group.id, name);
-			groups.setMembers(group.id, members);
-			toast.show(`Saved ${name.trim()}`);
-			onsaved(group.id);
-		} else {
-			const existed = groups.hasName(name);
-			const created = groups.create(name, members);
-			toast.show(existed ? `Added to ${created.name}` : `Created ${created.name}`);
-			onsaved(created.id);
-		}
+		name = original;
+		groups.rename(group.id, original);
+		e.currentTarget.blur();
 	};
 
-	const focusOnMount = (node: HTMLInputElement) => {
-		if (matchMedia('(pointer: fine)').matches) node.focus();
+	/** Invites a real name while the group still has its placeholder one. */
+	const nameOnMount = (node: HTMLInputElement) => {
+		if (!/^Group \d+$/.test(original) || !matchMedia('(pointer: fine)').matches) return;
+		node.focus();
+		node.select();
 	};
 </script>
 
-<form
-	class="popover absolute inset-x-3 top-full z-30 mt-1.5 p-3"
-	aria-label={group ? `Edit ${group.name}` : 'New group'}
-	onsubmit={save}
-	{@attach dismissable(onclose)}
->
-	<label for="{id}-name" class="text-xs font-medium text-fg-2">Group name</label>
-	<input
-		id="{id}-name"
-		class="input mt-1 h-8 text-[13px]"
-		placeholder="Design team"
-		maxlength="40"
-		bind:value={name}
-		oninput={() => (error = '')}
-		{@attach focusOnMount}
-	/>
-
-	<div class="mt-3 mb-1 flex items-center justify-between">
-		<span class="text-xs font-medium text-fg-2">Members · {checked.size}</span>
-		<span class="flex gap-1">
-			<button
-				type="button"
-				class="btn btn-ghost btn-sm"
-				onclick={() => (checked = new Set(people.map((p) => p.id)))}
-			>
-				All
-			</button>
-			<button type="button" class="btn btn-ghost btn-sm" onclick={() => (checked = new Set())}
-				>None</button
-			>
-		</span>
+<div class="mt-2 rounded-lg bg-subtle p-1.5 pl-2">
+	<div class="flex items-center gap-1.5">
+		<input
+			class="input h-8 min-w-0 flex-1 text-[13px] font-medium"
+			aria-label="Group name"
+			maxlength="40"
+			bind:value={name}
+			oninput={() => groups.rename(group.id, name)}
+			onblur={() => {
+				// The store never takes a blank name, so an emptied field shows the last good one.
+				if (!name.trim()) name = group.name;
+			}}
+			{onkeydown}
+			{@attach nameOnMount}
+		/>
+		<button
+			class="btn btn-ghost btn-sm btn-icon shrink-0 text-fg-3 hover:bg-danger-soft hover:text-danger"
+			onclick={() => remove()}
+			aria-label="Delete {group.name}"
+			title="Delete group"
+		>
+			<Trash2 class="size-3.5" />
+		</button>
+		<button class="btn btn-primary btn-sm shrink-0" onclick={done}>Done</button>
 	</div>
-	<ul class="-mx-1 max-h-56 overflow-y-auto">
-		{#each people as person (person.id)}
-			<li>
-				<label
-					class="flex cursor-pointer items-center gap-2.5 rounded-md px-1 py-1 hover:bg-subtle"
-				>
-					<input
-						type="checkbox"
-						class="size-4 shrink-0 cursor-pointer accent-accent"
-						checked={checked.has(person.id)}
-						onchange={() => toggle(person.id)}
-					/>
-					<Avatar id={person.id} name={person.name} size={22} />
-					<span class="truncate text-[13px]">{person.name}</span>
-				</label>
-			</li>
-		{/each}
-	</ul>
-	{#if error}<p class="mt-2 text-xs text-danger" role="alert">{error}</p>{/if}
-
-	<div class="mt-3 flex justify-end gap-1.5">
-		<button type="button" class="btn btn-ghost btn-sm" onclick={onclose}>Cancel</button>
-		<button type="submit" class="btn btn-primary btn-sm">{group ? 'Save' : 'Create group'}</button>
-	</div>
-</form>
+	<p class="mt-1.5 px-0.5 text-[11px] text-fg-3">
+		{present
+			? 'Check or uncheck people below. Changes save as you go.'
+			: 'Check the people below who belong in this group.'}
+	</p>
+</div>

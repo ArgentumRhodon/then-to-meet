@@ -258,10 +258,10 @@ export const turnout = (
 		: result.attendees.length;
 
 /**
- * Best times starts out listing times at least three-quarters of people can make, which for most
- * polls is everyone or one person short.
+ * The attendance cutoff starts at everyone, which the list holds down to the most people any time
+ * gets, so it opens on the best matches. Any change to the search puts it back there.
  */
-export const DEFAULT_MIN_MATCH = 0.75;
+export const DEFAULT_MIN_MATCH = 1;
 
 /** How many of `considered` people a share of them comes to, rounding up, and at least one. */
 export const peopleFor = (share: number, considered: number): number =>

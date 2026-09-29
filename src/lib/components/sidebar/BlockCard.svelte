@@ -6,42 +6,35 @@
 	import Link from '@lucide/svelte/icons/link';
 	import { page } from '$app/state';
 	import type { TimeBlock } from '$lib/analysis/bestTimes';
-	import { formatDay, formatTime, formatTimeRange } from '$lib/analysis/format';
+	import { formatDay, formatTimeRange } from '$lib/analysis/format';
 	import { downloadIcs, googleCalendarUrl, meetingFor } from '$lib/share/calendar';
 	import { app } from '$lib/state/app.svelte';
-	import Avatar from '$lib/ui/Avatar.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
 	import { copyText } from '$lib/ui/toast.svelte';
+	import Attendees from './Attendees.svelte';
 	import DayStrip from './DayStrip.svelte';
 	import MissingList from './MissingList.svelte';
+	import StartStepper from './StartStepper.svelte';
 
 	let { block }: { block: TimeBlock } = $props();
-
-	const AVATARS = 5;
 
 	const event = $derived(app.event!);
 	const zone = $derived(app.grid!.zone);
 	const pinned = $derived(app.pinnedBlock?.id === block.id);
 	const names = $derived(new Map(event.people.map((p) => [p.id, p.name])));
 	const attendees = $derived(event.people.filter((p) => block.attendees.includes(p.id)));
-	const missingNames = $derived(
-		block.missing.map(
-			(id) => (names.get(id) ?? '?') + (app.roleOf(id) === 'optional' ? ' (optional)' : '')
-		)
+	const missing = $derived(
+		block.missing.map((id) => ({ name: names.get(id) ?? '?', role: app.roleOf(id) }))
 	);
 
-	// A long window fits the meeting at several start times; let the user pick one for export.
-	const starts = $derived.by(() => {
-		const out: number[] = [];
-		for (let t = block.start; t + app.duration * 60 <= block.end; t += event.slotSeconds)
-			out.push(t);
-		return out;
-	});
-	let chosenStart = $state<number | null>(null);
-	const start = $derived(
-		chosenStart !== null && starts.includes(chosenStart) ? chosenStart : block.start
-	);
+	// A long window fits the meeting at several start times; the pinned card's arrows pick one, and
+	// that's the time the heatmap highlights and the calendar and links use.
+	const positions = $derived(app.shiftRoom(block) + 1);
+	const position = $derived(pinned ? app.shiftFor(block) : 0);
+	const start = $derived(block.start + position * event.slotSeconds);
 	const end = $derived(start + app.duration * 60);
+	/** An open card with room to move gets its time as a stepper. */
+	const stepping = $derived(pinned && positions > 1);
 	const meeting = $derived(meetingFor(event, start, end, app.zone));
 	const dayLabel = $derived(formatDay(block.start, zone, event.weekly));
 
@@ -62,68 +55,43 @@
 	onpointerenter={() => (app.hoveredBlock = block)}
 	onpointerleave={() => (app.hoveredBlock = null)}
 >
-	<button
-		class="w-full px-3.5 py-2.5 text-left"
-		aria-expanded={pinned}
-		onclick={toggle}
-		onfocus={() => (app.hoveredBlock = block)}
-		onblur={() => (app.hoveredBlock = null)}
-	>
-		<span class="flex items-center justify-between gap-2">
-			<span class="text-xs font-medium text-fg-2">{dayLabel}</span>
-			<ChevronDown
-				class="size-3.5 text-fg-3 transition-transform {pinned ? 'rotate-180' : ''}"
-				aria-hidden="true"
-			/>
-		</span>
-		<span class="mt-0.5 flex items-center justify-between gap-3">
-			<span class="text-[15px] font-semibold tracking-tight tabular">
-				{formatTimeRange(block.start, block.end, zone)}
+	<div>
+		<button
+			class="w-full px-3.5 pt-2.5 text-left {stepping ? 'pb-1.5' : 'pb-2.5'}"
+			aria-expanded={pinned}
+			onclick={toggle}
+			onfocus={() => (app.hoveredBlock = block)}
+			onblur={() => (app.hoveredBlock = null)}
+		>
+			<span class="flex items-center justify-between gap-2">
+				<span class="text-xs font-medium text-fg-2">{dayLabel}</span>
+				<ChevronDown
+					class="size-3.5 text-fg-3 transition-transform {pinned ? 'rotate-180' : ''}"
+					aria-hidden="true"
+				/>
 			</span>
-			<span class="flex shrink-0 items-center gap-1">
-				<span class="flex -space-x-1.5">
-					{#each attendees.slice(0, AVATARS) as person (person.id)}
-						<Avatar id={person.id} name={person.name} size={18} class="ring-2 ring-surface" />
-					{/each}
+			{#if !stepping}
+				<span class="mt-0.5 block text-[15px] font-semibold tracking-tight tabular">
+					{formatTimeRange(pinned ? start : block.start, pinned ? end : block.end, zone)}
 				</span>
-				{#if attendees.length > AVATARS}
-					<span class="text-[11px] text-fg-3 tabular">+{attendees.length - AVATARS}</span>
-				{/if}
-			</span>
-		</span>
-		{#if block.missing.length}
-			<span class="mt-1 block truncate text-xs text-fg-3">
-				Without {block.missing.map((id) => names.get(id)?.split(' ')[0]).join(', ')}
-			</span>
+			{/if}
+		</button>
+		<!-- Closed, the whole window; open with room to move, the meeting its arrows have picked. -->
+		{#if stepping}
+			<div class="px-2.5 pb-2.5">
+				<StartStepper label={formatTimeRange(start, end, zone)} {position} count={positions} />
+			</div>
 		{/if}
-	</button>
+	</div>
 
 	{#if pinned}
 		<div class="space-y-2.5 border-t border-line px-3.5 pt-2.5 pb-3">
 			{#if !layout.showHeatmap}
 				<DayStrip {block} />
 			{/if}
-			{#if missingNames.length}
-				<MissingList names={missingNames} />
-			{/if}
-			{#if starts.length > 1}
-				<label class="flex items-center justify-between gap-2 text-xs text-fg-2">
-					Start at
-					<select
-						class="h-7 rounded-md border border-line bg-surface px-2 text-xs text-fg tabular"
-						value={start}
-						onchange={(e) => (chosenStart = Number(e.currentTarget.value))}
-					>
-						{#each starts as t (t)}
-							<option value={t}>{formatTime(t, zone)}</option>
-						{/each}
-					</select>
-				</label>
-			{/if}
-			{#if event.weekly}
-				<p class="text-xs text-fg-3">
-					Repeats weekly from {formatDay(meeting.start, app.zone, false)}
-				</p>
+			<Attendees people={attendees} />
+			{#if missing.length}
+				<MissingList people={missing} total={block.attendees.length + block.missing.length} />
 			{/if}
 			<div class="flex items-center gap-1">
 				<a

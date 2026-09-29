@@ -1,6 +1,7 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
-	import { tick } from 'svelte';
+	import { tick, untrack } from 'svelte';
+	import { MediaQuery } from 'svelte/reactivity';
 	import type { TimeBlock } from '$lib/analysis/bestTimes';
 	import { formatDay, formatMinuteOfDay, formatTimeRange } from '$lib/analysis/format';
 	import type { MeetingSet } from '$lib/analysis/meetingSets';
@@ -59,7 +60,7 @@
 		return Array.from({ length: steps + 1 }, (_, i) => heatColor(i, steps));
 	});
 
-	const held = $derived(app.heldBlocks);
+	const held = $derived(app.heldSpans);
 	/** Outlines for the blocks in play: one for a single time, one per meeting for a set. */
 	const outlines = $derived(
 		app.activeBlocks.flatMap((block) => {
@@ -272,6 +273,83 @@
 		);
 	});
 
+	// The picked-time card floats over the grid. It starts at the bottom center and moves to
+	// whichever corner or edge covers the least of the picked times, so it never hides them.
+	let root: HTMLDivElement;
+	let card = $state<HTMLDivElement | null>(null);
+	let cardSpot = $state<{ left: number; top: number } | null>(null);
+	/** Which spot the card is in, kept while it stays clear so it doesn't hop around. */
+	let spotIndex = 0;
+	const wide = new MediaQuery('(min-width: 640px)');
+	const cardPad = $derived(wide.current ? 24 : 16);
+
+	const placeCard = () => {
+		if (!card || !scroller || !gridEl) return;
+		const box = root.getBoundingClientRect();
+		const view = scroller.getBoundingClientRect();
+		const dayRow = gridEl.querySelector<HTMLElement>('.corner')?.offsetHeight ?? 0;
+		const visibleTop = view.top + dayRow;
+		// The picked times on screen, in page coordinates.
+		const picked = app.selectedBlocks.flatMap((block) => {
+			const first = gridEl.querySelector(`[data-slot="${block.startSlot}"]`);
+			const last = gridEl.querySelector(`[data-slot="${block.endSlot}"]`);
+			if (!first || !last) return [];
+			const a = first.getBoundingClientRect();
+			const z = last.getBoundingClientRect();
+			const r = {
+				left: Math.max(a.left, view.left),
+				right: Math.min(a.right, view.right),
+				top: Math.max(a.top, visibleTop),
+				bottom: Math.min(z.bottom, view.bottom)
+			};
+			return r.right > r.left && r.bottom > r.top ? [r] : [];
+		});
+
+		const w = card.offsetWidth;
+		const h = card.offsetHeight;
+		const xs = [(box.width - w) / 2, cardPad, box.width - w - cardPad];
+		const ys = [box.height - h - 16, Math.max(0, visibleTop - box.top + 8)];
+		const spots = ys.flatMap((top) => xs.map((left) => ({ left, top })));
+		const covered = spots.map(({ left, top }) =>
+			picked.reduce((sum, r) => {
+				const x = Math.min(r.right, box.left + left + w) - Math.max(r.left, box.left + left);
+				const y = Math.min(r.bottom, box.top + top + h) - Math.max(r.top, box.top + top);
+				return sum + Math.max(0, x) * Math.max(0, y);
+			}, 0)
+		);
+		if (covered[spotIndex] > 0 || !cardSpot) {
+			spotIndex = covered.indexOf(Math.min(...covered));
+		}
+		cardSpot = spots[spotIndex];
+	};
+
+	let placeQueued = false;
+	const queuePlaceCard = () => {
+		if (placeQueued || !card) return;
+		placeQueued = true;
+		requestAnimationFrame(() => {
+			placeQueued = false;
+			placeCard();
+		});
+	};
+
+	$effect(() => {
+		if (!card) return;
+		const observer = new ResizeObserver(() => placeCard());
+		observer.observe(root);
+		observer.observe(card);
+		return () => {
+			observer.disconnect();
+			cardSpot = null;
+			spotIndex = 0;
+		};
+	});
+
+	$effect(() => {
+		void app.selectedBlocks;
+		untrack(placeCard);
+	});
+
 	const hovered = $derived(app.hoveredSlot);
 	const liveLabel = $derived.by(() => {
 		if (hovered === null || !app.attendance) return '';
@@ -285,6 +363,7 @@
 <!-- Always dark: color ramps read far better on a dark ground. In the light theme it sits in the
      page as a framed panel. -->
 <div
+	bind:this={root}
 	class="relative flex min-h-0 flex-col bg-page scheme-dark light:m-3 light:overflow-hidden light:rounded-2xl light:shadow-[0_12px_32px_-14px_rgb(14_42_53/0.45)] light:sm:m-4 {spotlightPinned
 		? 'ring-2 ring-accent/70 ring-inset'
 		: ''} {className}"
@@ -349,7 +428,10 @@
 	<div
 		bind:this={scroller}
 		class="relative isolate max-h-[75dvh] min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-6 sm:px-6 lg:max-h-none"
-		onscroll={() => tipRect && hideTip()}
+		onscroll={() => {
+			if (tipRect) hideTip();
+			queuePlaceCard();
+		}}
 	>
 		<!-- Focusable so arrow keys can walk the slots; the live region announces each one. -->
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
@@ -452,13 +534,19 @@
 	</div>
 
 	{#if app.selectedBlocks.length}
-		<!-- Floats over the grid so picking a time doesn't shift the cells being dragged across. -->
+		<!-- Floats over the grid so picking a time doesn't shift the cells being dragged across, in
+		     whichever spot keeps the picked times in view. -->
 		<div
-			class="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-4 pb-4 sm:px-6"
+			bind:this={card}
+			class="absolute z-20 motion-safe:transition-[left,top] motion-safe:duration-200 {dragged
+				? 'pointer-events-none'
+				: ''}"
+			style:width="min(28rem, calc(100% - {cardPad * 2}px))"
+			style:left={cardSpot ? `${cardSpot.left}px` : null}
+			style:top={cardSpot ? `${cardSpot.top}px` : null}
+			style:visibility={cardSpot ? null : 'hidden'}
 		>
-			<div class="w-full max-w-md {dragged ? '' : 'pointer-events-auto'}">
-				<PickedTime />
-			</div>
+			<PickedTime />
 		</div>
 	{/if}
 </div>

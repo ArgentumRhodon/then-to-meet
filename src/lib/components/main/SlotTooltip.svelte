@@ -3,6 +3,7 @@
 	import { app } from '$lib/state/app.svelte';
 	import Avatar from '$lib/ui/Avatar.svelte';
 	import { heatColor } from '$lib/ui/heat';
+	import { roleChip } from '$lib/ui/roleChip';
 
 	let { slot }: { slot: number } = $props();
 
@@ -47,26 +48,21 @@
 		></div>
 	</div>
 
-	{#each [{ label: 'Available', people: groups.available }, { label: 'Can’t make it', people: groups.unavailable }] as group (group.label)}
-		{#if group.people.length}
-			<p class="eyebrow mt-3 mb-1.5">{group.label}</p>
-			<ul class="space-y-1">
-				{#each group.people as person (person.id)}
-					<li
-						class="flex items-center gap-2 text-[13px] {group.label === 'Available'
-							? ''
-							: 'text-fg-2'}"
+	{#if groups.unavailable.length}
+		<p class="eyebrow mt-3 mb-1.5">Can’t make it</p>
+		<ul class="space-y-1">
+			{#each groups.unavailable as person (person.id)}
+				<li class="flex items-center gap-2 text-[13px]">
+					<Avatar id={person.id} name={person.name} size={18} />
+					<span class="truncate rounded-full px-2 py-0.5 {roleChip(person.role)}"
+						>{person.name}</span
 					>
-						<Avatar id={person.id} name={person.name} size={18} />
-						<span class="truncate">{person.name}</span>
-						{#if person.role === 'optional'}<span class="ml-auto text-[11px] text-fg-3"
-								>optional</span
-							>{/if}
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	{/each}
+				</li>
+			{/each}
+		</ul>
+	{:else if total}
+		<p class="mt-3 text-[13px] font-medium text-ok">Everyone can make it</p>
+	{/if}
 
 	{#if groups.skipped.length}
 		<p class="mt-3 text-[11px] text-fg-3">

@@ -44,7 +44,7 @@
 				Find the time that actually works
 			</h1>
 			<p class="mt-4 text-base text-pretty text-fg-2">
-				Paste a When2Meet link to rank the best meeting times, choose who’s required, and share the
+				Paste a When2Meet link to choose who’s required, rank the best meeting times, and share the
 				result.
 			</p>
 		</div>

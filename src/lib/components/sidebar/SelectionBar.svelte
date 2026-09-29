@@ -1,5 +1,8 @@
 <script lang="ts">
+	import Check from '@lucide/svelte/icons/check';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
+	import Minus from '@lucide/svelte/icons/minus';
+	import Plus from '@lucide/svelte/icons/plus';
 	import FolderPlus from '@lucide/svelte/icons/folder-plus';
 	import Funnel from '@lucide/svelte/icons/funnel';
 	import X from '@lucide/svelte/icons/x';
@@ -11,13 +14,11 @@
 
 	let {
 		people,
-		visible,
-		onnewgroup
+		visible
 	}: {
 		people: Person[];
 		/** The people currently listed (after group filter and search). */
 		visible: Person[];
-		onnewgroup: () => void;
 	} = $props();
 
 	const active = $derived(app.group);
@@ -49,17 +50,27 @@
 		app.setSelected(ids);
 	};
 
-	const addTo = (group: PeopleGroup) => {
-		groups.addMembers(group.id, app.selected);
-		groupMenu = false;
-		toast.show(`Added ${count} to ${group.name}`);
+	/** How many of the selected people are already in a group. */
+	const inGroup = (group: PeopleGroup) => {
+		const members = new Set(group.members);
+		return selectedPeople.filter((p) => members.has(p.id)).length;
 	};
 
-	const removeFromActive = () => {
-		if (!active) return;
-		groups.removeMembers(active.id, app.selected);
-		toast.show(`Removed ${count} from ${active.name}`);
-		app.setSelected([]);
+	/** Adds the selected people to a group, or takes them out if they're all in it already. */
+	const toggleIn = (group: PeopleGroup) => {
+		const who = count > 1 ? count : selectedPeople[0].name;
+		if (inGroup(group) === count) {
+			groups.removeMembers(group.id, app.selected);
+			toast.show(`Took ${who} out of ${group.name}`);
+			// They've left the group on screen, so there's nothing left to act on.
+			if (active?.id === group.id) {
+				groupMenu = false;
+				app.setSelected([]);
+			}
+		} else {
+			groups.addMembers(group.id, app.selected);
+			toast.show(`Added ${who} to ${group.name}`);
+		}
 	};
 
 	const indeterminate = (node: HTMLInputElement) => {
@@ -84,9 +95,9 @@
 			Clear
 		</button>
 	{:else}
-		<span class="text-xs text-fg-3"
-			>Select people to see just their times or change them together</span
-		>
+		<span class="text-xs text-fg-3">
+			Select people to see their times, change their priorities, or form a group.
+		</span>
 	{/if}
 </div>
 
@@ -103,7 +114,7 @@
 					: 'Narrow the heatmap and best times to just these people'}
 			>
 				<Funnel class="size-3.5" aria-hidden="true" />
-				Show only them
+				Just them
 			</button>
 			<div
 				class="relative"
@@ -116,42 +127,49 @@
 					aria-expanded={groupMenu}
 				>
 					<FolderPlus class="size-3.5" aria-hidden="true" />
-					Add to group
+					Group
 					<ChevronDown class="size-3 text-fg-3" aria-hidden="true" />
 				</button>
 				{#if groupMenu}
 					<div class="popover absolute top-full left-0 z-30 mt-1 w-56 p-1" role="menu">
 						{#each groups.items as group (group.id)}
+							{@const n = inGroup(group)}
 							<button
-								class="w-full truncate rounded-md px-2.5 py-1.5 text-left text-[13px] hover:bg-subtle"
-								role="menuitem"
-								onclick={() => addTo(group)}
+								class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] hover:bg-subtle"
+								role="menuitemcheckbox"
+								aria-checked={n === count ? 'true' : n ? 'mixed' : 'false'}
+								onclick={() => toggleIn(group)}
+								title={n === count ? `Take them out of ${group.name}` : `Add them to ${group.name}`}
 							>
-								{group.name}
+								<span class="flex size-3.5 shrink-0 items-center justify-center text-accent-fg">
+									{#if n === count}
+										<Check class="size-3.5" aria-hidden="true" />
+									{:else if n}
+										<Minus class="size-3.5" aria-hidden="true" />
+									{/if}
+								</span>
+								<span class="truncate">{group.name}</span>
 							</button>
 						{/each}
 						{#if groups.items.length}<div class="my-1 border-t border-line"></div>{/if}
 						<button
-							class="w-full rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-accent-fg hover:bg-subtle"
+							class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-accent-fg hover:bg-subtle"
 							role="menuitem"
 							onclick={() => {
 								groupMenu = false;
-								onnewgroup();
+								app.newGroup();
 							}}
 						>
-							New group from selection…
+							<Plus class="size-3.5 shrink-0" aria-hidden="true" />
+							<span class="truncate">
+								New group with {count === 1 ? selectedPeople[0]?.name : `these ${count}`}
+							</span>
 						</button>
 					</div>
 				{/if}
 			</div>
-			{#if active}
-				<button class="btn btn-ghost btn-sm" onclick={removeFromActive}>
-					Remove from {active.name}
-				</button>
-			{/if}
 		</div>
 		<div class="flex items-center gap-2">
-			<span class="text-xs text-fg-2">Make them</span>
 			<div
 				class="ml-auto flex rounded-lg bg-surface p-0.5 ring-1 ring-line"
 				role="group"

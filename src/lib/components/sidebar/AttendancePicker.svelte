@@ -1,34 +1,48 @@
 <script lang="ts">
 	import { app } from '$lib/state/app.svelte';
+	import { heatColor } from '$lib/ui/heat';
 
 	/**
-	 * The least share of people a best time needs, as a slider with a stop per person. The track runs
-	 * the heatmap's colors from one person to everyone, dimmed below the cutoff.
+	 * The least share of people a best time needs, as a slider with a stop per person, from the
+	 * fewest any time gets (`min`) to the most (`max`). The track runs the heatmap's colors over that
+	 * span, dimmed below the cutoff.
 	 */
-	let { considered }: { considered: number } = $props();
+	let {
+		considered,
+		min,
+		max,
+		need
+	}: { considered: number; min: number; max: number; need: number } = $props();
 
-	const need = $derived(app.minPeople);
 	const percent = $derived(Math.round((need / considered) * 100));
-	/** Where the thumb sits, from 0 at one person to 1 at everyone. */
-	const at = $derived(considered > 1 ? (need - 1) / (considered - 1) : 1);
+	/** Where the thumb sits, from 0 at `min` to 1 at `max`. */
+	const at = $derived((need - min) / (max - min));
+	/** The heatmap's color for each stop, so the track matches what those counts look like there. */
+	const ramp = $derived(
+		Array.from({ length: 5 }, (_, i) => {
+			const people = min + ((max - min) * i) / 4;
+			return `${heatColor(people, considered)} ${i * 25}%`;
+		}).join(', ')
+	);
 </script>
 
 <label class="block">
 	<span class="flex items-baseline justify-between gap-2 text-[13px]">
 		<span class="text-fg-2">Attendance</span>
 		<span class="tabular">
-			<span class="font-semibold text-fg">{percent}%{need < considered ? '+' : ''}</span>
+			<span class="font-semibold text-fg">{percent}%{need < max ? '+' : ''}</span>
 			<span class="text-fg-3">· {need} of {considered}</span>
 		</span>
 	</span>
 	<input
 		type="range"
 		class="attendance mt-1.5"
-		min="1"
-		max={considered}
+		{min}
+		{max}
 		step="1"
 		value={need}
 		style:--at={at}
+		style:--ramp={ramp}
 		aria-label="Attendance"
 		aria-valuetext="At least {need} of {considered} people"
 		oninput={(e) => app.setMinMatch(Number(e.currentTarget.value) / considered)}
@@ -44,7 +58,7 @@
 		--dim: color-mix(in oklab, var(--panel) 72%, transparent);
 		--fill:
 			linear-gradient(to right, var(--dim) var(--cut), transparent 0),
-			linear-gradient(to right, var(--heat-low), var(--heat-mid) 70%, var(--heat-high));
+			linear-gradient(to right, var(--ramp));
 		display: block;
 		width: 100%;
 		height: var(--thumb);

@@ -49,7 +49,7 @@
 	<meta
 		property="og:description"
 		content={data.preview?.description ??
-			'Find the best time to meet from any When2Meet poll: rank times, mark who’s required, and share the result.'}
+			"Find the best time to meet from any When2Meet poll: choose who's required, rank times, and share the result."}
 	/>
 	{#if data.image}
 		<meta property="og:image" content={data.image} />

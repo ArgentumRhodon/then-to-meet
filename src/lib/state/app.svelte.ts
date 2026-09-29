@@ -72,10 +72,12 @@ class AppState {
 	error = $state<string | null>(null);
 	refreshing = $state(false);
 
-	/** Each person's own role; a selected group narrows these without changing them. */
+	/** Each person's role when no group is viewed. Each group keeps its own roles for its members. */
 	roles = $state.raw<Roles>({});
 	/** The group whose overlap is being shown, or null for everyone. */
 	groupId = $state<string | null>(null);
+	/** Whether the group being viewed is open for editing, with the people list as its members. */
+	editingGroup = $state(false);
 	/**
 	 * Name of the group someone else's link was showing. Its members aren't known here, only who
 	 * the link skipped, so it's a label rather than a saved group.
@@ -99,6 +101,11 @@ class AppState {
 	/** The same for a set of meetings a week. */
 	hoveredSet = $state.raw<MeetingSet | null>(null);
 	pinnedSet = $state.raw<MeetingSet | null>(null);
+	/**
+	 * How many slots later than its window's earliest start the pinned time (or set of meetings)
+	 * begins. Only a window with room for the meeting more than once can shift.
+	 */
+	pinShift = $state(0);
 	/**
 	 * Times picked on the heatmap (Shift adds more) or opened from a link, in time order. Kept as
 	 * times rather than slots so they survive refreshes.
@@ -124,8 +131,10 @@ class AppState {
 			? `${this.selected.size} selected ${this.selected.size === 1 ? 'person' : 'people'}`
 			: this.groupLabel
 	);
+	/** The roles being viewed and changed: the selected group's, or everyone's. */
+	activeRoles = $derived(this.group ? (this.group.roles ?? {}) : this.roles);
 	/** Roles with the selected group applied, before any narrowing to the checked people. */
-	#groupRoles = $derived(withGroup(this.roles, this.group, this.event?.people ?? []));
+	#groupRoles = $derived(withGroup(this.activeRoles, this.group, this.event?.people ?? []));
 	/** The roles the heatmap and best times actually use. */
 	effectiveRoles = $derived(
 		this.onlySelected
@@ -165,7 +174,30 @@ class AppState {
 		});
 	});
 	spotlight = $derived(this.hoveredPerson ?? this.pinnedPerson);
-	/** Blocks that stay highlighted: a pinned best time, a pinned set's meetings, or picked times. */
+	/** Slots one meeting takes. */
+	meetingSlots = $derived(
+		this.event ? Math.max(1, Math.ceil((this.duration * 60) / this.event.slotSeconds)) : 1
+	);
+	/** How far a pinned window lets its meeting shift, in slots. */
+	shiftRoom = (block: Pick<TimeBlock, 'startSlot' | 'endSlot'>) =>
+		Math.max(0, block.endSlot - block.startSlot + 1 - this.meetingSlots);
+	/** The pinned shift, held to what the given window allows. */
+	shiftFor = (block: Pick<TimeBlock, 'startSlot' | 'endSlot'>) =>
+		Math.min(this.pinShift, this.shiftRoom(block));
+	/**
+	 * The slots actually highlighted: a pinned best time's meeting at its chosen start (the window
+	 * around it is only outlined), each meeting of a pinned set, or picked times.
+	 */
+	heldSpans = $derived.by<{ startSlot: number; endSlot: number }[]>(() => {
+		const meeting = (block: TimeBlock) => {
+			const startSlot = block.startSlot + this.shiftFor(block);
+			return { startSlot, endSlot: startSlot + this.meetingSlots - 1 };
+		};
+		if (this.pinnedBlock) return [meeting(this.pinnedBlock)];
+		if (this.pinnedSet) return this.pinnedSet.sessions.map(meeting);
+		return this.selectedBlocks;
+	});
+	/** Blocks that stay outlined: a pinned best time, a pinned set's meetings, or picked times. */
 	heldBlocks = $derived<TimeBlock[]>(
 		this.pinnedBlock
 			? [this.pinnedBlock]
@@ -189,17 +221,21 @@ class AppState {
 			const event = overrides.event?.id === id ? overrides.event : await fetchEvent(id);
 			if (token !== this.#loadToken) return;
 			const saved = readJson<EventPrefs>(prefsKey(id), {});
-			groups.load(event.id);
 			const savedRoles = saved.roles ?? {};
+			groups.load(event.id, savedRoles);
 			const savedGroup = groups.get(saved.group ?? null);
 			// A link we wrote ourselves carries the group's view of the roles; restore the saved roles
 			// and group behind it. Anyone else's link is taken as-is, with its group as a label.
 			const ownLink =
 				!overrides.roles ||
-				sameRoles(overrides.roles, withGroup(savedRoles, savedGroup, event.people));
+				sameRoles(
+					overrides.roles,
+					withGroup(savedGroup ? (savedGroup.roles ?? {}) : savedRoles, savedGroup, event.people)
+				);
 			this.event = event;
 			this.roles = ownLink ? savedRoles : overrides.roles!;
 			this.groupId = ownLink ? (savedGroup?.id ?? null) : null;
+			this.editingGroup = false;
 			this.sharedGroup = ownLink
 				? savedGroup
 					? null
@@ -282,6 +318,13 @@ class AppState {
 	#unpin() {
 		this.pinnedBlock = null;
 		this.pinnedSet = null;
+		this.pinShift = 0;
+	}
+
+	/** A new search: pins let go, and the attendance cutoff goes back to the best there is. */
+	#searchChanged() {
+		this.minMatch = DEFAULT_MIN_MATCH;
+		this.#unpin();
 	}
 
 	reset() {
@@ -290,6 +333,7 @@ class AppState {
 		this.status = 'idle';
 		this.error = null;
 		this.groupId = null;
+		this.editingGroup = false;
 		this.sharedGroup = null;
 		this.changes = NO_CHANGES;
 		this.#seen = undefined;
@@ -297,8 +341,9 @@ class AppState {
 		this.clearHighlights();
 	}
 
+	/** A person's role in the group being viewed, or for everyone. */
 	roleOf(id: number): Role {
-		return roleOf(this.roles, id);
+		return roleOf(this.activeRoles, id);
 	}
 
 	/** The role the analysis uses, which treats people outside the selected group as skipped. */
@@ -310,25 +355,45 @@ class AppState {
 		this.setRoles([id], role);
 	}
 
+	/** Changes roles in the group being viewed, or everyone's when no group is. */
 	setRoles(ids: Iterable<number>, role: Role) {
-		const next = { ...this.roles };
+		const next = { ...this.activeRoles };
 		for (const id of ids) {
 			if (role === 'required') delete next[id];
 			else next[id] = role;
 		}
-		this.roles = next;
-		this.#unpin();
+		this.#setActiveRoles(next);
+	}
+
+	#setActiveRoles(roles: Roles) {
+		if (this.group) groups.setRoles(this.group.id, roles);
+		else this.roles = roles;
+		this.#searchChanged();
 	}
 
 	/** Shows the overlap for one group (or everyone, with null). */
 	setGroup(id: string | null) {
 		this.groupId = id;
+		this.editingGroup = false;
 		this.sharedGroup = null;
 		this.selected = new Set();
 		this.onlySelected = false;
-		this.#unpin();
+		this.#searchChanged();
 		this.hoveredBlock = null;
 		this.hoveredSet = null;
+	}
+
+	/** Starts a group with the checked people (or no one yet), shows it, and opens it for editing. */
+	newGroup() {
+		const group = groups.create(groups.nextName(), this.selected);
+		this.setGroup(group.id);
+		this.editingGroup = true;
+	}
+
+	/** Opens the group being viewed for editing, or closes it. */
+	editGroup(on: boolean) {
+		this.editingGroup = on && !!this.group;
+		if (this.editingGroup) this.selected = new Set();
 	}
 
 	/**
@@ -359,46 +424,53 @@ class AppState {
 		if (!this.onlySelected) return;
 		// Checking someone changes who the narrowed view shows; unchecking everyone ends it.
 		if (!this.selected.size) this.onlySelected = false;
-		this.#unpin();
+		this.#searchChanged();
 	}
 
 	/** Narrows the heatmap and best times to the checked people, or goes back. */
 	showOnlySelected(on: boolean) {
 		this.onlySelected = on && this.selected.size > 0;
-		this.#unpin();
+		this.#searchChanged();
 		this.hoveredBlock = null;
 		this.hoveredSet = null;
 	}
 
+	/** Makes everyone required again, in the group being viewed or else for everyone. */
 	resetRoles() {
-		this.roles = {};
-		this.sharedGroup = null;
-		this.#unpin();
+		if (!this.group) this.sharedGroup = null;
+		this.#setActiveRoles({});
 	}
 
 	setDuration(minutes: number) {
 		this.duration = clampDuration(minutes);
-		this.#unpin();
+		this.#searchChanged();
 	}
 
 	setPerWeek(count: MeetingsPerWeek) {
 		this.perWeek = count;
-		this.#unpin();
+		this.#searchChanged();
 		this.hoveredBlock = null;
 		this.hoveredSet = null;
+	}
+
+	/** Moves the pinned meeting earlier or later by whole slots, within its window. */
+	stepPin(delta: number) {
+		const window = this.pinnedBlock ?? this.pinnedSet?.sessions[0];
+		if (!window) return;
+		this.pinShift = Math.min(Math.max(0, this.shiftFor(window) + delta), this.shiftRoom(window));
 	}
 
 	setMinMatch(share: number) {
 		this.minMatch = share;
 		// Let go of a pinned result the list no longer shows.
-		if (this.pinnedBlock && turnout(this.pinnedBlock) < this.minPeople) this.pinnedBlock = null;
-		if (this.pinnedSet && turnout(this.pinnedSet) < this.minPeople) this.pinnedSet = null;
+		if (this.pinnedBlock && turnout(this.pinnedBlock) < this.minPeople) this.#unpin();
+		if (this.pinnedSet && turnout(this.pinnedSet) < this.minPeople) this.#unpin();
 	}
 
 	setZone(zone: string) {
 		this.zone = zone;
 		// Blocks carry grid day indices, which shift with the timezone.
-		this.#unpin();
+		this.#searchChanged();
 		this.hoveredBlock = null;
 		this.hoveredSet = null;
 	}

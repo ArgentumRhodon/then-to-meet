@@ -10,11 +10,25 @@
 >
 	{#if toast.message}
 		<div
-			class="flex items-center gap-2 rounded-full bg-fg px-4 py-2 text-sm font-medium text-canvas shadow-pop"
+			class="flex items-center gap-2 rounded-full bg-fg px-4 py-2 text-sm font-medium text-canvas shadow-pop {toast.action
+				? 'pointer-events-auto py-1.5 pr-1.5'
+				: ''}"
 			transition:fly={{ y: 8, duration: 160 }}
 		>
 			<Check class="size-4" aria-hidden="true" />
 			{toast.message}
+			{#if toast.action}
+				<button
+					class="ml-1 rounded-full px-2.5 py-0.5 font-semibold text-canvas hover:bg-canvas/15"
+					onclick={() => {
+						const { run } = toast.action!;
+						toast.hide();
+						run();
+					}}
+				>
+					{toast.action.label}
+				</button>
+			{/if}
 		</div>
 	{/if}
 </div>

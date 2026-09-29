@@ -13,7 +13,6 @@
 	import { layout } from '$lib/ui/layout.svelte';
 	import { copyText } from '$lib/ui/toast.svelte';
 	import GroupBar from './GroupBar.svelte';
-	import GroupEditor from './GroupEditor.svelte';
 	import Section from './Section.svelte';
 	import SelectionBar from './SelectionBar.svelte';
 
@@ -32,13 +31,14 @@
 	};
 
 	let query = $state('');
-	/** The group editor popover: creating a new group, or editing an existing one. */
-	let editor = $state<{ groupId: string | null; preset: number[] } | null>(null);
 	/** Anchor for shift-click ranges. */
 	let lastChecked: number | null = null;
 
 	const people = $derived(app.event?.people ?? []);
-	const inView = $derived(app.group ? membersIn(app.group, people) : people);
+	/** The group open for editing: the list shows everyone, and its checkboxes are membership. */
+	const editing = $derived(app.editingGroup ? app.group : undefined);
+	const members = $derived(new Set(editing?.members));
+	const inView = $derived(!editing && app.group ? membersIn(app.group, people) : people);
 	const visible = $derived.by(() => {
 		const q = query.trim().toLowerCase();
 		return q ? inView.filter((p) => p.name.toLowerCase().includes(q)) : inView;
@@ -82,23 +82,42 @@
 			.join(' · ')
 	);
 
-	/** Checkbox click; shift-click selects the whole range since the last one. */
+	/** Whether a person's checkbox is on: in the group being edited, or else selected. */
+	const isChecked = (id: number) => (editing ? members.has(id) : app.selected.has(id));
+
+	const setChecked = (ids: number[], on: boolean) => {
+		if (editing) {
+			if (on) groups.addMembers(editing.id, ids);
+			else groups.removeMembers(editing.id, ids);
+			return;
+		}
+		const next = new Set(app.selected);
+		for (const id of ids) {
+			if (on) next.add(id);
+			else next.delete(id);
+		}
+		app.setSelected(next);
+	};
+
+	/** Checkbox click; shift-click sets the whole range since the last one. */
 	const check = (e: MouseEvent, index: number) => {
 		const person = visible[index];
 		const anchor = lastChecked === null ? -1 : visible.findIndex((p) => p.id === lastChecked);
-		if (e.shiftKey && anchor >= 0) {
-			const [from, to] = [Math.min(anchor, index), Math.max(anchor, index)];
-			const on = !app.selected.has(person.id);
-			const next = new Set(app.selected);
-			for (const p of visible.slice(from, to + 1)) {
-				if (on) next.add(p.id);
-				else next.delete(p.id);
-			}
-			app.setSelected(next);
-		} else {
-			app.toggleSelected(person.id);
-		}
+		const range =
+			e.shiftKey && anchor >= 0
+				? visible.slice(Math.min(anchor, index), Math.max(anchor, index) + 1)
+				: [person];
+		setChecked(
+			range.map((p) => p.id),
+			!isChecked(person.id)
+		);
 		lastChecked = person.id;
+	};
+
+	const visibleMembers = $derived(visible.filter((p) => members.has(p.id)).length);
+	const allMembers = $derived(visible.length > 0 && visibleMembers === visible.length);
+	const indeterminate = (node: HTMLInputElement) => {
+		node.indeterminate = visibleMembers > 0 && !allMembers;
 	};
 </script>
 
@@ -136,7 +155,7 @@
 		</div>
 	{/if}
 
-	<div class="px-4 text-xs">
+	<!-- <div class="px-4 text-xs">
 		<p class="text-fg-2">{summary}</p>
 		{#if !customized && !groups.items.length}
 			<p class="mt-0.5 text-fg-3">
@@ -145,29 +164,9 @@
 					: 'Tap a role to change it, or tap names to change several at once.'}
 			</p>
 		{/if}
-	</div>
+	</div> -->
 
-	<div class="relative">
-		<GroupBar
-			{people}
-			oncreate={() => (editor = { groupId: null, preset: [...app.selected] })}
-			onedit={(id) => (editor = { groupId: id, preset: [] })}
-		/>
-		{#if editor}
-			{#key editor}
-				<GroupEditor
-					{people}
-					group={groups.get(editor.groupId)}
-					preset={editor.preset}
-					onclose={() => (editor = null)}
-					onsaved={(id) => {
-						editor = null;
-						app.setGroup(id);
-					}}
-				/>
-			{/key}
-		{/if}
-	</div>
+	<GroupBar {people} />
 
 	{#if people.length > 8}
 		<div class="relative px-4 pt-2">
@@ -186,11 +185,30 @@
 	{/if}
 
 	<div class="pt-1.5">
-		<SelectionBar
-			{people}
-			{visible}
-			onnewgroup={() => (editor = { groupId: null, preset: [...app.selected] })}
-		/>
+		{#if editing}
+			<div class="flex h-9 items-center gap-2.5 px-4">
+				<input
+					type="checkbox"
+					class="size-4 shrink-0 cursor-pointer accent-accent"
+					checked={allMembers}
+					onchange={() =>
+						setChecked(
+							visible.map((p) => p.id),
+							!allMembers
+						)}
+					disabled={!visible.length}
+					aria-label={allMembers
+						? `Take everyone shown out of ${editing.name}`
+						: `Put everyone shown in ${editing.name}`}
+					{@attach indeterminate}
+				/>
+				<span class="text-xs text-fg-2 tabular">
+					{membersIn(editing, people).length} of {people.length} in {editing.name}
+				</span>
+			</div>
+		{:else}
+			<SelectionBar {people} {visible} />
+		{/if}
 	</div>
 
 	<!-- Only big groups get their own scroll area, so best times stay reachable. -->
@@ -201,7 +219,7 @@
 		{#each visible as person, index (person.id)}
 			{@const role = app.roleOf(person.id)}
 			{@const pinned = app.pinnedPerson === person.id}
-			{@const selected = app.selected.has(person.id)}
+			{@const selected = isChecked(person.id)}
 			<li
 				class="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {pinned
 					? 'bg-accent-soft/40 ring-1 ring-accent/60 ring-inset'
@@ -215,14 +233,16 @@
 					class="size-4 shrink-0 cursor-pointer accent-accent"
 					checked={selected}
 					onclick={(e) => check(e, index)}
-					aria-label="Select {person.name}"
+					aria-label={editing ? `${person.name} is in ${editing.name}` : `Select ${person.name}`}
 				/>
 				<!-- The name selects the person, like the checkbox. Showing only their times on the grid
 				     is the eye button's job, so a stray click never changes what the heatmap means. -->
-				<!-- Dimmed when skipped, or left out of a view of just the selected people. -->
+				<!-- Dimmed when skipped, left out of a view of just the selected people, or outside the
+				     group being edited. -->
 				<button
-					class="ml-0.5 flex min-w-0 flex-1 items-center gap-2.5 text-left {role === 'skip' ||
-					(app.onlySelected && !selected)
+					class="ml-0.5 flex min-w-0 flex-1 items-center gap-2.5 text-left {(
+						editing ? !selected : role === 'skip' || (app.onlySelected && !selected)
+					)
 						? 'opacity-55'
 						: ''}"
 					aria-pressed={selected}
@@ -231,7 +251,11 @@
 				>
 					<Avatar id={person.id} name={person.name} />
 					<span class="flex min-w-0 flex-1 items-center gap-1.5">
-						<span class="truncate text-[13px] font-medium {role === 'skip' ? 'line-through' : ''}">
+						<span
+							class="truncate text-[13px] font-medium {role === 'skip' && !editing
+								? 'line-through'
+								: ''}"
+						>
 							{person.name}
 						</span>
 						{#if added.has(person.id)}
@@ -264,18 +288,21 @@
 						<Eye class="size-3.5" aria-hidden="true" />
 					</button>
 				{/if}
-				<button
-					class="h-6 shrink-0 rounded-full border px-2.5 text-[11px] font-medium transition-colors hover:border-line-strong {CHIP[
-						role
-					]}"
-					onclick={() => app.setRole(person.id, NEXT[role])}
-					aria-label="{person.name} is {LABEL[role].toLowerCase()}. Change to {LABEL[
-						NEXT[role]
-					].toLowerCase()}"
-					title="Change to {LABEL[NEXT[role]].toLowerCase()}"
-				>
-					{LABEL[role]}
-				</button>
+				<!-- Roles step aside while a group is edited, so every click in the list is about who's in it. -->
+				{#if !editing}
+					<button
+						class="h-6 shrink-0 rounded-full border px-2.5 text-[11px] font-medium transition-colors hover:border-line-strong {CHIP[
+							role
+						]}"
+						onclick={() => app.setRole(person.id, NEXT[role])}
+						aria-label="{person.name} is {LABEL[role].toLowerCase()}. Change to {LABEL[
+							NEXT[role]
+						].toLowerCase()}"
+						title="Change to {LABEL[NEXT[role]].toLowerCase()}"
+					>
+						{LABEL[role]}
+					</button>
+				{/if}
 			</li>
 		{:else}
 			<li class="px-2 py-3 text-[13px] text-fg-3">

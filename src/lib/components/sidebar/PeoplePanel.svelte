@@ -121,7 +121,13 @@
 	};
 </script>
 
-<Section title="People" count={people.length} note={summary} {startOpen}>
+<Section
+	title="People"
+	count={people.length}
+	note={summary}
+	{startOpen}
+	collapsible={!layout.sideColumn}
+>
 	{#snippet actions()}
 		{#if customized}
 			<button class="btn btn-ghost btn-sm" onclick={() => app.resetRoles()}>Reset roles</button>

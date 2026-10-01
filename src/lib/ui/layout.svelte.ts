@@ -26,6 +26,9 @@ class Layout {
 	 */
 	showHeatmap = $derived(desktop.current || this.#fits.current);
 
+	/** Whether people has a column of its own, rather than sitting atop the page. */
+	sideColumn = $derived(desktop.current);
+
 	/**
 	 * Whether best times gets its own column right of the heatmap. Below that it follows the
 	 * heatmap in the same column, and on narrow screens in the page flow.

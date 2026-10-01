@@ -30,6 +30,10 @@
 		return out;
 	});
 
+	/** Every required person is free but an optional one isn't (see the heatmap's stripes). */
+	const partial = (slot: number) => !!app.attendance?.partial[slot];
+	const anyPartial = $derived(segments.some((segment) => segment.some(partial)));
+
 	const range = (segment: number[]) =>
 		formatTimeRange(
 			event.slots[segment[0]].time,
@@ -40,8 +44,18 @@
 
 <!-- Dark like the heatmap it stands in for. -->
 <div class="rounded-lg bg-canvas p-2.5 scheme-dark">
-	<p class="mb-1.5 text-[11px] text-fg-3">
-		{day.weekday}{day.date ? `, ${day.date}` : ''} at a glance
+	<p class="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 text-[11px] text-fg-3">
+		<span>{day.weekday}{day.date ? `, ${day.date}` : ''} at a glance</span>
+		{#if anyPartial}
+			<span class="flex items-center gap-1.5">
+				<span
+					class="partial h-2.5 w-4 rounded-[2px]"
+					style:--base={heatColor(3, 4)}
+					aria-hidden="true"
+				></span>
+				All required free
+			</span>
+		{/if}
 	</p>
 	<div class="flex gap-1.5">
 		{#each segments as segment (segment[0])}
@@ -54,11 +68,10 @@
 				>
 					{#each segment as slot (slot)}
 						<span
-							class="h-full min-w-0 flex-1 first:rounded-l-sm last:rounded-r-sm {slot >=
-								meetingStart && slot <= meetingEnd
-								? ''
-								: 'opacity-35'}"
-							style:background={heatColor(app.attendance!.counts[slot], app.attendance!.total)}
+							class="cell h-full min-w-0 flex-1 first:rounded-l-sm last:rounded-r-sm {partial(slot)
+								? 'partial'
+								: ''} {slot >= meetingStart && slot <= meetingEnd ? '' : 'opacity-35'}"
+							style:--base={heatColor(app.attendance!.counts[slot], app.attendance!.total)}
 						></span>
 					{/each}
 					{#if inside.length}
@@ -75,3 +88,17 @@
 		{/each}
 	</div>
 </div>
+
+<style>
+	/* The heatmap's marker, drawn as horizontal stripes: these cells are only a few pixels wide, too
+	   narrow for diagonals to read. Every cell is the same height, so the stripes line up. */
+	.cell {
+		background: var(--base);
+	}
+	.partial {
+		background:
+			linear-gradient(to bottom, var(--heat-high) 50%, transparent 50%) 0 0 / 100% 4px,
+			linear-gradient(rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.3)),
+			var(--base, var(--heat-0));
+	}
+</style>

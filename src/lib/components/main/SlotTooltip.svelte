@@ -49,7 +49,12 @@
 	</div>
 
 	{#if groups.unavailable.length}
-		<p class="eyebrow mt-3 mb-1.5">Can’t make it</p>
+		{#if app.attendance?.partial[slot]}
+			<p class="mt-3 text-[13px] font-medium text-ok">All required can make it</p>
+			<p class="eyebrow mt-2 mb-1.5">Optional, can’t make it</p>
+		{:else}
+			<p class="eyebrow mt-3 mb-1.5">Can’t make it</p>
+		{/if}
 		<ul class="space-y-1">
 			{#each groups.unavailable as person (person.id)}
 				<li class="flex items-center gap-2 text-[13px]">

@@ -3,7 +3,14 @@ import { describe, expect, it } from 'vitest';
 import type { Roles, W2MEvent } from '$lib/types';
 import { demoEventHtml } from '$lib/w2m/demo';
 import { parseEvent } from '$lib/w2m/parse';
-import { blockers, blockForSlots, findBestTimes, slotSpan, type TimeBlock } from './bestTimes';
+import {
+	blockers,
+	blockForSlots,
+	findBestTimes,
+	slotAttendance,
+	slotSpan,
+	type TimeBlock
+} from './bestTimes';
 import { buildGrid } from './grid';
 
 const ZONE = 'America/New_York';
@@ -198,5 +205,35 @@ describe('buildGrid', () => {
 		expect(g.zone).toBe('UTC');
 		expect(g.rows[0].minute).toBe(9 * 60);
 		expect(g.days[0].date).toBeNull();
+	});
+});
+
+describe('slotAttendance', () => {
+	const [a, b, c] = event.people.map((p) => p.id);
+	const small: W2MEvent = {
+		...event,
+		people: event.people.slice(0, 3),
+		slots: [
+			{ time: 0, available: [a, b, c] },
+			{ time: 900, available: [a, b] },
+			{ time: 1800, available: [a, c] },
+			{ time: 2700, available: [] }
+		]
+	};
+
+	it('marks slots with every required person but not every optional one', () => {
+		const roles: Roles = { [c]: 'optional' };
+		expect(slotAttendance(small, roles).partial).toEqual([false, true, false, false]);
+	});
+
+	it('never marks slots without both required and optional people', () => {
+		expect(slotAttendance(small, {}).partial).toEqual([false, false, false, false]);
+		const allOptional: Roles = { [a]: 'optional', [b]: 'optional', [c]: 'optional' };
+		expect(slotAttendance(small, allOptional).partial).toEqual([false, false, false, false]);
+	});
+
+	it('ignores skipped people', () => {
+		const roles: Roles = { [c]: 'skip' };
+		expect(slotAttendance(small, roles).partial).toEqual([false, false, false, false]);
 	});
 });

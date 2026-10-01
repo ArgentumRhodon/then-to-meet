@@ -55,6 +55,12 @@
 		return heatColor(app.attendance!.counts[slot], app.attendance!.total);
 	};
 
+	/** Every required person is free but an optional one isn't: striped, so it stands apart. */
+	const isPartial = (slot: number) => app.spotlight === null && !!app.attendance?.partial[slot];
+	const anyPartial = $derived(
+		app.spotlight === null && !!app.attendance?.partial.some((partial) => partial)
+	);
+
 	const legendSteps = $derived.by(() => {
 		const steps = Math.min(app.attendance?.total ?? 0, 6);
 		return Array.from({ length: steps + 1 }, (_, i) => heatColor(i, steps));
@@ -417,6 +423,16 @@
 					{/each}
 				</span>
 				<span class="tabular">{app.attendance?.total ?? 0} available</span>
+				{#if anyPartial}
+					<span class="flex items-center gap-1.5 text-fg-3">
+						<span
+							class="partial-swatch h-3 w-4 rounded-sm"
+							style:--base={heatColor(3, 4)}
+							aria-hidden="true"
+						></span>
+						All required free
+					</span>
+				{/if}
 				{#if app.viewLabel}
 					<span class="text-fg-3">· only {app.viewLabel}</span>
 				{/if}
@@ -526,10 +542,11 @@
 							class:seg-end={segEnd}
 							class:in-held={inHeld(slot)}
 							class:hovered={hovered === slot}
+							class:partial={isPartial(slot)}
 							data-slot={slot}
 							style:grid-row={layout.line[i]}
 							style:grid-column={d + 2}
-							style:background={heat(slot)}
+							style:--base={heat(slot)}
 						></div>
 					{/if}
 				{/each}
@@ -597,7 +614,26 @@
 	}
 	.cell {
 		position: relative;
+		background: var(--base);
 		transition: opacity 150ms;
+	}
+	/* Thin stripes in the palette's top color over a darkened cell: the heat color still shows the
+	   count, and the stripes mark that everyone required is free. The stripes are a square tile that
+	   divides the row height evenly, so they run unbroken from one row to the next. */
+	.cell.partial,
+	.partial-swatch {
+		--tile: calc(var(--row, 14px) / 2);
+		background:
+			linear-gradient(
+					135deg,
+					var(--heat-high) 25%,
+					transparent 25% 50%,
+					var(--heat-high) 50% 75%,
+					transparent 75%
+				)
+				0 0 / var(--tile) var(--tile),
+			linear-gradient(rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.3)),
+			var(--base, var(--heat-0));
 	}
 	.cell:not(.empty) {
 		cursor: pointer;

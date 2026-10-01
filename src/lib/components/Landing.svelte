@@ -6,7 +6,7 @@
 	import { openEvent } from '$lib/navigation';
 	import { app } from '$lib/state/app.svelte';
 	import { recent } from '$lib/state/recent.svelte';
-	import ThemeMenu from '$lib/ui/ThemeMenu.svelte';
+	import SettingsMenu from '$lib/ui/SettingsMenu.svelte';
 	import { DEMO_ID } from '$lib/w2m/id';
 	import LinkInput from './LinkInput.svelte';
 	import RecentList from './RecentList.svelte';
@@ -33,7 +33,7 @@
 <div class="flex min-h-dvh flex-col">
 	<header class="mx-auto flex w-full max-w-5xl items-center justify-between px-5 py-4">
 		<span class="text-[15px] font-semibold tracking-tight">ThenToMeet</span>
-		<ThemeMenu />
+		<SettingsMenu />
 	</header>
 
 	<main class="mx-auto flex w-full max-w-5xl flex-1 flex-col px-5 pt-10 pb-16 sm:pt-20">

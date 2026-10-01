@@ -3,7 +3,7 @@
 	import { app } from '$lib/state/app.svelte';
 	import { isTyping } from '$lib/ui/keys';
 	import { layout } from '$lib/ui/layout.svelte';
-	import ThemeMenu from '$lib/ui/ThemeMenu.svelte';
+	import SettingsMenu from '$lib/ui/SettingsMenu.svelte';
 	import EventHeader from './main/EventHeader.svelte';
 	import Heatmap from './main/Heatmap.svelte';
 	import BestTimesPanel from './sidebar/BestTimesPanel.svelte';
@@ -45,10 +45,10 @@
 		</a>
 		<div class="ml-auto flex items-center gap-1.5">
 			<EventSwitcher />
-			<!-- On narrow screens this bar is the top of the page, so the theme menu sits here; the
-			     wide layout puts it in the event header, left of the timezone. -->
+			<!-- On narrow screens this bar is the top of the page, so the settings menu sits here; the
+			     wide layout puts it in the event header. -->
 			<div class="lg:hidden">
-				<ThemeMenu />
+				<SettingsMenu />
 			</div>
 		</div>
 	</div>

@@ -9,6 +9,7 @@
 		count,
 		note,
 		startOpen = true,
+		collapsible = true,
 		actions,
 		children
 	}: {
@@ -17,39 +18,48 @@
 		/** Shown in the header while the section is collapsed. */
 		note?: string;
 		startOpen?: boolean;
+		/** A section with a column of its own has nothing to fold away into, so it stays open. */
+		collapsible?: boolean;
 		actions?: Snippet;
 		children: Snippet;
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
-	let open = $state(startOpen);
+	let folded = $state(!startOpen);
+	const open = $derived(!collapsible || !folded);
 	const id = $props.id();
 </script>
 
+{#snippet label()}
+	<span id="{id}-title" class="text-[13px] font-semibold text-fg">{title}</span>
+	{#if count !== undefined}
+		<span class="rounded-full bg-subtle px-1.5 py-px text-[11px] font-medium text-fg-2 tabular">
+			{count}
+		</span>
+	{/if}
+{/snippet}
+
 <section class="border-b border-line" aria-labelledby="{id}-title">
 	<div class="flex h-12 items-center gap-2 pr-3 pl-4">
-		<!-- The heading holds the button, not the other way round: a button can't contain one. -->
-		<h2>
-			<button
-				class="-ml-1 flex h-10 items-center gap-1.5 rounded-md px-1 text-left"
-				aria-expanded={open}
-				aria-controls="{id}-body"
-				onclick={() => (open = !open)}
-			>
-				<span id="{id}-title" class="text-[13px] font-semibold text-fg">{title}</span>
-				{#if count !== undefined}
-					<span
-						class="rounded-full bg-subtle px-1.5 py-px text-[11px] font-medium text-fg-2 tabular"
-					>
-						{count}
-					</span>
-				{/if}
-				<ChevronDown
-					class="size-3.5 shrink-0 text-fg-3 transition-transform {open ? '' : '-rotate-90'}"
-					aria-hidden="true"
-				/>
-			</button>
-		</h2>
+		{#if collapsible}
+			<!-- The heading holds the button, not the other way round: a button can't contain one. -->
+			<h2>
+				<button
+					class="-ml-1 flex h-10 items-center gap-1.5 rounded-md px-1 text-left"
+					aria-expanded={open}
+					aria-controls="{id}-body"
+					onclick={() => (folded = !folded)}
+				>
+					{@render label()}
+					<ChevronDown
+						class="size-3.5 shrink-0 text-fg-3 transition-transform {open ? '' : '-rotate-90'}"
+						aria-hidden="true"
+					/>
+				</button>
+			</h2>
+		{:else}
+			<h2 class="flex items-center gap-1.5">{@render label()}</h2>
+		{/if}
 		{#if note && !open}
 			<span class="min-w-0 truncate text-xs text-fg-3">{note}</span>
 		{/if}

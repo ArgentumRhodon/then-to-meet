@@ -77,25 +77,27 @@
 	const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 </script>
 
-<Section title="Best times" count={total}>
+<Section title="Best times" count={total} collapsible={!layout.resultsBeside}>
 	<div class="space-y-4 px-4 pb-5">
 		<!-- Without the heatmap, a time opened from a shared link shows up here instead. -->
 		{#if !layout.showHeatmap && app.selectedBlocks.length}
 			<PickedTime />
 		{/if}
 
-		<div class="space-y-3">
+		<!-- Both controls read the same: label above, full-width segments. Under the heatmap there's
+		     width to set them side by side. -->
+		<div class="space-y-3 sm:grid sm:grid-cols-2 sm:space-y-0 sm:gap-x-6 xl:block xl:space-y-3">
 			<DurationPicker />
-			<div class="flex items-center gap-2">
-				<span id="per-week-label" class="text-[13px] text-fg-2">Meetings a week</span>
+			<div class="space-y-1.5">
+				<span id="per-week-label" class="block text-[13px] text-fg-2">Meetings a week</span>
 				<div
-					class="ml-auto flex rounded-lg bg-subtle p-0.5"
+					class="grid grid-cols-3 rounded-lg bg-subtle p-0.5"
 					role="group"
 					aria-labelledby="per-week-label"
 				>
 					{#each PER_WEEK as option (option.value)}
 						<button
-							class="h-7 rounded-md px-2.5 text-xs font-medium transition-colors pointer-coarse:h-9 pointer-coarse:px-3 {app.perWeek ===
+							class="h-7 rounded-md text-xs font-medium whitespace-nowrap transition-colors pointer-coarse:h-9 {app.perWeek ===
 							option.value
 								? 'bg-accent text-on-accent'
 								: 'text-fg-2 hover:text-fg'}"
@@ -179,7 +181,7 @@
 					{group.title}
 					<span class="ml-1 font-normal text-fg-3 tabular">{group.items.length}</span>
 				</h3>
-				<ul class="space-y-2">
+				<ul class="grid items-start gap-2 sm:grid-cols-2 xl:grid-cols-1">
 					{#each open ? group.items : group.items.slice(0, LIMIT) as item (item.id)}
 						{#if sets}
 							<SetCard set={item as MeetingSet} />

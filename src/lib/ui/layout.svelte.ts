@@ -9,6 +9,8 @@ const HEATMAP_CHROME = 100;
 const MIN_WIDTH = 640;
 
 const desktop = new MediaQuery('(min-width: 1024px)');
+/** Room for people, the heatmap, and best times side by side. Matches Tailwind's `xl`. */
+const wide = new MediaQuery('(min-width: 80rem)');
 
 class Layout {
 	/** Room for every day at a readable width, as a media query so it tracks resizes and rotation. */
@@ -23,6 +25,12 @@ class Layout {
 	 * when every day fits; there, best times takes over. Desktop keeps it and scrolls sideways.
 	 */
 	showHeatmap = $derived(desktop.current || this.#fits.current);
+
+	/**
+	 * Whether best times gets its own column right of the heatmap. Below that it follows the
+	 * heatmap in the same column, and on narrow screens in the page flow.
+	 */
+	resultsBeside = $derived(wide.current);
 }
 
 export const layout = new Layout();

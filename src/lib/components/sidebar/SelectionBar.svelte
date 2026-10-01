@@ -131,7 +131,9 @@
 					<ChevronDown class="size-3 text-fg-3 pointer-coarse:size-3.5" aria-hidden="true" />
 				</button>
 				{#if groupMenu}
-					<div class="popover absolute top-full left-0 z-30 mt-1 w-56 p-1" role="menu">
+					<!-- Hangs left from the button: it sits in the sidebar's right half, and the sidebar clips
+					     anything wider than itself. -->
+					<div class="popover absolute top-full right-0 z-30 mt-1 w-56 p-1" role="menu">
 						{#each groups.items as group (group.id)}
 							{@const n = inGroup(group)}
 							<button

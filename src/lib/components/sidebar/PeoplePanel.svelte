@@ -211,11 +211,8 @@
 		{/if}
 	</div>
 
-	<!-- Only big groups get their own scroll area, so best times stay reachable. -->
-	<ul
-		class="px-2 pb-3 {visible.length > 12 ? 'lg:max-h-[45dvh] lg:overflow-y-auto' : ''}"
-		onpointerleave={() => (app.hoveredPerson = null)}
-	>
+	<!-- Best times lives beside the heatmap, so a long list can use the whole sidebar. -->
+	<ul class="px-2 pb-3" onpointerleave={() => (app.hoveredPerson = null)}>
 		{#each visible as person, index (person.id)}
 			{@const role = app.roleOf(person.id)}
 			{@const pinned = app.pinnedPerson === person.id}

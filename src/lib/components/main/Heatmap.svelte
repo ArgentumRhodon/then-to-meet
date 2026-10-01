@@ -266,7 +266,7 @@
 	/** Height of the sticky day header, so scrolling a slot into view stops below it. */
 	let headerHeight = $state(0);
 
-	// Bring a block (or a set's first meeting) into view when it's picked in the sidebar.
+	// Bring a block (or a set's first meeting) into view when it's picked in best times.
 	$effect(() => {
 		if (!app.pinnedBlock && !app.pinnedSet) return;
 		tick().then(() =>

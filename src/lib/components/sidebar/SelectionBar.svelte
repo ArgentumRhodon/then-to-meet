@@ -102,11 +102,11 @@
 </div>
 
 {#if count}
-	<div class="mx-3 mb-1 space-y-2 rounded-lg border border-accent/30 bg-accent-soft/40 p-2.5">
-		<div class="flex flex-wrap gap-1.5">
+	<div class="mx-3 mb-1 space-y-1.5 rounded-lg border border-accent/30 bg-accent-soft/40 p-2">
+		<div class="grid grid-cols-2 gap-1.5">
 			<!-- A quick look at just these people, like a group without saving one. -->
 			<button
-				class="btn btn-sm {app.onlySelected ? 'btn-primary' : 'btn-secondary'}"
+				class="btn btn-sm w-full {app.onlySelected ? 'btn-primary' : 'btn-secondary'}"
 				aria-pressed={app.onlySelected}
 				onclick={() => app.showOnlySelected(!app.onlySelected)}
 				title={app.onlySelected
@@ -121,7 +121,7 @@
 				{@attach groupMenu ? dismissable(() => (groupMenu = false)) : undefined}
 			>
 				<button
-					class="btn btn-secondary btn-sm"
+					class="btn btn-secondary btn-sm w-full"
 					onclick={() => (groupMenu = !groupMenu)}
 					aria-haspopup="menu"
 					aria-expanded={groupMenu}
@@ -171,25 +171,23 @@
 				{/if}
 			</div>
 		</div>
-		<div class="flex items-center gap-2">
-			<div
-				class="ml-auto flex rounded-lg bg-surface p-0.5 ring-1 ring-line"
-				role="group"
-				aria-label="Role for selected people"
-			>
-				{#each ROLES as role (role.value)}
-					<button
-						class="h-6 rounded-md px-2 text-[11px] font-medium transition-colors pointer-coarse:h-9 pointer-coarse:px-3 pointer-coarse:text-xs {sharedRole ===
-						role.value
-							? 'bg-accent text-on-accent'
-							: 'text-fg-2 hover:bg-subtle hover:text-fg'}"
-						aria-pressed={sharedRole === role.value}
-						onclick={() => app.setRoles(app.selected, role.value)}
-					>
-						{role.label}
-					</button>
-				{/each}
-			</div>
+		<div
+			class="grid grid-cols-3 gap-0.5 rounded-lg bg-surface p-0.5 ring-1 ring-line"
+			role="group"
+			aria-label="Role for selected people"
+		>
+			{#each ROLES as role (role.value)}
+				<button
+					class="h-6 rounded-md px-2 text-xs font-medium transition-colors pointer-coarse:h-9 {sharedRole ===
+					role.value
+						? 'bg-accent text-on-accent'
+						: 'text-fg-2 hover:bg-subtle hover:text-fg'}"
+					aria-pressed={sharedRole === role.value}
+					onclick={() => app.setRoles(app.selected, role.value)}
+				>
+					{role.label}
+				</button>
+			{/each}
 		</div>
 	</div>
 {/if}

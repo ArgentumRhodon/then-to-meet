@@ -88,7 +88,7 @@ class AppState {
 	/** Person whose availability the heatmap is showing on its own. */
 	hoveredPerson = $state<number | null>(null);
 	pinnedPerson = $state<number | null>(null);
-	/** Time block previewed from the sidebar, and the one clicked to keep highlighted. */
+	/** Time block previewed from best times, and the one clicked to keep highlighted. */
 	hoveredBlock = $state.raw<TimeBlock | null>(null);
 	pinnedBlock = $state.raw<TimeBlock | null>(null);
 	/** The same for a set of meetings a week. */
@@ -196,7 +196,7 @@ class AppState {
 				? this.pinnedSet.sessions
 				: this.selectedBlocks
 	);
-	/** Blocks previewed by hovering a result in the sidebar, if any. */
+	/** Blocks previewed by hovering a result in best times, if any. */
 	previewBlocks = $derived<TimeBlock[] | null>(
 		this.hoveredBlock ? [this.hoveredBlock] : (this.hoveredSet?.sessions ?? null)
 	);

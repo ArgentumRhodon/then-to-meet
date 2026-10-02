@@ -6,11 +6,10 @@
 	import { DateTime } from 'luxon';
 	import { formatDay } from '$lib/analysis/format';
 	import { app } from '$lib/state/app.svelte';
-	import ThemeMenu from '$lib/ui/ThemeMenu.svelte';
+	import SettingsMenu from '$lib/ui/SettingsMenu.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { DEMO_ID, eventUrl } from '$lib/w2m/id';
 	import ShareMenu from './ShareMenu.svelte';
-	import TimezonePicker from './TimezonePicker.svelte';
 
 	let { class: className = '' }: { class?: string } = $props();
 
@@ -109,11 +108,6 @@
 			</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-1.5">
-			<!-- Narrow screens keep it in the top bar, where there's room (see Workspace). -->
-			<div class="hidden lg:block">
-				<ThemeMenu />
-			</div>
-			<TimezonePicker />
 			{#if event.id !== DEMO_ID}
 				<a
 					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"
@@ -128,6 +122,10 @@
 				</a>
 			{/if}
 			<ShareMenu />
+			<!-- Narrow screens keep it at the end of the top bar, where there's room (see Workspace). -->
+			<div class="hidden lg:block">
+				<SettingsMenu />
+			</div>
 		</div>
 	</div>
 

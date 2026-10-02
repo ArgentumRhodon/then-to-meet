@@ -54,7 +54,7 @@ src/
 9. **Response Tracking** - New and updated responses since your last visit are flagged, the page checks for more every minute while it's open, refresh reports what changed, and anyone who signed in without marking times is listed with a copyable reminder
 10. **Browser Persistence** - Remembers recent events and each event's groups, roles, length, meetings a week, and timezone
 11. **Colorblind-Friendly Heatmap** - Palettes tuned for deuteranopia, protanopia, and tritanopia, checked with a color vision deficiency simulation
-12. **Responsive Design** - Sidebar layout on desktop; on screens too narrow for the heatmap, best times takes over with a per-day availability strip. Dark (default), light, and system themes
+12. **Responsive Design** - People sidebar, heatmap, and best times in three columns on wide screens, best times under the heatmap on laptop-width windows; on screens too narrow for the heatmap, best times takes over with a per-day availability strip. Dark (default), light, and system themes
 
 ## Checks
 

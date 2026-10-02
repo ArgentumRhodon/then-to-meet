@@ -3,7 +3,7 @@
 	import { app } from '$lib/state/app.svelte';
 	import { isTyping } from '$lib/ui/keys';
 	import { layout } from '$lib/ui/layout.svelte';
-	import ThemeMenu from '$lib/ui/ThemeMenu.svelte';
+	import SettingsMenu from '$lib/ui/SettingsMenu.svelte';
 	import EventHeader from './main/EventHeader.svelte';
 	import Heatmap from './main/Heatmap.svelte';
 	import BestTimesPanel from './sidebar/BestTimesPanel.svelte';
@@ -45,10 +45,10 @@
 		</a>
 		<div class="ml-auto flex items-center gap-1.5">
 			<EventSwitcher />
-			<!-- On narrow screens this bar is the top of the page, so the theme menu sits here; the
-			     wide layout puts it in the event header, left of the timezone. -->
+			<!-- On narrow screens this bar is the top of the page, so the settings menu sits here; the
+			     wide layout puts it in the event header. -->
 			<div class="lg:hidden">
-				<ThemeMenu />
+				<SettingsMenu />
 			</div>
 		</div>
 	</div>
@@ -57,22 +57,39 @@
 
 	<aside
 		class="relative z-10 border-b border-line bg-panel [grid-area:side] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:shadow-[8px_0_24px_-12px_var(--shadow-tint)]"
-		aria-label="People and best times"
+		aria-label="People"
 	>
 		<!-- Groups and filters belong to one event, so start fresh when the event changes. -->
 		{#key app.event?.id}
 			<!-- Without the heatmap, best times is the main view, so keep people folded away. -->
 			<PeoplePanel startOpen={layout.showHeatmap} />
 		{/key}
-		<BestTimesPanel />
 	</aside>
 
-	<!-- Too narrow for the grid to read well: best times covers it instead. -->
-	{#if layout.showHeatmap}
-		<main class="min-h-0 [grid-area:grid] lg:flex lg:flex-col" aria-label="Availability heatmap">
-			<Heatmap class="lg:flex-1" />
-		</main>
-	{/if}
+	<!-- The results, in reading order: the heatmap, then best times. Wide screens put them side by
+	     side, each with its own scroll; a laptop-width window stacks them in one scrolling column;
+	     narrow ones let the page flow. -->
+	<div
+		class="min-w-0 [grid-area:main] lg:overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden"
+	>
+		<!-- Too narrow for the grid to read well: best times covers it instead. -->
+		{#if layout.showHeatmap}
+			<main
+				class="min-h-0 lg:flex lg:h-[70dvh] lg:flex-col xl:h-auto"
+				aria-label="Availability heatmap"
+			>
+				<Heatmap class="lg:flex-1" />
+			</main>
+		{/if}
+
+		<div
+			class="bg-panel xl:min-h-0 xl:overflow-y-auto {layout.showHeatmap
+				? 'border-t border-line xl:border-t-0 xl:border-l'
+				: ''}"
+		>
+			<BestTimesPanel />
+		</div>
+	</div>
 
 	{#if app.status === 'loading'}
 		<div
@@ -91,13 +108,13 @@
 		/* When everything is folded away and the page is shorter than the screen, the spare height
 		   goes to the last row, not spread across the bars above it. */
 		grid-template-rows: auto auto auto 1fr;
-		grid-template-areas: 'brand' 'header' 'side' 'grid';
+		grid-template-areas: 'brand' 'header' 'side' 'main';
 	}
 	@media (min-width: 64rem) {
 		.workspace {
 			grid-template-columns: 23rem minmax(0, 1fr);
 			grid-template-rows: auto minmax(0, 1fr);
-			grid-template-areas: 'brand header' 'side grid';
+			grid-template-areas: 'brand header' 'side main';
 		}
 	}
 	.loading-bar {

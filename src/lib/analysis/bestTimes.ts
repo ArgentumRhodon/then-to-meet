@@ -243,12 +243,20 @@ export const blockers = (
 	return [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
 };
 
-/** Everyone considered who is free during a single slot. */
+/**
+ * Everyone considered who is free during a single slot, and which slots have every required person
+ * but miss an optional one (`partial`). Those only exist when someone is required and someone is
+ * optional.
+ */
 export const slotAttendance = (event: W2MEvent, roles: Roles) => {
 	const considered = event.people.filter((p) => roleOf(roles, p.id) !== 'skip');
 	const ids = new Set(considered.map((p) => p.id));
-	return {
-		total: considered.length,
-		counts: event.slots.map((slot) => slot.available.filter((id) => ids.has(id)).length)
-	};
+	const required = considered.filter((p) => roleOf(roles, p.id) === 'required').map((p) => p.id);
+	const counts = event.slots.map((slot) => slot.available.filter((id) => ids.has(id)).length);
+	const partial = event.slots.map((slot, i) => {
+		if (!required.length || counts[i] === considered.length) return false;
+		const free = new Set(slot.available);
+		return required.every((id) => free.has(id));
+	});
+	return { total: considered.length, counts, partial };
 };

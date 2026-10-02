@@ -108,10 +108,6 @@
 			</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-1.5">
-			<!-- Narrow screens keep it in the top bar, where there's room (see Workspace). -->
-			<div class="hidden lg:block">
-				<SettingsMenu />
-			</div>
 			{#if event.id !== DEMO_ID}
 				<a
 					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"
@@ -126,6 +122,10 @@
 				</a>
 			{/if}
 			<ShareMenu />
+			<!-- Narrow screens keep it at the end of the top bar, where there's room (see Workspace). -->
+			<div class="hidden lg:block">
+				<SettingsMenu />
+			</div>
 		</div>
 	</div>
 

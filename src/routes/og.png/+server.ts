@@ -1,5 +1,6 @@
 import { renderHeatmapImage } from '$lib/server/og/heatmapImage';
-import { EventLoadError, getEvent } from '$lib/server/w2m';
+import { loadEvent } from '$lib/server/events/load';
+import { EventLoadError } from '$lib/server/w2m';
 import { sharedView } from '$lib/share/sharedView';
 import { readShareParams } from '$lib/share/url';
 import type { RequestHandler } from './$types';
@@ -16,13 +17,13 @@ export const GET: RequestHandler = async ({ url, fetch }) => {
 	if (!share.id) return fail(400, 'Missing event');
 
 	try {
-		const event = await getEvent(share.id, fetch);
+		const event = await loadEvent(share.id, fetch);
 		const { grid, roles, featured } = sharedView(event, share);
 		const png = await renderHeatmapImage({ event, grid, roles, featured });
 		return new Response(png, {
 			headers: {
 				'content-type': 'image/png',
-				// Unfurlers fetch this once per post; the CDN keeps a burst of them off When2Meet.
+				// Unfurlers fetch this once per post; the CDN keeps a burst of them off the event's source.
 				'cache-control': 'public, max-age=600, s-maxage=600, stale-while-revalidate=3600'
 			}
 		});

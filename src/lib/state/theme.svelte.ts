@@ -1,34 +1,28 @@
-import { browser } from '$app/environment';
+import type { ThemePref } from '$lib/events/userModel';
+import { userData } from './userData';
 
-export type ThemePref = 'system' | 'light' | 'dark';
+export type { ThemePref };
 
-const KEY = 'ttm:theme';
 export const DEFAULT_THEME: ThemePref = 'dark';
 
+/**
+ * The color theme. The page starts on the default (see the inline script in app.html), and a
+ * signed-in user's saved choice is applied once it's loaded. Choices are saved to their account.
+ */
 class Theme {
 	pref = $state<ThemePref>(DEFAULT_THEME);
 
-	constructor() {
-		if (!browser) return;
-		try {
-			const saved = localStorage.getItem(KEY);
-			if (saved === 'light' || saved === 'dark' || saved === 'system') this.pref = saved;
-		} catch {
-			// Storage unavailable; stay on the default.
-		}
-	}
-
-	set(pref: ThemePref) {
+	/** Shows a theme without saving it, like one just loaded from the account. */
+	apply(pref: ThemePref) {
 		this.pref = pref;
 		const root = document.documentElement;
 		if (pref === 'system') delete root.dataset.theme;
 		else root.dataset.theme = pref;
-		// Stored as a bare string so the inline script in app.html can read it before paint.
-		try {
-			localStorage.setItem(KEY, pref);
-		} catch {
-			// Ignore.
-		}
+	}
+
+	set(pref: ThemePref) {
+		this.apply(pref);
+		userData.saveSettings({ theme: pref });
 	}
 }
 

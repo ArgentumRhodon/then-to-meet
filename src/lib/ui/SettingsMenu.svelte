@@ -3,11 +3,14 @@
 	import Check from '@lucide/svelte/icons/check';
 	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Globe from '@lucide/svelte/icons/globe';
+	import LogIn from '@lucide/svelte/icons/log-in';
+	import LogOut from '@lucide/svelte/icons/log-out';
 	import Monitor from '@lucide/svelte/icons/monitor';
 	import Moon from '@lucide/svelte/icons/moon';
 	import Settings from '@lucide/svelte/icons/settings';
 	import Sun from '@lucide/svelte/icons/sun';
 	import { formatOffset } from '$lib/analysis/format';
+	import { accounts } from '$lib/state/accounts.svelte';
 	import { app } from '$lib/state/app.svelte';
 	import { theme, type ThemePref } from '$lib/state/theme.svelte';
 	import { dismissable } from './dismissable';
@@ -38,6 +41,15 @@
 		else open = true;
 	};
 
+	const signIn = async () => {
+		if (await accounts.signIn()) close();
+	};
+
+	const signOut = async () => {
+		close();
+		await accounts.signOut();
+	};
+
 	const choose = (value: ThemePref) => {
 		theme.set(value);
 		close();
@@ -50,7 +62,7 @@
 		onclick={toggle}
 		aria-haspopup="menu"
 		aria-expanded={open}
-		title="Theme, heatmap colors, and timezone"
+		title="Account, theme, heatmap colors, and timezone"
 	>
 		<Settings class="size-3.5 text-fg-2 pointer-coarse:size-4.5" aria-hidden="true" />
 		Settings
@@ -76,6 +88,45 @@
 				<TimezoneList onchoose={close} />
 			{:else}
 				<div class="p-1">
+					{#if accounts.enabled}
+						<p class="eyebrow px-2.5 pt-1.5 pb-1">Account</p>
+						{#if accounts.user}
+							<div class="px-2.5 py-1.5">
+								<span class="block truncate text-[13px]">
+									{accounts.user.name ?? accounts.user.email}
+								</span>
+								{#if accounts.user.name && accounts.user.email}
+									<span class="block truncate text-[11px] text-fg-3">{accounts.user.email}</span>
+								{/if}
+							</div>
+							<button
+								class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle disabled:opacity-60 pointer-coarse:py-2.5"
+								role="menuitem"
+								disabled={accounts.busy}
+								onclick={signOut}
+							>
+								<LogOut
+									class="size-4 shrink-0 text-fg-2 pointer-coarse:size-5"
+									aria-hidden="true"
+								/>
+								<span class="text-[13px]">Sign out</span>
+							</button>
+						{:else}
+							<button
+								class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle disabled:opacity-60 pointer-coarse:py-2.5"
+								role="menuitem"
+								disabled={accounts.busy}
+								onclick={signIn}
+							>
+								<LogIn class="size-4 shrink-0 text-fg-2 pointer-coarse:size-5" aria-hidden="true" />
+								<span class="flex-1">
+									<span class="block text-[13px]">Sign in with Google</span>
+									<span class="block text-[11px] text-fg-3">Keep and import your events</span>
+								</span>
+							</button>
+						{/if}
+						<div class="my-1 border-t border-line"></div>
+					{/if}
 					<p class="eyebrow px-2.5 pt-1.5 pb-1">Theme</p>
 					{#each OPTIONS as option (option.value)}
 						<button

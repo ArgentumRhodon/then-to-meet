@@ -19,25 +19,15 @@ import { clampDuration, DEFAULT_DURATION } from '$lib/analysis/duration';
 import { buildGrid } from '$lib/analysis/grid';
 import { findMeetingSets, type MeetingSet, type MeetingsPerWeek } from '$lib/analysis/meetingSets';
 import { sameRoles, withGroup } from '$lib/analysis/roles';
+import { isNativeEventId } from '$lib/events/id';
 import { shareSearch } from '$lib/share/url';
 import type { Role, Roles, TimeRange, W2MEvent } from '$lib/types';
 import { DEMO_ID } from '$lib/w2m/id';
+import type { EventPrefs } from '$lib/events/userModel';
+import { accounts } from './accounts.svelte';
 import { groups } from './groups.svelte';
 import { recent } from './recent.svelte';
-import { readJson, writeJson } from './storage';
-
-interface EventPrefs {
-	roles?: Roles;
-	duration?: number;
-	zone?: string;
-	/** The group being viewed, if any. */
-	group?: string;
-	/** Name of the group a shared link was showing, when it isn't one of the viewer's own. */
-	sharedGroup?: string;
-	/** Everyone's times as of the last visit, to spot what changed since. */
-	seen?: Snapshot;
-	perWeek?: MeetingsPerWeek;
-}
+import { userData } from './userData';
 
 export interface LoadOverrides {
 	roles?: Roles;
@@ -50,8 +40,6 @@ export interface LoadOverrides {
 	/** The event itself, when the server already fetched it for this page. */
 	event?: W2MEvent | null;
 }
-
-const prefsKey = (id: string) => `ttm:event:${id}`;
 
 export const localZone = (): string => {
 	try {
@@ -203,17 +191,27 @@ class AppState {
 	activeBlocks = $derived(this.previewBlocks ?? this.heldBlocks);
 
 	#loadToken = 0;
+	/** Who was signed in when the open event's setup was loaded; undefined before anything is. */
+	#knownUid: string | null | undefined;
 
 	async load(id: string, overrides: LoadOverrides = {}) {
 		const token = ++this.#loadToken;
 		this.status = 'loading';
 		this.error = null;
 		try {
-			const event = overrides.event?.id === id ? overrides.event : await fetchEvent(id);
+			void accounts.init();
+			// What was changed in the event being left goes out before the next one's load begins.
+			void userData.flush();
+			// The saved setup waits on who's signed in, so it's read while the event is fetched.
+			const [event, data] = await Promise.all([
+				overrides.event?.id === id ? overrides.event : fetchEvent(id),
+				userData.loadEvent(id)
+			]);
 			if (token !== this.#loadToken) return;
-			const saved = readJson<EventPrefs>(prefsKey(id), {});
+			this.#knownUid = accounts.user?.uid ?? null;
+			const saved: EventPrefs = data?.prefs ?? {};
 			const savedRoles = saved.roles ?? {};
-			groups.load(event.id, savedRoles);
+			groups.load(event.id, data?.groups, savedRoles);
 			const savedGroup = groups.get(saved.group ?? null);
 			// A link we wrote ourselves carries the group's view of the roles; restore the saved roles
 			// and group behind it. Anyone else's link is taken as-is, with its group as a label.
@@ -277,7 +275,7 @@ class AppState {
 				before.slots.every((slot, i) => slot.time === event.slots[i].time);
 			this.pinnedBlock = sameSlots && blockId ? this.#findBlock(blockId) : null;
 			this.pinnedSet = sameSlots && setId ? this.#findSet(setId) : null;
-			recent.remember(event);
+			recent.remember(event, { opened: false });
 			return fresh;
 		} catch (e) {
 			if (!auto) this.error = e instanceof Error ? e.message : String(e);
@@ -548,7 +546,10 @@ class AppState {
 			: '';
 	}
 
-	/** Saves this event's setup (roles, group, duration, and so on) so it comes back next visit. */
+	/**
+	 * Saves this event's setup (roles, group, duration, and so on) to the signed-in user's account
+	 * so it comes back next visit. Signed out, it's only kept for this visit.
+	 */
 	persist() {
 		if (!this.event) return;
 		const prefs: EventPrefs = { roles: this.roles, duration: this.duration };
@@ -557,7 +558,19 @@ class AppState {
 		if (this.group) prefs.group = this.group.id;
 		else if (this.sharedGroup) prefs.sharedGroup = this.sharedGroup;
 		if (this.#seen) prefs.seen = this.#seen;
-		writeJson(prefsKey(this.event.id), prefs);
+		userData.queueEvent(this.event.id, { prefs });
+	}
+
+	/**
+	 * Called when someone signs in or out with an event open. Signing in brings that event's saved
+	 * setup back, replacing the visit's own; if nothing was saved, what's on screen is saved.
+	 */
+	async accountChanged(uid: string | null) {
+		if (this.#knownUid === undefined || this.#knownUid === uid) return;
+		this.#knownUid = uid;
+		const event = this.event;
+		if (!event || !uid) return;
+		if (await userData.loadEvent(event.id)) await this.load(event.id, { event });
 	}
 
 	clearHighlights() {
@@ -581,6 +594,8 @@ export const withRange = (ranges: TimeRange[], range: TimeRange): TimeRange[] =>
 	[...ranges.filter((r) => !overlaps(r, range)), range].sort((a, b) => a.start - b.start);
 
 const fetchEvent = async (id: string, { fresh = false } = {}): Promise<W2MEvent> => {
+	// ThenToMeet's own events come straight from Firestore; When2Meet's go through the server.
+	if (isNativeEventId(id)) return accounts.loadEvent(id);
 	let response: Response;
 	try {
 		response = await fetch(`/api/event/${encodeURIComponent(id)}${fresh ? '?fresh=1' : ''}`);

@@ -13,6 +13,8 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:live": "vitest run src/lib/server/w2m.live.test.ts",
+		"emulators": "npx --yes firebase-tools emulators:start --project demo-thentomeet",
+		"firebase:deploy": "npx --yes firebase-tools deploy --only firestore",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"lint": "prettier --check .",
@@ -41,6 +43,7 @@
 		"@fontsource/inter": "^5.3.0",
 		"@lucide/svelte": "^1.47.0",
 		"@resvg/resvg-js": "^2.6.2",
+		"firebase": "^12.19.0",
 		"luxon": "^3.5.0",
 		"satori": "^0.32.0"
 	}

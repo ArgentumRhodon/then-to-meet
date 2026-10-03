@@ -1,20 +1,51 @@
 <script lang="ts">
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
+	import Import from '@lucide/svelte/icons/import';
+	import Pencil from '@lucide/svelte/icons/pencil';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import X from '@lucide/svelte/icons/x';
 	import { DateTime } from 'luxon';
 	import { formatDay } from '$lib/analysis/format';
+	import { isImportableId } from '$lib/events/id';
+	import { openEvent } from '$lib/navigation';
+	import { accounts } from '$lib/state/accounts.svelte';
 	import { app } from '$lib/state/app.svelte';
 	import SettingsMenu from '$lib/ui/SettingsMenu.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { DEMO_ID, eventUrl } from '$lib/w2m/id';
+	import RespondDialog from './RespondDialog.svelte';
 	import ShareMenu from './ShareMenu.svelte';
 
 	let { class: className = '' }: { class?: string } = $props();
 
 	const event = $derived(app.event!);
 	const zone = $derived(app.grid!.zone);
+
+	// Events with no source are When2Meet's; an imported copy points back at its poll.
+	const w2mId = $derived(event.importedFrom ?? (event.source === 'thentomeet' ? null : event.id));
+	const canImport = $derived(
+		accounts.enabled && event.source !== 'thentomeet' && isImportableId(event.id)
+	);
+	let importing = $state(false);
+	// ThenToMeet's own events can be answered right here; When2Meet's are answered on When2Meet.
+	const native = $derived(event.source === 'thentomeet');
+	let responding = $state(false);
+
+	/** Copies this When2Meet poll into the signed-in account (signing in first), then opens it. */
+	const importEvent = async () => {
+		if (importing) return;
+		importing = true;
+		try {
+			if (!accounts.user && !(await accounts.signIn())) return;
+			const copy = await accounts.importWhen2Meet(event);
+			if (!copy) return;
+			toast.show(copy.created ? 'Imported to ThenToMeet' : 'You already imported this one');
+			await openEvent(copy.id);
+		} finally {
+			importing = false;
+		}
+	};
 
 	const range = $derived.by(() => {
 		const first = event.slots[0].time;
@@ -108,10 +139,31 @@
 			</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-1.5">
-			{#if event.id !== DEMO_ID}
+			{#if native}
+				<button
+					class="btn btn-primary h-8 gap-1.5 px-2.5 text-[13px]"
+					onclick={() => (responding = true)}
+					title="Mark when you’re free"
+				>
+					<Pencil class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
+					Add your times
+				</button>
+			{/if}
+			{#if canImport}
+				<button
+					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"
+					onclick={importEvent}
+					disabled={importing || accounts.busy}
+					title="Copy this poll into your ThenToMeet account"
+				>
+					<Import class="size-3.5 text-fg-2 pointer-coarse:size-4.5" aria-hidden="true" />
+					Import
+				</button>
+			{/if}
+			{#if event.id !== DEMO_ID && w2mId}
 				<a
 					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"
-					href={eventUrl(event.id)}
+					href={eventUrl(w2mId)}
 					target="_blank"
 					rel="noopener noreferrer"
 					aria-label="W2M: open in When2Meet"
@@ -128,6 +180,10 @@
 			</div>
 		</div>
 	</div>
+
+	{#if responding}
+		<RespondDialog onclose={() => (responding = false)} />
+	{/if}
 
 	{#if app.error}
 		<div

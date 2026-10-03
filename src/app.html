@@ -10,21 +10,9 @@
 			content="Find the best time to meet from any When2Meet poll: choose who's required, rank times, and share the result."
 		/>
 		<script>
-			// Apply the saved theme (dark by default) and heatmap palette before first paint.
-			(function () {
-				let pref = 'dark';
-				let heat = null;
-				try {
-					pref = localStorage.getItem('ttm:theme') || 'dark';
-					heat = localStorage.getItem('ttm:heat');
-				} catch {}
-				if (pref === 'light' || pref === 'dark') {
-					document.documentElement.dataset.theme = pref;
-				}
-				if (heat === 'deuteranopia' || heat === 'protanopia' || heat === 'tritanopia') {
-					document.documentElement.dataset.heat = heat;
-				}
-			})();
+			// Start on the dark theme, the default. A signed-in user's saved theme and heatmap palette
+			// are applied as soon as they're loaded from their account (see state/session.ts).
+			document.documentElement.dataset.theme = 'dark';
 		</script>
 		%sveltekit.head%
 	</head>

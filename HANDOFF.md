@@ -26,7 +26,7 @@ password, and editing with the right, wrong, and missing password.
    by name (no account), and edit anyone's times by entering their name. An account is only needed to
    create an event (which makes you its owner) and for "your events".
 3. **Optional per-entry passwords**, set when an entry is created, like When2Meet.
-4. **Imports are per-user snapshots.** Importing a When2Meet poll gives *that user* their own copy
+4. **Imports are per-user snapshots.** Importing a When2Meet poll gives _that user_ their own copy
    (ID = hash of uid + poll ID), idempotent per user. Importing never makes anyone else a participant.
    The user explicitly liked this.
 5. **No browser storage.** Theme, heatmap palette, recent events, per-event setup and groups live in

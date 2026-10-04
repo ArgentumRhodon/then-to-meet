@@ -8,6 +8,30 @@ import { toast } from '$lib/ui/toast.svelte';
 /** Popup closed or replaced by another one: the person changed their mind, not an error. */
 const CANCELLED = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
 
+/** Errors from our own checks already read well; anything else is turned into plain words. */
+const DOMAIN_ERRORS = ['InvalidInput', 'PasswordRequired', 'WrongPassword', 'NativeEventNotFound'];
+
+const explain = (e: unknown, what: string, ownerOnly = false): Error => {
+	if (e instanceof Error && DOMAIN_ERRORS.includes(e.name)) return e;
+	if ((e as { code?: string }).code === 'permission-denied') {
+		return new Error(
+			ownerOnly
+				? `Only the event's owner can ${what}, and only while signed in.`
+				: `That wasn't allowed. You can't ${what} right now.`
+		);
+	}
+	return new Error(`Couldn't ${what}. Check your connection and try again.`);
+};
+
+/** Owner and password management, loaded when someone first uses it. */
+const manage = async () => {
+	const [client, tools] = await Promise.all([
+		import('$lib/firebase/client'),
+		import('$lib/events/manage')
+	]);
+	return { db: client.getClientDb(), ...tools };
+};
+
 /** Firebase and Firestore are loaded on first use, so they stay out of the main bundle. */
 const firebase = async () => {
 	const [client, store] = await Promise.all([
@@ -129,6 +153,18 @@ class Accounts {
 		}
 	}
 
+	/**
+	 * Follows a ThenToMeet event live (see `watchNativeEvent`). Resolves to a function that stops it.
+	 */
+	async watchEvent(
+		id: string,
+		onEvent: (event: W2MEvent) => void,
+		onError: (error: Error) => void
+	): Promise<() => void> {
+		const { getClientDb, watchNativeEvent } = await firebase();
+		return watchNativeEvent(getClientDb(), id, onEvent, onError);
+	}
+
 	/** Makes a ThenToMeet event owned by the signed-in user. Returns its ID. */
 	async createEvent(input: NewEvent): Promise<string> {
 		const user = this.user;
@@ -142,9 +178,59 @@ class Accounts {
 	 * or not; the errors that matter to a form (`PasswordRequired`, `WrongPassword`,
 	 * `InvalidInput`) are thrown as they are.
 	 */
-	async respond(eventId: string, body: unknown): Promise<void> {
+	async respond(eventId: string, body: unknown): Promise<{ personId: number }> {
 		const { getClientDb, submitResponse } = await firebase();
-		await submitResponse(getClientDb(), this.user, eventId, body);
+		return submitResponse(getClientDb(), this.user, eventId, body);
+	}
+
+	/** Whether the signed-in user owns this event, and so can manage it. */
+	owns(event: W2MEvent): boolean {
+		return event.ownerId !== undefined && event.ownerId === this.user?.uid;
+	}
+
+	/** Deletes an event and all its responses. Only its owner can. */
+	async deleteEvent(eventId: string): Promise<void> {
+		try {
+			const { db, deleteEvent } = await manage();
+			await deleteEvent(db, eventId);
+		} catch (e) {
+			throw explain(e, 'delete this event', true);
+		}
+	}
+
+	/** Removes one person's entry (and its password) from an event. Only its owner can. */
+	async deleteEntry(eventId: string, name: string): Promise<void> {
+		try {
+			const { db, deleteEntry } = await manage();
+			await deleteEntry(db, eventId, name);
+		} catch (e) {
+			throw explain(e, 'remove people from this event', true);
+		}
+	}
+
+	/** Gives a password-protected entry a new password; takes the current one. */
+	async changePassword(
+		eventId: string,
+		name: string,
+		current: string,
+		next: string
+	): Promise<void> {
+		try {
+			const { db, changePassword } = await manage();
+			await changePassword(db, eventId, name, current, next);
+		} catch (e) {
+			throw explain(e, 'change the password');
+		}
+	}
+
+	/** Takes the password off an entry; takes the current one. */
+	async removePassword(eventId: string, name: string, current: string): Promise<void> {
+		try {
+			const { db, removePassword } = await manage();
+			await removePassword(db, eventId, name, current);
+		} catch (e) {
+			throw explain(e, 'remove the password');
+		}
 	}
 
 	/** Copies a When2Meet poll into the account. Returns the copy's ID, or null if it failed. */

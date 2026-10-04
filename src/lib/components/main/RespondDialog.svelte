@@ -70,13 +70,15 @@
 		}
 		busy = true;
 		try {
-			await accounts.respond(event.id, {
+			const { personId } = await accounts.respond(event.id, {
 				name,
 				available: [...selected].map((i) => event.slots[i].time),
 				password: password || undefined
 			});
 			accounts.lastName = name.trim();
-			await app.refresh();
+			// Your own change isn't news to you; a live event already has it, and others are pulled.
+			app.noteOwn(personId);
+			if (!app.live) await app.refresh();
 			toast.show(existing ? 'Times updated' : 'Times added');
 			onclose();
 		} catch (e) {

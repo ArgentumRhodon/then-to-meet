@@ -11,6 +11,7 @@ import {
 	changesSince,
 	mergeChanges,
 	NO_CHANGES,
+	sameContent,
 	snapshot,
 	type Changes,
 	type Snapshot
@@ -20,6 +21,7 @@ import { buildGrid } from '$lib/analysis/grid';
 import { findMeetingSets, type MeetingSet, type MeetingsPerWeek } from '$lib/analysis/meetingSets';
 import { sameRoles, withGroup } from '$lib/analysis/roles';
 import { isNativeEventId } from '$lib/events/id';
+import { toast } from '$lib/ui/toast.svelte';
 import { shareSearch } from '$lib/share/url';
 import type { Role, Roles, TimeRange, W2MEvent } from '$lib/types';
 import { DEMO_ID } from '$lib/w2m/id';
@@ -54,6 +56,8 @@ class AppState {
 	status = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
 	error = $state<string | null>(null);
 	refreshing = $state(false);
+	/** Whether the open event is being followed live, so new responses arrive without asking. */
+	live = $state(false);
 
 	/** Each person's role when no group is viewed. Each group keeps its own roles for its members. */
 	roles = $state.raw<Roles>({});
@@ -193,11 +197,15 @@ class AppState {
 	#loadToken = 0;
 	/** Who was signed in when the open event's setup was loaded; undefined before anything is. */
 	#knownUid: string | null | undefined;
+	#unwatch: (() => void) | null = null;
+	/** People this browser just saved times for, so their own change isn't announced back to them. */
+	#own = new Set<number>();
 
 	async load(id: string, overrides: LoadOverrides = {}) {
 		const token = ++this.#loadToken;
 		this.status = 'loading';
 		this.error = null;
+		this.#stopWatching();
 		try {
 			void accounts.init();
 			// What was changed in the event being left goes out before the next one's load begins.
@@ -240,7 +248,9 @@ class AppState {
 			this.#seen = tracked ? snapshot(event) : undefined;
 			for (const range of overrides.picks ?? []) this.pick(range.start, range.end, { add: true });
 			this.status = 'ready';
+			this.#own.clear();
 			recent.remember(event);
+			if (isNativeEventId(event.id)) void this.#startWatching(event.id, token);
 		} catch (e) {
 			if (token !== this.#loadToken) return;
 			this.error = e instanceof Error ? e.message : String(e);
@@ -260,22 +270,7 @@ class AppState {
 		try {
 			const event = await fetchEvent(before.id, { fresh: !auto });
 			if (this.event?.id !== before.id) return null;
-			const fresh = this.#seen ? changesSince(this.#seen, event) : NO_CHANGES;
-			this.changes = mergeChanges(this.changes, fresh);
-			if (this.#seen) this.#seen = snapshot(event);
-			const blockId = this.pinnedBlock?.id;
-			const setId = this.pinnedSet?.id;
-			this.event = event;
-			this.hoveredBlock = null;
-			this.hoveredSet = null;
-			// Pins point at slot indices, which only hold if the poll's times didn't change. Then keep
-			// them if the same result still exists, so a background refresh doesn't close a card.
-			const sameSlots =
-				before.slots.length === event.slots.length &&
-				before.slots.every((slot, i) => slot.time === event.slots[i].time);
-			this.pinnedBlock = sameSlots && blockId ? this.#findBlock(blockId) : null;
-			this.pinnedSet = sameSlots && setId ? this.#findSet(setId) : null;
-			recent.remember(event, { opened: false });
+			const fresh = this.#apply(event);
 			return fresh;
 		} catch (e) {
 			if (!auto) this.error = e instanceof Error ? e.message : String(e);
@@ -283,6 +278,82 @@ class AppState {
 		} finally {
 			this.refreshing = false;
 		}
+	}
+
+	/**
+	 * Swaps in a newer copy of the open event: notes who responded or changed their times, and keeps
+	 * a pinned result if it's still there. Returns what changed.
+	 */
+	#apply(event: W2MEvent): Changes {
+		const before = this.event!;
+		let fresh = this.#seen ? changesSince(this.#seen, event) : NO_CHANGES;
+		if (this.#own.size) {
+			fresh = {
+				added: fresh.added.filter((id) => !this.#own.has(id)),
+				updated: fresh.updated.filter((id) => !this.#own.has(id))
+			};
+		}
+		this.changes = mergeChanges(this.changes, fresh);
+		if (this.#seen) this.#seen = snapshot(event);
+		const blockId = this.pinnedBlock?.id;
+		const setId = this.pinnedSet?.id;
+		this.event = event;
+		this.hoveredBlock = null;
+		this.hoveredSet = null;
+		// Pins point at slot indices, which only hold if the poll's times didn't change. Then keep
+		// them if the same result still exists, so a background refresh doesn't close a card.
+		const sameSlots =
+			before.slots.length === event.slots.length &&
+			before.slots.every((slot, i) => slot.time === event.slots[i].time);
+		this.pinnedBlock = sameSlots && blockId ? this.#findBlock(blockId) : null;
+		this.pinnedSet = sameSlots && setId ? this.#findSet(setId) : null;
+		recent.remember(event, { opened: false });
+		return fresh;
+	}
+
+	/** Follows a ThenToMeet event as it changes, so responses show up without refreshing. */
+	async #startWatching(id: string, token: number) {
+		try {
+			const stop = await accounts.watchEvent(
+				id,
+				(event) => this.#onLive(event, id),
+				(error) => {
+					if (this.event?.id !== id) return;
+					this.live = false;
+					// Gone for good: say so. Anything else (a dropped connection) falls back to polling.
+					if (error.name === 'NativeEventNotFound') this.error = 'This event was deleted.';
+				}
+			);
+			if (token !== this.#loadToken) stop();
+			else this.#unwatch = stop;
+		} catch {
+			// No live updates; the page's polling covers it.
+		}
+	}
+
+	#stopWatching() {
+		this.#unwatch?.();
+		this.#unwatch = null;
+		this.live = false;
+	}
+
+	#onLive(event: W2MEvent, id: string) {
+		if (this.event?.id !== id) return;
+		this.live = true;
+		// Most snapshots only touch bookkeeping (a counter, a timestamp); there's nothing to redraw.
+		if (sameContent(this.event, event)) return;
+		const fresh = this.#apply(event);
+		const parts = [
+			fresh.added.length &&
+				`${fresh.added.length} new ${fresh.added.length === 1 ? 'response' : 'responses'}`,
+			fresh.updated.length && `${fresh.updated.length} updated`
+		].filter(Boolean);
+		if (parts.length) toast.show(parts.join(', '));
+	}
+
+	/** Records that this browser just saved this person's times, so their own change isn't announced. */
+	noteOwn(personId: number) {
+		this.#own.add(personId);
 	}
 
 	#findBlock(id: string): TimeBlock | null {
@@ -308,6 +379,8 @@ class AppState {
 
 	reset() {
 		this.#loadToken++;
+		this.#stopWatching();
+		this.#own.clear();
 		this.event = null;
 		this.status = 'idle';
 		this.error = null;

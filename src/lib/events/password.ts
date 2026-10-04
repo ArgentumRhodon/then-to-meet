@@ -15,6 +15,8 @@
  *
  * The string hashed for a proof must match the rules exactly:
  *   secret + '|' + currentNonce + '|' + newNonce
+ * (and for removing a password, 'remove' in place of the new nonce). The rules' hex output is
+ * uppercase, so they lowercase it before comparing; proofs here are lowercase hex.
  */
 
 /** PBKDF2 rounds. Slow enough to blunt guessing, fast enough for a phone. */
@@ -62,6 +64,12 @@ export const deriveSecret = async (password: string, salt: string): Promise<stri
 	);
 	return hex(bits);
 };
+
+/**
+ * Stands in for the new nonce in the proof that a password is being removed. An entry without a
+ * password has no nonce to move, so the proof is bound to this word instead.
+ */
+export const REMOVE = 'remove';
 
 /** The proof that goes with a change, for the response's current nonce and a new one. */
 export const proofFor = async (

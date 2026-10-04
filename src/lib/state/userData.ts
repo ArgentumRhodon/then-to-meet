@@ -2,6 +2,7 @@ import { browser } from '$app/environment';
 import type { RecentEvent, UserEventData, UserSettings } from '$lib/events/userModel';
 import { toast } from '$lib/ui/toast.svelte';
 import { accounts } from './accounts.svelte';
+import { migrateLegacy } from './migrate';
 
 /**
  * The signed-in user's saved settings and per-event setup, in Firestore. Nothing here touches the
@@ -30,6 +31,24 @@ const queued = new Map<string, { uid: string; eventId: string; fields: UserEvent
 const known = new Map<string, string>();
 let timer: ReturnType<typeof setTimeout> | undefined;
 let warned = false;
+
+/** Accounts whose browser-stored data has been carried over (or had none) this visit. */
+const migrated = new Set<string>();
+
+/**
+ * Who's signed in, once that's known and anything this browser kept for them has been moved into
+ * their account. Every load waits on this, so nothing is read, or queued for saving as the default,
+ * before the older data is there: a default saved first would overwrite what was being moved.
+ */
+const signedInUid = async (): Promise<string | null> => {
+	await accounts.ready;
+	const uid = accounts.user?.uid ?? null;
+	if (uid && !migrated.has(uid)) {
+		await migrateLegacy(uid);
+		migrated.add(uid);
+	}
+	return uid;
+};
 
 const knownKey = (uid: string, eventId: string, field: string) => `${uid}/${eventId}/${field}`;
 
@@ -70,8 +89,7 @@ if (browser) {
 export const userData = {
 	/** The saved theme and palette, or null if signed out or none saved yet. */
 	async loadSettings(): Promise<UserSettings | null> {
-		await accounts.ready;
-		const uid = accounts.user?.uid;
+		const uid = await signedInUid();
 		if (!uid) return null;
 		try {
 			const { db, loadSettings } = await backend();
@@ -92,8 +110,7 @@ export const userData = {
 
 	/** The saved setup for an event, or null if signed out or never opened. */
 	async loadEvent(eventId: string): Promise<UserEventData | null> {
-		await accounts.ready;
-		const uid = accounts.user?.uid;
+		const uid = await signedInUid();
 		if (!uid) return null;
 		try {
 			const { db, loadEventData } = await backend();
@@ -130,8 +147,7 @@ export const userData = {
 	flush,
 
 	async loadRecent(): Promise<RecentEvent[]> {
-		await accounts.ready;
-		const uid = accounts.user?.uid;
+		const uid = await signedInUid();
 		if (!uid) return [];
 		try {
 			const { db, loadRecent } = await backend();

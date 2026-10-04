@@ -102,7 +102,8 @@ export const toEvent = (
 		people,
 		noTimes,
 		fetchedAt,
-		source: 'thentomeet'
+		source: 'thentomeet',
+		ownerId: doc.ownerId
 	};
 	if (doc.source.type === 'when2meet') event.importedFrom = doc.source.id;
 	return event;

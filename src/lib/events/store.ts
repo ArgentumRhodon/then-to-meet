@@ -5,6 +5,7 @@ import {
 	getDoc,
 	getDocs,
 	limit,
+	onSnapshot,
 	orderBy,
 	query,
 	runTransaction,
@@ -71,6 +72,69 @@ export const loadNativeEvent = async (db: Firestore, id: string): Promise<W2MEve
 		snap.data() as EventDoc,
 		responses.docs.map((d) => d.data() as ResponseDoc)
 	);
+};
+
+/**
+ * Follows a ThenToMeet event as it changes: calls `onEvent` with the event and everyone's
+ * responses now, and again whenever either changes (including by this browser's own writes, which
+ * show up at once). Returns a function that stops listening. An event that isn't there, or can't
+ * be read, goes to `onError`, after which nothing more arrives.
+ */
+export const watchNativeEvent = (
+	db: Firestore,
+	id: string,
+	onEvent: (event: W2MEvent) => void,
+	onError: (error: Error) => void
+): (() => void) => {
+	let event: EventDoc | null | undefined;
+	let responses: ResponseDoc[] | undefined;
+	let scheduled = false;
+	let stopped = false;
+
+	// The event and its responses are separate listeners, and one write usually changes both in the
+	// same breath, so wait for the breath to finish and report once.
+	const schedule = () => {
+		if (scheduled) return;
+		scheduled = true;
+		queueMicrotask(() => {
+			scheduled = false;
+			if (stopped || event === undefined || responses === undefined) return;
+			if (event === null) {
+				stopped = true;
+				onError(new NativeEventNotFound());
+				return;
+			}
+			onEvent(toEvent(id, event, responses));
+		});
+	};
+
+	const fail = (e: Error) => {
+		if (stopped) return;
+		stopped = true;
+		onError(e);
+	};
+
+	const stopEvent = onSnapshot(
+		eventRef(db, id),
+		(snap) => {
+			event = snap.exists() ? (snap.data() as EventDoc) : null;
+			schedule();
+		},
+		fail
+	);
+	const stopResponses = onSnapshot(
+		responsesOf(db, id),
+		(snap) => {
+			responses = snap.docs.map((d) => d.data() as ResponseDoc);
+			schedule();
+		},
+		fail
+	);
+	return () => {
+		stopped = true;
+		stopEvent();
+		stopResponses();
+	};
 };
 
 export const createEvent = async (

@@ -11,6 +11,7 @@
 	import type { PeopleGroup, Person, Role } from '$lib/types';
 	import { dismissable } from '$lib/ui/dismissable';
 	import { toast } from '$lib/ui/toast.svelte';
+	import SelectionManage from './SelectionManage.svelte';
 
 	let {
 		people,
@@ -191,5 +192,6 @@
 				</button>
 			{/each}
 		</div>
+		<SelectionManage {selectedPeople} />
 	</div>
 {/if}

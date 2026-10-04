@@ -37,6 +37,8 @@ export interface W2MEvent {
 	source?: 'when2meet' | 'thentomeet';
 	/** For a ThenToMeet event imported from When2Meet, the ID of the poll it was copied from. */
 	importedFrom?: string;
+	/** ThenToMeet events only: the account that owns the event, who can manage it. */
+	ownerId?: string;
 }
 
 /** A stretch of time as Unix seconds, `end` exclusive. */

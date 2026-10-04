@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { W2MEvent } from '$lib/types';
-import { changesSince, mergeChanges, NO_CHANGES, snapshot } from './changes';
+import { changesSince, mergeChanges, NO_CHANGES, sameContent, snapshot } from './changes';
 
 const event = (available: number[][], people = [1, 2, 3]): W2MEvent => ({
 	id: '1-a',
@@ -40,5 +40,62 @@ describe('response changes', () => {
 			updated: [1, 2]
 		});
 		expect(mergeChanges(NO_CHANGES, NO_CHANGES)).toBe(NO_CHANGES);
+	});
+});
+
+describe('sameContent', () => {
+	const event = (
+		over: Partial<import('$lib/types').W2MEvent> = {}
+	): import('$lib/types').W2MEvent => ({
+		id: 'x',
+		title: 'T',
+		weekly: false,
+		slotSeconds: 900,
+		slots: [
+			{ time: 0, available: [1, 2] },
+			{ time: 900, available: [2] }
+		],
+		people: [
+			{ id: 1, name: 'Ada' },
+			{ id: 2, name: 'Bo' }
+		],
+		noTimes: [],
+		fetchedAt: 1,
+		...over
+	});
+
+	it('ignores when it was fetched', () => {
+		expect(sameContent(event(), event({ fetchedAt: 999 }))).toBe(true);
+	});
+
+	it('notices a title, a person, a lock, or anyone’s times changing', () => {
+		expect(sameContent(event(), event({ title: 'U' }))).toBe(false);
+		expect(sameContent(event(), event({ noTimes: [{ id: 3, name: 'Cy' }] }))).toBe(false);
+		expect(
+			sameContent(
+				event(),
+				event({
+					people: [
+						{ id: 1, name: 'Ada', locked: true },
+						{ id: 2, name: 'Bo' }
+					]
+				})
+			)
+		).toBe(false);
+		expect(
+			sameContent(
+				event(),
+				event({
+					slots: [
+						{ time: 0, available: [1] },
+						{ time: 900, available: [2] }
+					]
+				})
+			)
+		).toBe(false);
+	});
+
+	it('notices a different set of slots', () => {
+		expect(sameContent(event(), event({ slots: [{ time: 0, available: [1, 2] }] }))).toBe(false);
 	});
 });

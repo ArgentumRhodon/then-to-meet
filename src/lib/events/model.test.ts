@@ -155,6 +155,7 @@ describe('toEvent', () => {
 			{ time: 1900, available: [] }
 		]);
 		expect(event.importedFrom).toBeUndefined();
+		expect(event.ownerId).toBe(OWNER);
 		expect(event.fetchedAt).toBe(5);
 	});
 

@@ -14,6 +14,7 @@
 	import SettingsMenu from '$lib/ui/SettingsMenu.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import { DEMO_ID, eventUrl } from '$lib/w2m/id';
+	import ManageMenu from './ManageMenu.svelte';
 	import RespondDialog from './RespondDialog.svelte';
 	import ShareMenu from './ShareMenu.svelte';
 
@@ -95,7 +96,8 @@
 	const AUTO_REFRESH_MS = 60_000;
 	const eventId = $derived(event.id);
 	$effect(() => {
-		if (eventId === DEMO_ID) return;
+		// A live event pushes its own changes; the demo never changes.
+		if (eventId === DEMO_ID || app.live) return;
 		lastPulled = Date.now();
 		const check = () => {
 			if (document.visibilityState !== 'visible' || app.refreshing) return;
@@ -135,7 +137,13 @@
 				{event.people.length}
 				{event.people.length === 1 ? 'person' : 'people'} responded · {range}
 				{#if event.weekly}· weekly{/if}
-				<span class="text-fg-3">· updated {updated}</span>
+				{#if app.live}
+					<span class="text-fg-3" title="New responses appear as they come in">
+						· <span class="live-dot" aria-hidden="true"></span> live
+					</span>
+				{:else}
+					<span class="text-fg-3">· updated {updated}</span>
+				{/if}
 			</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-1.5">
@@ -149,6 +157,7 @@
 					Add your times
 				</button>
 			{/if}
+			<ManageMenu />
 			{#if canImport}
 				<button
 					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"
@@ -202,3 +211,25 @@
 		</div>
 	{/if}
 </header>
+
+<style>
+	.live-dot {
+		display: inline-block;
+		width: 0.4rem;
+		height: 0.4rem;
+		margin-right: 0.15rem;
+		border-radius: 9999px;
+		background: var(--ok);
+		vertical-align: middle;
+	}
+	@media (prefers-reduced-motion: no-preference) {
+		.live-dot {
+			animation: live-pulse 2.4s ease-in-out infinite;
+		}
+	}
+	@keyframes live-pulse {
+		50% {
+			opacity: 0.35;
+		}
+	}
+</style>

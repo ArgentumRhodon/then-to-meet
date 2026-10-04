@@ -4,10 +4,12 @@ const mocks = vi.hoisted(() => ({
 	accounts: { ready: Promise.resolve(), user: { uid: 'u1' } as { uid: string } | null },
 	saveEventData: vi.fn(),
 	loadEventData: vi.fn(),
-	toast: vi.fn()
+	toast: vi.fn(),
+	migrateLegacy: vi.fn()
 }));
 
 vi.mock('./accounts.svelte', () => ({ accounts: mocks.accounts }));
+vi.mock('./migrate', () => ({ migrateLegacy: mocks.migrateLegacy }));
 vi.mock('$lib/ui/toast.svelte', () => ({ toast: { show: mocks.toast } }));
 vi.mock('$lib/firebase/client', () => ({ getClientDb: () => 'db' }));
 vi.mock('$lib/events/userStore', () => ({
@@ -32,6 +34,7 @@ beforeEach(() => {
 	mocks.saveEventData.mockReset().mockResolvedValue(undefined);
 	mocks.loadEventData.mockReset().mockResolvedValue(null);
 	mocks.toast.mockReset();
+	mocks.migrateLegacy.mockReset().mockResolvedValue(false);
 });
 
 afterEach(async () => {
@@ -149,5 +152,36 @@ describe('loadEvent', () => {
 	it('is null, not an error, when the read fails', async () => {
 		mocks.loadEventData.mockRejectedValue(new Error('offline'));
 		expect(await userData.loadEvent('y')).toBeNull();
+	});
+});
+
+describe('migrating older browser data', () => {
+	it('moves it into the account before the first load reads anything', async () => {
+		mocks.accounts.user = { uid: 'u-first' };
+		const order: string[] = [];
+		mocks.migrateLegacy.mockImplementation(async () => {
+			order.push('migrate');
+			return true;
+		});
+		mocks.loadEventData.mockImplementation(async () => {
+			order.push('load');
+			return null;
+		});
+		await userData.loadEvent('mig1');
+		expect(order).toEqual(['migrate', 'load']);
+	});
+
+	it('does it once per account, not on every load', async () => {
+		mocks.accounts.user = { uid: 'u-once' };
+		await userData.loadEvent('a');
+		await userData.loadEvent('b');
+		expect(mocks.migrateLegacy).toHaveBeenCalledTimes(1);
+		expect(mocks.migrateLegacy).toHaveBeenCalledWith('u-once');
+	});
+
+	it('is not attempted when signed out', async () => {
+		mocks.accounts.user = null;
+		await userData.loadEvent('a');
+		expect(mocks.migrateLegacy).not.toHaveBeenCalled();
 	});
 });

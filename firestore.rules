@@ -84,14 +84,15 @@ service cloud.firestore {
         }
 
         // The change proves the password: its proof is the hash of the entry's secret (which only
-        // these rules can read), the nonce it has now, and the new one.
+        // these rules can read), the nonce it has now, and the new one. The rules engine's
+        // toHexString() gives UPPERCASE hex, so it's lowercased to match what the app sends.
         function provesPassword() {
           let d = request.resource.data;
           return ('proof' in d)
             && d.nonce != resource.data.nonce
             && d.proof == hashing.sha256(
               get(secretPath(responseId)).data.secret + '|' + resource.data.nonce + '|' + d.nonce
-            ).toHexString();
+            ).toHexString().lower();
         }
 
         // A response keeps its person ID and its account. The one change to who it belongs to is a
@@ -115,20 +116,56 @@ service cloud.firestore {
           && (request.resource.data.uid == null
             || (signedIn() && request.resource.data.uid == request.auth.uid));
 
+        // Removing a password is proven the same way, with the word "remove" where the new nonce
+        // would go, since an entry with no password has no nonce to move.
+        function provesRemoval() {
+          return ('proof' in request.resource.data)
+            && request.resource.data.proof == hashing.sha256(
+              get(secretPath(responseId)).data.secret + '|' + resource.data.nonce + '|remove'
+            ).toHexString().lower();
+        }
+
         // An entry without a password can't be given one later, or anyone could lock out its person.
+        // An entry with one changes only with its proof, and the password itself changes or goes
+        // only along with its secret (see the secrets rules below).
         allow update: if validResponse()
           && sameOwner()
-          && ((!('salt' in resource.data) && !('salt' in request.resource.data))
-            || (('salt' in resource.data)
+          && (
+            // No password before or after.
+            (!('salt' in resource.data) && !('salt' in request.resource.data))
+            // A password, and a change to the entry with its proof.
+            || (('salt' in resource.data) && ('salt' in request.resource.data)
               && request.resource.data.salt == resource.data.salt
-              && provesPassword()));
+              && provesPassword())
+            // The password replaced: a new salt, proven with the old password, and the secret
+            // swapped for a new one in the same write.
+            || (('salt' in resource.data) && ('salt' in request.resource.data)
+              && request.resource.data.salt != resource.data.salt
+              && provesPassword()
+              && existsAfter(secretPath(responseId))
+              && getAfter(secretPath(responseId)).data.secret != get(secretPath(responseId)).data.secret)
+            // The password removed: proven with the old password, and the secret deleted in the
+            // same write.
+            || (('salt' in resource.data) && !('salt' in request.resource.data)
+              && provesRemoval()
+              && !existsAfter(secretPath(responseId)))
+          );
 
         allow delete: if ownsEventDoc();
       }
 
-      // The secret behind an entry's password. Nobody reads it; the rules above do. It can only be
-      // created along with its (new) entry.
+      // The secret behind an entry's password. Nobody reads it; the rules above do. It's created
+      // along with its (new) entry, and only ever replaced or deleted as part of a change to that
+      // entry's password that proves the old one (or by the event's owner, who can delete it).
       match /secrets/{secretId} {
+        function entryBefore() {
+          return get(responsePath(secretId)).data;
+        }
+
+        function entryAfter() {
+          return getAfter(responsePath(secretId)).data;
+        }
+
         allow read: if false;
 
         allow create: if !exists(responsePath(secretId))
@@ -137,7 +174,31 @@ service cloud.firestore {
           && request.resource.data.secret is string
           && request.resource.data.secret.size() == 64;
 
-        allow delete: if ownsEventDoc();
+        // Replaced when the entry's password is: its salt and nonce change together, with a proof
+        // worked out from this (the old) secret.
+        allow update: if request.resource.data.keys().hasOnly(['secret'])
+          && request.resource.data.secret is string
+          && request.resource.data.secret.size() == 64
+          && exists(responsePath(secretId))
+          && existsAfter(responsePath(secretId))
+          && ('salt' in entryBefore())
+          && ('salt' in entryAfter())
+          && entryAfter().salt != entryBefore().salt
+          && entryAfter().nonce != entryBefore().nonce
+          && entryAfter().proof == hashing.sha256(
+            resource.data.secret + '|' + entryBefore().nonce + '|' + entryAfter().nonce
+          ).toHexString().lower();
+
+        // Deleted by the owner (who deletes the entry too), or when the password is removed from
+        // the entry in the same write, with a proof worked out from this secret.
+        allow delete: if ownsEventDoc()
+          || (exists(responsePath(secretId))
+            && existsAfter(responsePath(secretId))
+            && ('salt' in entryBefore())
+            && !('salt' in entryAfter())
+            && entryAfter().proof == hashing.sha256(
+              resource.data.secret + '|' + entryBefore().nonce + '|remove'
+            ).toHexString().lower());
       }
     }
 

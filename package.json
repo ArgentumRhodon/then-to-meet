@@ -13,6 +13,7 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:live": "vitest run src/lib/server/w2m.live.test.ts",
+		"test:rules": "npx --yes firebase-tools emulators:exec --only auth,firestore --project demo-thentomeet \"vitest run --config vitest.rules.config.ts\"",
 		"emulators": "npx --yes firebase-tools emulators:start --project demo-thentomeet",
 		"firebase:deploy": "npx --yes firebase-tools deploy --only firestore",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

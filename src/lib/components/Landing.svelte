@@ -99,7 +99,7 @@
 					<div
 						class="flex size-9 items-center justify-center rounded-lg bg-accent-soft text-accent-fg"
 					>
-						<feature.icon class="size-[18px]" aria-hidden="true" />
+						<feature.icon class="size-4.5" aria-hidden="true" />
 					</div>
 					<h3 class="mt-4 text-sm font-semibold">{feature.title}</h3>
 					<p class="mt-1.5 text-sm text-fg-2">{feature.body}</p>

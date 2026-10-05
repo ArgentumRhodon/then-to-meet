@@ -270,6 +270,8 @@
 
 	/** Height of the sticky day header, so scrolling a slot into view stops below it. */
 	let headerHeight = $state(0);
+	/** Whether days have slid under the time column, which then gets an edge to sit them under. */
+	let scrolledX = $state(false);
 
 	// Bring a block (or a set's first meeting) into view when it's picked in best times.
 	$effect(() => {
@@ -445,6 +447,7 @@
 		style:scroll-padding-top="{headerHeight}px"
 		style:scroll-padding-left="3.25rem"
 		onscroll={() => {
+			scrolledX = scroller.scrollLeft > 0;
 			if (tipRect) hideTip();
 			queuePlaceCard();
 		}}
@@ -481,8 +484,17 @@
 			></div>
 			<div
 				bind:offsetHeight={headerHeight}
-				class="corner sticky top-0 left-0 z-20 bg-page"
+				class="corner rail sticky top-0 left-0 z-20"
+				class:scrolled={scrolledX}
 				style:grid-row="1"
+				style:grid-column="1"
+			></div>
+			<!-- One backing for the whole time column, so days scroll under it rather than between
+			     the labels. -->
+			<div
+				class="rail sticky left-0 z-[4]"
+				class:scrolled={scrolledX}
+				style:grid-row="2 / -1"
 				style:grid-column="1"
 			></div>
 			{#each grid.days as day, d (day.key)}
@@ -504,7 +516,7 @@
 			{#each grid.rows as row, i (row.minute)}
 				{#if row.hour || i === 0 || row.gapBefore}
 					<div
-						class="sticky left-0 z-[5] bg-page pr-2 text-right text-[11px] leading-none text-fg-3 tabular"
+						class="sticky left-0 z-[5] pr-2 text-right text-[11px] leading-none text-fg-3 tabular"
 						style:grid-row={layout.line[i]}
 						style:grid-column="1"
 					>
@@ -661,6 +673,21 @@
 	}
 	.dimmed .cell:not(.in-held):not(.empty) {
 		opacity: 0.45;
+	}
+	/* The time column's backing. It reaches left over the scroller's padding, which days would
+	   otherwise show through, and once days are scrolled under it, right over the column gap too.
+	   Painted like bg-page so it lines up with the page around it. */
+	.rail::before {
+		content: '';
+		position: absolute;
+		inset: 0 0 0 -1.5rem;
+		background-color: var(--canvas);
+		background-image: var(--glow);
+		background-attachment: fixed;
+	}
+	.rail.scrolled::before {
+		right: -4px;
+		box-shadow: 6px 0 8px -6px rgb(0 0 0 / 0.6);
 	}
 	.block-outline {
 		pointer-events: none;

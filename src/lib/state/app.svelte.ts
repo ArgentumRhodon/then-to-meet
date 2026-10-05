@@ -447,7 +447,7 @@ class AppState {
 	}
 
 	/**
-	 * Brings an imported event up to date with its When2Meet poll, for its owner. Returns what
+	 * Brings an imported event up to date with its When2Meet poll, for its owner or an admin. Returns what
 	 * changed, and what it did to people is not announced again by the live update.
 	 */
 	async resyncImport(): Promise<ResyncReport> {

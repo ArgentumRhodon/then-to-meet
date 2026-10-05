@@ -12,13 +12,16 @@ rules_version = '2';
 //   - An account is only needed to create an event, which makes it the owner. Owners can edit and
 //     delete their event and delete responses (which is how a forgotten password is dealt with);
 //     nobody else can.
+//   - An owner can make other accounts admins (`adminUids`). Admins can do everything the owner
+//     can except delete the event, hand it to someone else, or choose who the admins are; they can
+//     step down themselves.
 //   - Only people in an event's memberUids (its owner, and signed-in people who responded) can
 //     list events, so "my events" works and browsing doesn't.
 //   - Limits, so a public link can't be turned into a way to fill the database: a new event's fields
-//     are checked for type and size, and an event holds at most 500 people unless its owner adds
-//     more. Joining is one write that adds the response and moves the event's counters by one
+//     are checked for type and size, and an event holds at most 500 people unless its owner or an
+//     admin adds more. Joining is one write that adds the response and moves the event's counters by one
 //     (and names that response in `lastJoin`), so neither can happen without the other. Only the
-//     owner can lower the counters.
+//     owner and admins can lower the counters.
 service cloud.firestore {
   match /databases/{database}/documents {
     function signedIn() {
@@ -42,8 +45,25 @@ service cloud.firestore {
         return signedIn() && resource.data.ownerId == request.auth.uid;
       }
 
-      function ownsEventDoc() {
-        return signedIn() && get(eventPath()).data.ownerId == request.auth.uid;
+      // The owner or an admin of an event, going by that event's data.
+      function managesData(data) {
+        return signedIn()
+          && (data.ownerId == request.auth.uid || request.auth.uid in data.get('adminUids', []));
+      }
+
+      function managesEventDoc() {
+        return managesData(get(eventPath()).data);
+      }
+
+      // An admin changing the event: anything but its owner and its admins, except that they can
+      // take themselves off the list.
+      function adminUpdates() {
+        let before = resource.data.get('adminUids', []).toSet();
+        let after = request.resource.data.get('adminUids', []).toSet();
+        return signedIn()
+          && request.auth.uid in before
+          && request.resource.data.ownerId == resource.data.ownerId
+          && (after == before || after == before.difference([request.auth.uid].toSet()));
       }
 
       // What joining or changing a response does to the event.
@@ -101,6 +121,7 @@ service cloud.firestore {
         && validNewEvent();
 
       allow update: if ownsEvent()
+        || adminUpdates()
         // An edit to someone's times, which only notes when the event last changed.
         || changed().hasOnly(['updatedAt'])
         || (changed().hasOnly(['updatedAt', 'memberUids']) && addsOnlySelf())
@@ -148,12 +169,13 @@ service cloud.firestore {
                 && request.resource.data.uid == request.auth.uid));
         }
 
-        // The owner adds people freely (an import brings a whole poll). Anyone else adds one at a
-        // time, as the person the event counts next, along with the event's own counters (which
-        // can only go up by one, and name this response in `lastJoin`, so a batch can't slip in
-        // more than the one the count allows).
-        function ownsEventAfter() {
-          return signedIn() && getAfter(eventPath()).data.ownerId == request.auth.uid;
+        // The owner and admins add people freely (an import brings a whole poll). Anyone else adds
+        // one at a time, as the person the event counts next, along with the event's own counters
+        // (which can only go up by one, and name this response in `lastJoin`, so a batch can't slip
+        // in more than the one the count allows). Going by the event after the write is safe, since
+        // only the owner can change who the admins are.
+        function managesEventAfter() {
+          return managesData(getAfter(eventPath()).data);
         }
 
         function joins() {
@@ -172,7 +194,7 @@ service cloud.firestore {
         // password's secret go in with its entry.
         allow create: if validResponse()
           && existsAfter(eventPath())
-          && (ownsEventAfter() || joins())
+          && (managesEventAfter() || joins())
           && !('proof' in request.resource.data)
           && (!('salt' in request.resource.data) || existsAfter(secretPath(responseId)))
           && (request.resource.data.uid == null
@@ -213,12 +235,13 @@ service cloud.firestore {
               && !existsAfter(secretPath(responseId)))
           );
 
-        allow delete: if ownsEventDoc();
+        allow delete: if managesEventDoc();
       }
 
       // The secret behind an entry's password. Nobody reads it; the rules above do. It's created
       // along with its (new) entry, and only ever replaced or deleted as part of a change to that
-      // entry's password that proves the old one (or by the event's owner, who can delete it).
+      // entry's password that proves the old one (or by the event's owner or an admin, who can
+      // delete it).
       match /secrets/{secretId} {
         function entryBefore() {
           return get(responsePath(secretId)).data;
@@ -251,9 +274,9 @@ service cloud.firestore {
             resource.data.secret + '|' + entryBefore().nonce + '|' + entryAfter().nonce
           ).toHexString().lower();
 
-        // Deleted by the owner (who deletes the entry too), or when the password is removed from
-        // the entry in the same write, with a proof worked out from this secret.
-        allow delete: if ownsEventDoc()
+        // Deleted by the owner or an admin (who delete the entry too), or when the password is
+        // removed from the entry in the same write, with a proof worked out from this secret.
+        allow delete: if managesEventDoc()
           || (exists(responsePath(secretId))
             && existsAfter(responsePath(secretId))
             && ('salt' in entryBefore())

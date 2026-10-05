@@ -30,10 +30,14 @@ class Layout {
 	sideColumn = $derived(desktop.current);
 
 	/**
-	 * Whether best times gets its own column right of the heatmap. Below that it follows the
-	 * heatmap in the same column, and on narrow screens in the page flow.
+	 * Whether best times gets its own column right of the heatmap. Below that, a laptop-width
+	 * window puts it under people in their column, and narrow screens let it follow the heatmap
+	 * in the page flow.
 	 */
 	resultsBeside = $derived(wide.current);
+
+	/** Whether best times sits in the people column, leaving the heatmap the whole main area. */
+	resultsInSide = $derived(this.sideColumn && !this.resultsBeside);
 }
 
 export const layout = new Layout();

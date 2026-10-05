@@ -31,6 +31,11 @@ export interface EventDoc {
 	/** The owner and everyone who responded; what "my events" and the security rules look at. */
 	memberUids: string[];
 	/**
+	 * Accounts the owner made admins: they can do everything the owner can except delete the event,
+	 * hand it on, or choose the admins. Missing when there are none.
+	 */
+	adminUids?: string[];
+	/**
 	 * The response key of the last person to join, which the rules want in the same write as the
 	 * counters above moving (so a join can't skip either). Only joins set it.
 	 */
@@ -74,7 +79,10 @@ export interface EventSummary {
 
 /** Most slots one event may have: a month of 15-minute slots is 2,880. */
 export const MAX_SLOTS = 5000;
-/** Most people an event holds, unless its owner adds more. firestore.rules enforces the same number. */
+/**
+ * Most people an event holds, unless its owner or an admin adds more. firestore.rules enforces the
+ * same number.
+ */
 export const MAX_RESPONSES = 500;
 export const MAX_TITLE = 120;
 export const MAX_NAME = 60;
@@ -115,6 +123,7 @@ export const toEvent = (
 		source: 'thentomeet',
 		ownerId: doc.ownerId
 	};
+	if (doc.adminUids?.length) event.adminUids = [...doc.adminUids];
 	if (doc.source.type === 'when2meet') event.importedFrom = doc.source.id;
 	return event;
 };

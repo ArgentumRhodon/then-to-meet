@@ -31,7 +31,8 @@ import type { W2MEvent } from '$lib/types';
 import { deriveSecret, MAX_PASSWORD, newNonce, newSalt, proofFor, REMOVE } from './password';
 
 /*
- * What an event's owner can do beyond the everyday (see store.ts), and what a person with a
+ * What an event's owner and admins can do beyond the everyday (see store.ts; admins can do all of
+ * it but delete the event, transfer it, or choose the admins), and what a person with a
  * password can do to it: change or remove it. All of it is enforced by firestore.rules; these
  * just do the writes the rules expect, in the order and groupings they need.
  */
@@ -62,9 +63,9 @@ export const deleteEvent = async (db: Firestore, eventId: string): Promise<void>
 };
 
 /**
- * Removes one person's entry, and its password if it has one, for the event's owner. The event's
- * count goes down, and so does its member list if that was the account's only entry. Person IDs
- * aren't reused. Returns whether there was an entry to remove.
+ * Removes one person's entry, and its password if it has one, for the event's owner or an admin.
+ * The event's count goes down, and so does its member list if that was the account's only entry.
+ * Person IDs aren't reused. Returns whether there was an entry to remove.
  */
 export const deleteEntry = async (
 	db: Firestore,
@@ -81,9 +82,9 @@ export const deleteEntry = async (
 	const event = eventSnap.data() as EventDoc;
 	const { uid } = entry.data() as ResponseDoc;
 
-	// An account stays a member while it has another entry, and the owner always is one.
+	// An account stays a member while it has another entry, and the owner and admins always are.
 	let dropMember = false;
-	if (uid && uid !== event.ownerId) {
+	if (uid && uid !== event.ownerId && !event.adminUids?.includes(uid)) {
 		const others = await getDocs(
 			query(collection(db, 'events', eventId, 'responses'), where('uid', '==', uid), limit(2))
 		);
@@ -196,7 +197,7 @@ export const removePassword = (
 
 /**
  * Brings an imported copy up to date with its When2Meet poll, as it is now (see `planResync` for
- * what changes and what is left alone), for the event's owner. The event's own fields go in first,
+ * what changes and what is left alone), for the event's owner or an admin. The event's own fields go in first,
  * so the IDs for new people are taken before anyone can join with them, then the responses.
  */
 export const resyncWhen2Meet = async (
@@ -228,9 +229,9 @@ export const resyncWhen2Meet = async (
 };
 
 /**
- * Hands an event to someone else, for its current owner: the new owner manages it from now on, and
- * the old one is an ordinary member. It has to be an account that responded to the event, so the
- * event can't be handed to nobody.
+ * Hands an event to someone else, for its current owner: the new owner manages it from now on (and
+ * is no longer listed as an admin), and the old one is an ordinary member. It has to be an account
+ * that responded to the event, so the event can't be handed to nobody.
  */
 export const transferOwnership = async (
 	db: Firestore,
@@ -257,6 +258,40 @@ export const transferOwnership = async (
 	await updateDoc(eventRef(db, eventId), {
 		ownerId: newOwnerUid,
 		memberUids: arrayUnion(newOwnerUid),
+		adminUids: arrayRemove(newOwnerUid),
+		updatedAt: Date.now()
+	});
+};
+
+/**
+ * Makes an account an admin of an event, or stops it being one. The owner chooses admins, who have
+ * to be accounts that responded (so they're members and find the event in their list); an admin
+ * can only take themselves off.
+ */
+export const setAdmin = async (
+	db: Firestore,
+	eventId: string,
+	uid: string,
+	admin: boolean
+): Promise<void> => {
+	if (admin) {
+		const [eventSnap, entry] = await Promise.all([
+			getDoc(eventRef(db, eventId)),
+			getDocs(
+				query(collection(db, 'events', eventId, 'responses'), where('uid', '==', uid), limit(1))
+			)
+		]);
+		if (!eventSnap.exists()) throw new NativeEventNotFound();
+		if ((eventSnap.data() as EventDoc).ownerId === uid) {
+			throw new InvalidInput('The owner already manages this event.');
+		}
+		if (entry.empty) {
+			throw new InvalidInput('Only someone signed in who has added their times can be an admin.');
+		}
+	}
+	await updateDoc(eventRef(db, eventId), {
+		adminUids: admin ? arrayUnion(uid) : arrayRemove(uid),
+		...(admin ? { memberUids: arrayUnion(uid) } : {}),
 		updatedAt: Date.now()
 	});
 };

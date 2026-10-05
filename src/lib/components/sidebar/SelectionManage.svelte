@@ -1,5 +1,7 @@
 <script lang="ts">
 	import KeyRound from '@lucide/svelte/icons/key-round';
+	import ShieldCheck from '@lucide/svelte/icons/shield-check';
+	import ShieldOff from '@lucide/svelte/icons/shield-off';
 	import UserMinus from '@lucide/svelte/icons/user-minus';
 	import { accounts } from '$lib/state/accounts.svelte';
 	import { app } from '$lib/state/app.svelte';
@@ -16,11 +18,29 @@
 	 */
 	let removeTargets = $state.raw<Person[] | null>(null);
 	let passwordFor = $state.raw<Person | null>(null);
+	let settingAdmin = $state(false);
 
 	/** Only ThenToMeet's own events have anyone to manage; When2Meet's are managed on When2Meet. */
 	const native = $derived(app.event?.source === 'thentomeet');
-	/** The event's owner can remove people. */
-	const canRemove = $derived(native && !!app.event && accounts.owns(app.event));
+	/** The event's owner and admins can remove people. */
+	const canRemove = $derived(native && !!app.event && accounts.manages(app.event));
+	/**
+	 * The owner chooses admins: one person at a time, who responded signed in (admins are accounts),
+	 * and isn't the owner.
+	 */
+	const adminCandidate = $derived(
+		native &&
+			app.event &&
+			accounts.owns(app.event) &&
+			selectedPeople.length === 1 &&
+			selectedPeople[0].uid &&
+			selectedPeople[0].uid !== app.event.ownerId
+			? selectedPeople[0]
+			: null
+	);
+	const isAdmin = $derived(
+		!!adminCandidate?.uid && !!app.event?.adminUids?.includes(adminCandidate.uid)
+	);
 	/** One person with a password can have it changed or removed, by whoever knows it. */
 	const lockedPerson = $derived(
 		native && selectedPeople.length === 1 && selectedPeople[0].locked ? selectedPeople[0] : null
@@ -39,6 +59,20 @@
 		// Last: with nobody selected, this whole section (and its dialog) goes away.
 		app.setSelected([]);
 	};
+
+	const toggleAdmin = async (person: Person, admin: boolean) => {
+		if (settingAdmin) return;
+		settingAdmin = true;
+		try {
+			await accounts.setAdmin(app.event!.id, person.uid!, admin);
+			if (!app.live) await app.refresh();
+			toast.show(admin ? `${person.name} is now an admin` : `${person.name} is no longer an admin`);
+		} catch (e) {
+			toast.show(e instanceof Error ? e.message : 'Couldn’t change that. Try again.');
+		} finally {
+			settingAdmin = false;
+		}
+	};
 </script>
 
 {#if canRemove || lockedPerson}
@@ -54,6 +88,24 @@
 				>
 					<KeyRound class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 					Password…
+				</button>
+			{/if}
+			{#if adminCandidate}
+				<button
+					class="btn btn-secondary btn-sm w-full"
+					disabled={settingAdmin}
+					onclick={() => toggleAdmin(adminCandidate, !isAdmin)}
+					title={isAdmin
+						? `Stop ${adminCandidate.name} managing this event`
+						: `Let ${adminCandidate.name} manage this event and its people (but not delete it)`}
+				>
+					{#if isAdmin}
+						<ShieldOff class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
+						Remove admin
+					{:else}
+						<ShieldCheck class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
+						Make admin
+					{/if}
 				</button>
 			{/if}
 			{#if canRemove}

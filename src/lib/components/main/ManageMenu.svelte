@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ArrowRightLeft from '@lucide/svelte/icons/arrow-right-left';
+	import LogOut from '@lucide/svelte/icons/log-out';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
 	import Trash2 from '@lucide/svelte/icons/trash-2';
@@ -17,9 +18,15 @@
 	let deleting = $state(false);
 	let transferring = $state(false);
 	let updating = $state(false);
+	let steppingDown = $state(false);
 
-	/** Managing the event as a whole is for its owner; managing people is done from the people list. */
-	const owner = $derived(app.event?.source === 'thentomeet' && accounts.owns(app.event));
+	/**
+	 * Managing the event as a whole is for its owner and admins (admins can't delete or transfer it);
+	 * managing people is done from the people list.
+	 */
+	const native = $derived(app.event?.source === 'thentomeet');
+	const owner = $derived(native && !!app.event && accounts.owns(app.event));
+	const admin = $derived(native && !!app.event && accounts.administers(app.event));
 	/** Accounts that could take over: signed in when they responded, and not the owner already. */
 	const heirs = $derived(
 		app.event
@@ -55,7 +62,7 @@
 	};
 </script>
 
-{#if owner && app.event}
+{#if (owner || admin) && app.event}
 	<div class="relative" {@attach open ? dismissable(() => (open = false)) : undefined}>
 		<button
 			class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"
@@ -89,45 +96,77 @@
 						</span>
 					</button>
 				{/if}
-				<button
-					class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle disabled:opacity-50 disabled:hover:bg-transparent pointer-coarse:py-2.5"
-					role="menuitem"
-					disabled={!heirs.length}
-					onclick={() => {
-						open = false;
-						transferring = true;
-					}}
-				>
-					<ArrowRightLeft
-						class="size-4 shrink-0 text-fg-2 pointer-coarse:size-5"
-						aria-hidden="true"
-					/>
-					<span class="flex-1">
-						<span class="block text-[13px]">Transfer ownership…</span>
-						<span class="block text-[11px] text-fg-3">
-							{heirs.length
-								? 'Hand the event to someone else'
-								: 'Needs someone signed in who’s responded'}
+				{#if admin}
+					<button
+						class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle pointer-coarse:py-2.5"
+						role="menuitem"
+						onclick={() => {
+							open = false;
+							steppingDown = true;
+						}}
+					>
+						<LogOut class="size-4 shrink-0 text-fg-2 pointer-coarse:size-5" aria-hidden="true" />
+						<span class="flex-1">
+							<span class="block text-[13px]">Step down as admin…</span>
+							<span class="block text-[11px] text-fg-3">Only the owner can make you one again</span>
 						</span>
-					</span>
-				</button>
-				<button
-					class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-danger hover:bg-subtle pointer-coarse:py-2.5"
-					role="menuitem"
-					onclick={() => {
-						open = false;
-						deleting = true;
-					}}
-				>
-					<Trash2 class="size-4 shrink-0 pointer-coarse:size-5" aria-hidden="true" />
-					<span class="flex-1">
-						<span class="block text-[13px]">Delete event…</span>
-						<span class="block text-[11px] text-fg-3">And everyone’s responses</span>
-					</span>
-				</button>
+					</button>
+				{/if}
+				{#if owner}
+					<button
+						class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle disabled:opacity-50 disabled:hover:bg-transparent pointer-coarse:py-2.5"
+						role="menuitem"
+						disabled={!heirs.length}
+						onclick={() => {
+							open = false;
+							transferring = true;
+						}}
+					>
+						<ArrowRightLeft
+							class="size-4 shrink-0 text-fg-2 pointer-coarse:size-5"
+							aria-hidden="true"
+						/>
+						<span class="flex-1">
+							<span class="block text-[13px]">Transfer ownership…</span>
+							<span class="block text-[11px] text-fg-3">
+								{heirs.length
+									? 'Hand the event to someone else'
+									: 'Needs someone signed in who’s responded'}
+							</span>
+						</span>
+					</button>
+					<button
+						class="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left text-danger hover:bg-subtle pointer-coarse:py-2.5"
+						role="menuitem"
+						onclick={() => {
+							open = false;
+							deleting = true;
+						}}
+					>
+						<Trash2 class="size-4 shrink-0 pointer-coarse:size-5" aria-hidden="true" />
+						<span class="flex-1">
+							<span class="block text-[13px]">Delete event…</span>
+							<span class="block text-[11px] text-fg-3">And everyone’s responses</span>
+						</span>
+					</button>
+				{/if}
 			</div>
 		{/if}
 	</div>
+
+	{#if steppingDown}
+		<ConfirmDialog
+			title="Step down as admin?"
+			body="You’ll keep your own times here, but won’t be able to manage the event or its people. Only the owner can make you an admin again."
+			confirmLabel="Step down"
+			onconfirm={async () => {
+				await accounts.setAdmin(app.event!.id, accounts.user!.uid, false);
+				if (!app.live) await app.refresh();
+				toast.show('You’re no longer an admin of this event');
+			}}
+			onclose={() => (steppingDown = false)}
+		/>
+	{/if}
 
 	{#if deleting}
 		<ConfirmDialog

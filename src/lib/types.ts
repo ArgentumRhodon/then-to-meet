@@ -41,6 +41,8 @@ export interface W2MEvent {
 	importedFrom?: string;
 	/** ThenToMeet events only: the account that owns the event, who can manage it. */
 	ownerId?: string;
+	/** ThenToMeet events only: accounts the owner made admins, who can manage it but not delete it. */
+	adminUids?: string[];
 }
 
 /** A stretch of time as Unix seconds, `end` exclusive. */

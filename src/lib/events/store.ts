@@ -257,7 +257,9 @@ export const submitResponse = async (
 					return { personId: prior.personId };
 				}
 
-				if (event.responseCount >= MAX_RESPONSES && event.ownerId !== user?.uid) {
+				const manages =
+					user !== null && (event.ownerId === user.uid || !!event.adminUids?.includes(user.uid));
+				if (event.responseCount >= MAX_RESPONSES && !manages) {
 					throw new InvalidInput(
 						`This event is full: it holds up to ${MAX_RESPONSES} people. Ask its owner to make room.`
 					);

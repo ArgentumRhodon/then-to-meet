@@ -68,6 +68,12 @@ describe('sameContent', () => {
 		expect(sameContent(event(), event({ fetchedAt: 999 }))).toBe(true);
 	});
 
+	it('notices a new owner or a change of admins', () => {
+		expect(sameContent(event({ ownerId: 'a' }), event({ ownerId: 'b' }))).toBe(false);
+		expect(sameContent(event(), event({ adminUids: ['b'] }))).toBe(false);
+		expect(sameContent(event({ adminUids: [] }), event())).toBe(true);
+	});
+
 	it('notices a title, a person, a lock, or anyone’s times changing', () => {
 		expect(sameContent(event(), event({ title: 'U' }))).toBe(false);
 		expect(sameContent(event(), event({ noTimes: [{ id: 3, name: 'Cy' }] }))).toBe(false);

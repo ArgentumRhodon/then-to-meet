@@ -205,13 +205,32 @@ list when it's opened, when it's deleted while open, and, for ThenToMeet IDs, on
 `findMissingEvents`). Tests: `syncTransfer.test.ts` (rules), `planResync` in `model.test.ts`,
 `recent.test.ts`, and the new cases in `app.live.test.ts`.
 
-1. Co-owners (transfer is one owner at a time); adding a password to an existing entry (deliberately
-   disallowed). A transfer only checks in the client that the new owner responded; the rules would let
+1. Adding a password to an existing entry (deliberately disallowed). Co-owners were replaced by
+   **admins** (user's choice, 2026-10-05; see below). A transfer only checks in the client that the new owner responded; the rules would let
    an owner write any `ownerId`, which is within the "not particularly tight" stance.
 2. Re-sync never removes people who left the poll, and a poll whose slot length or weekly/dated kind
    changed is refused. It only adds the poll's new times.
 3. Per-account limits (how many events someone can create, how much a user document can hold) can't be
    enforced without a server; the limits below are per event.
+
+## Admins
+
+The user asked for admins instead of co-owners: "every control other than the owner's ability to
+delete the event". Since an admin who could transfer the event could take it and then delete it,
+transferring and choosing admins also stay with the owner; an admin can step down.
+
+- Data: `adminUids` on the event (missing = none), carried to `W2MEvent.adminUids` by `toEvent`.
+  `sameContent` compares `ownerId` and `adminUids`, so live updates redraw when they change.
+- Rules: `managesData()` (owner or admin) replaces the owner checks on response create/delete and
+  secret delete. Event updates: `adminUpdates()` lets an admin change anything but `ownerId`, and
+  `adminUids` only by removing themselves. Event delete is still owner-only.
+- Client: `setAdmin` in `manage.ts` (checks the person responded and isn't the owner),
+  `accounts.administers()` / `manages()`. `deleteEntry` keeps admins in `memberUids`; a transfer to an
+  admin takes them off `adminUids`.
+- UI: **Make admin / Remove admin** in `SelectionManage` (owner only; one selected person with a uid);
+  `ManageMenu` shows to admins with Update from When2Meet and **Step down as admin…**; Transfer and
+  Delete are owner-only. `PeoplePanel` labels the Owner and Admins.
+- Tests: `rules-tests/admins.test.ts`.
 
 ## Abuse limits and read costs
 

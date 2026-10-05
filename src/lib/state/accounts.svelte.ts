@@ -12,13 +12,18 @@ const CANCELLED = ['auth/popup-closed-by-user', 'auth/cancelled-popup-request'];
 /** Errors from our own checks already read well; anything else is turned into plain words. */
 const DOMAIN_ERRORS = ['InvalidInput', 'PasswordRequired', 'WrongPassword', 'NativeEventNotFound'];
 
-const explain = (e: unknown, what: string, ownerOnly = false): Error => {
+/** Who an action is for, so a refusal can say. */
+type Allowed = 'anyone' | 'managers' | 'owner';
+
+const explain = (e: unknown, what: string, allowed: Allowed = 'anyone'): Error => {
 	if (e instanceof Error && DOMAIN_ERRORS.includes(e.name)) return e;
 	if ((e as { code?: string }).code === 'permission-denied') {
 		return new Error(
-			ownerOnly
+			allowed === 'owner'
 				? `Only the event's owner can ${what}, and only while signed in.`
-				: `That wasn't allowed. You can't ${what} right now.`
+				: allowed === 'managers'
+					? `Only the event's owner and admins can ${what}, and only while signed in.`
+					: `That wasn't allowed. You can't ${what} right now.`
 		);
 	}
 	return new Error(`Couldn't ${what}. Check your connection and try again.`);
@@ -194,9 +199,20 @@ class Accounts {
 		return submitResponse(getClientDb(), this.user, eventId, body);
 	}
 
-	/** Whether the signed-in user owns this event, and so can manage it. */
+	/** Whether the signed-in user owns this event: they can do anything to it, deleting included. */
 	owns(event: W2MEvent): boolean {
 		return event.ownerId !== undefined && event.ownerId === this.user?.uid;
+	}
+
+	/** Whether the signed-in user is one of this event's admins (the owner isn't listed as one). */
+	administers(event: W2MEvent): boolean {
+		const uid = this.user?.uid;
+		return uid !== undefined && !!event.adminUids?.includes(uid);
+	}
+
+	/** Whether the signed-in user can manage this event's people and its When2Meet sync. */
+	manages(event: W2MEvent): boolean {
+		return this.owns(event) || this.administers(event);
 	}
 
 	/** Deletes an event and all its responses. Only its owner can. */
@@ -205,17 +221,17 @@ class Accounts {
 			const { db, deleteEvent } = await manage();
 			await deleteEvent(db, eventId);
 		} catch (e) {
-			throw explain(e, 'delete this event', true);
+			throw explain(e, 'delete this event', 'owner');
 		}
 	}
 
-	/** Removes one person's entry (and its password) from an event. Only its owner can. */
+	/** Removes one person's entry (and its password) from an event. Only its owner and admins can. */
 	async deleteEntry(eventId: string, name: string): Promise<void> {
 		try {
 			const { db, deleteEntry } = await manage();
 			await deleteEntry(db, eventId, name);
 		} catch (e) {
-			throw explain(e, 'remove people from this event', true);
+			throw explain(e, 'remove people from this event', 'managers');
 		}
 	}
 
@@ -250,7 +266,7 @@ class Accounts {
 			const { db, resyncWhen2Meet } = await manage();
 			return await resyncWhen2Meet(db, eventId, poll);
 		} catch (e) {
-			throw explain(e, 'update this event');
+			throw explain(e, 'update this event', 'managers');
 		}
 	}
 
@@ -260,7 +276,20 @@ class Accounts {
 			const { db, transferOwnership } = await manage();
 			await transferOwnership(db, eventId, newOwnerUid);
 		} catch (e) {
-			throw explain(e, 'transfer this event', true);
+			throw explain(e, 'transfer this event', 'owner');
+		}
+	}
+
+	/**
+	 * Makes an account that responded an admin of an event, or stops it being one. The owner chooses
+	 * admins; an admin can only step down.
+	 */
+	async setAdmin(eventId: string, uid: string, admin: boolean): Promise<void> {
+		try {
+			const { db, setAdmin } = await manage();
+			await setAdmin(db, eventId, uid, admin);
+		} catch (e) {
+			throw explain(e, 'change who the admins are', 'owner');
 		}
 	}
 

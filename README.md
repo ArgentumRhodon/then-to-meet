@@ -54,7 +54,7 @@ ThenToMeet is moving from reading When2Meet polls to events of its own, owned by
 ### Data model
 
 ```
-events/{eventId}                 owner, title, weekly, slotSeconds, slots[], memberUids[], source, ...
+events/{eventId}                 owner, title, weekly, slotSeconds, slots[], memberUids[], adminUids[], source, ...
 events/{eventId}/responses/{name}  personId, name, uid | null, available[] (slot times), updatedAt, salt?, nonce?, proof?
 events/{eventId}/secrets/{name}    secret (unreadable by anyone; only the rules see it)
 users/{uid}                      theme, heat (the heatmap palette)
@@ -68,6 +68,8 @@ Times are Unix seconds, as everywhere else. `source` is `thentomeet` or `{ when2
 **Limits** (so a public link can't be used to fill the database): a new event's fields are checked for type and size, and an event holds at most 500 people unless its owner adds more. Joining is one write that adds the response and moves the event's `nextPersonId` and `responseCount` up by one, naming the response in `lastJoin`, so the counters and the responses can't drift apart and visitors can't lower them. The app says "This event is full" before the rules have to. Opening a ThenToMeet event follows it live, and that first snapshot is the one read of its responses (it falls back to a plain read if the listener can't start); the server shares a read of an event for 30 seconds between a shared link's page and its preview image.
 
 **Owner controls** (`src/lib/events/manage.ts`): an event's owner can delete the event with everyone's responses, or remove one person's entry along with its password (which also frees the name to be used again). Each control sits with what it acts on: actions on people (**Remove…**, and **Password…** for a person who has one) are in a "Manage" section of the selection card in the people list, and event-level controls are in an owner-only **Manage** menu in the event header: **Delete event…**, **Transfer ownership…** (hands the event to another signed-in person who responded; the old owner stays a member), and, for an imported copy, **Update from When2Meet** (re-reads the poll and brings in new people, new times, and changed times for people nobody has touched here since; anyone who edited, claimed or locked their entry in the copy is left as they are). The Add-your-times dialog stays about your own name, password and times.
+
+**Admins**: the owner can make any signed-in person who responded an admin (**Make admin** / **Remove admin** in the selection card's Manage section, with one person selected). Admins can do everything the owner can except delete the event, transfer it, or choose the admins: they remove people, update an import from When2Meet, and add people past the limit. They can **Step down as admin…** from the Manage menu. The people list marks the owner and admins. Stored as `adminUids` on the event; firestore.rules enforces it, and `rules-tests/admins.test.ts` covers it.
 
 ### Creating events and adding times
 

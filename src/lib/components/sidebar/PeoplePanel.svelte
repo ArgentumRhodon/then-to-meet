@@ -8,7 +8,7 @@
 	import { buildReminder } from '$lib/share/reminder';
 	import { app } from '$lib/state/app.svelte';
 	import { groups, membersIn } from '$lib/state/groups.svelte';
-	import type { Role } from '$lib/types';
+	import type { Person, Role } from '$lib/types';
 	import Avatar from '$lib/ui/Avatar.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
 	import { copyText } from '$lib/ui/toast.svelte';
@@ -83,6 +83,14 @@
 	);
 
 	/** Whether a person's checkbox is on: in the group being edited, or else selected. */
+	/** Who runs a ThenToMeet event, marked by name so it's clear who to ask. */
+	const managerLabel = (person: Person): string | null => {
+		const event = app.event;
+		if (event?.source !== 'thentomeet' || !person.uid) return null;
+		if (person.uid === event.ownerId) return 'Owner';
+		return event.adminUids?.includes(person.uid) ? 'Admin' : null;
+	};
+
 	const isChecked = (id: number) => (editing ? members.has(id) : app.selected.has(id));
 
 	const setChecked = (ids: number[], on: boolean) => {
@@ -223,6 +231,7 @@
 			{@const role = app.roleOf(person.id)}
 			{@const pinned = app.pinnedPerson === person.id}
 			{@const selected = isChecked(person.id)}
+			{@const manager = managerLabel(person)}
 			<li
 				class="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {pinned
 					? 'bg-accent-soft/40 ring-1 ring-accent/60 ring-inset'
@@ -260,6 +269,9 @@
 						>
 							{person.name}
 						</span>
+						{#if manager}
+							<span class="shrink-0 text-[11px] font-medium text-fg-3">{manager}</span>
+						{/if}
 						{#if added.has(person.id)}
 							<span
 								class="shrink-0 rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent-fg"

@@ -8,7 +8,7 @@
 	import { buildReminder } from '$lib/share/reminder';
 	import { app } from '$lib/state/app.svelte';
 	import { groups, membersIn } from '$lib/state/groups.svelte';
-	import type { Role } from '$lib/types';
+	import type { Person, Role } from '$lib/types';
 	import Avatar from '$lib/ui/Avatar.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
 	import { copyText } from '$lib/ui/toast.svelte';
@@ -83,6 +83,14 @@
 	);
 
 	/** Whether a person's checkbox is on: in the group being edited, or else selected. */
+	/** Who runs a ThenToMeet event, marked by name so it's clear who to ask. */
+	const managerLabel = (person: Person): string | null => {
+		const event = app.event;
+		if (event?.source !== 'thentomeet' || !person.uid) return null;
+		if (person.uid === event.ownerId) return 'Owner';
+		return event.adminUids?.includes(person.uid) ? 'Admin' : null;
+	};
+
 	const isChecked = (id: number) => (editing ? members.has(id) : app.selected.has(id));
 
 	const setChecked = (ids: number[], on: boolean) => {
@@ -166,7 +174,7 @@
 		{#if !customized && !groups.items.length}
 			<p class="mt-0.5 text-fg-3">
 				{layout.showHeatmap
-					? 'Tap a role to change it. Hover a name to preview their times, or use the eye to keep them on the grid.'
+					? 'Tap a role to change it, or use the eye to show only their times on the grid.'
 					: 'Tap a role to change it, or tap names to change several at once.'}
 			</p>
 		{/if}
@@ -218,18 +226,18 @@
 	</div>
 
 	<!-- Best times lives beside the heatmap, so a long list can use the whole sidebar. -->
-	<ul class="px-2 pb-3" onpointerleave={() => (app.hoveredPerson = null)}>
+	<ul class="px-2 pb-3">
 		{#each visible as person, index (person.id)}
 			{@const role = app.roleOf(person.id)}
 			{@const pinned = app.pinnedPerson === person.id}
 			{@const selected = isChecked(person.id)}
+			{@const manager = managerLabel(person)}
 			<li
 				class="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {pinned
 					? 'bg-accent-soft/40 ring-1 ring-accent/60 ring-inset'
 					: selected
 						? 'bg-accent-soft/50'
 						: 'hover:bg-subtle'}"
-				onpointerenter={() => (app.hoveredPerson = person.id)}
 			>
 				<input
 					type="checkbox"
@@ -261,6 +269,9 @@
 						>
 							{person.name}
 						</span>
+						{#if manager}
+							<span class="shrink-0 text-[11px] font-medium text-fg-3">{manager}</span>
+						{/if}
 						{#if added.has(person.id)}
 							<span
 								class="shrink-0 rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent-fg"
@@ -285,8 +296,6 @@
 							: `Show only ${person.name}’s times on the grid`}
 						title={pinned ? 'Show everyone again' : `Show only ${person.name}’s times`}
 						onclick={() => (app.pinnedPerson = pinned ? null : person.id)}
-						onfocus={() => (app.hoveredPerson = person.id)}
-						onblur={() => (app.hoveredPerson = null)}
 					>
 						<Eye class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 					</button>

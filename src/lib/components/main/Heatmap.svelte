@@ -18,9 +18,7 @@
 	const event = $derived(app.event!);
 	const grid = $derived(app.grid!);
 	const free = $derived(event.slots.map((slot) => new Set(slot.available)));
-	const spotlit = $derived(event.people.find((p) => p.id === app.spotlight) ?? null);
-	/** Pinned from the sidebar, rather than a preview while hovering someone there. */
-	const spotlightPinned = $derived(!!spotlit && app.spotlight === app.pinnedPerson);
+	const spotlit = $derived(event.people.find((p) => p.id === app.pinnedPerson) ?? null);
 
 	/** CSS grid line for each row, with a thin spacer row wherever the day has a gap. */
 	const layout = $derived.by(() => {
@@ -51,14 +49,15 @@
 	const rowHeight = $derived(grid.rows.length > 64 ? 14 : grid.rows.length > 40 ? 16 : 20);
 
 	const heat = (slot: number): string => {
-		if (app.spotlight !== null) return free[slot].has(app.spotlight) ? mix(80) : 'var(--heat-0)';
+		if (app.pinnedPerson !== null)
+			return free[slot].has(app.pinnedPerson) ? mix(80) : 'var(--heat-0)';
 		return heatColor(app.attendance!.counts[slot], app.attendance!.total);
 	};
 
 	/** Every required person is free but an optional one isn't: striped, so it stands apart. */
-	const isPartial = (slot: number) => app.spotlight === null && !!app.attendance?.partial[slot];
+	const isPartial = (slot: number) => app.pinnedPerson === null && !!app.attendance?.partial[slot];
 	const anyPartial = $derived(
-		app.spotlight === null && !!app.attendance?.partial.some((partial) => partial)
+		app.pinnedPerson === null && !!app.attendance?.partial.some((partial) => partial)
 	);
 
 	const legendSteps = $derived.by(() => {
@@ -271,6 +270,8 @@
 
 	/** Height of the sticky day header, so scrolling a slot into view stops below it. */
 	let headerHeight = $state(0);
+	/** Whether days have slid under the time column, which then gets an edge to sit them under. */
+	let scrolledX = $state(false);
 
 	// Bring a block (or a set's first meeting) into view when it's picked in best times.
 	$effect(() => {
@@ -373,7 +374,7 @@
      page as a framed panel. -->
 <div
 	bind:this={root}
-	class="relative flex min-h-0 flex-col bg-page scheme-dark light:m-3 light:overflow-hidden light:rounded-2xl light:shadow-[0_12px_32px_-14px_rgb(14_42_53/0.45)] light:sm:m-4 {spotlightPinned
+	class="relative flex min-h-0 flex-col bg-page scheme-dark light:m-3 light:overflow-hidden light:rounded-2xl light:shadow-[0_12px_32px_-14px_rgb(14_42_53/0.45)] light:sm:m-4 {spotlit
 		? 'ring-2 ring-accent/70 ring-inset'
 		: ''} {className}"
 >
@@ -383,15 +384,13 @@
 		{#if spotlit}
 			<!-- Loud on purpose: the grid switches to one color, and that needs explaining at a glance. -->
 			<div
-				class="-my-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border py-1 pr-1 pl-1 {spotlightPinned
-					? 'border-accent/60 bg-accent-soft'
-					: 'border-dashed border-line-strong bg-subtle pr-3'}"
+				class="-my-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-accent/60 bg-accent-soft py-1 pr-1 pl-1"
 				role="status"
 			>
 				<span class="flex min-w-0 items-center gap-2">
 					<Avatar id={spotlit.id} name={spotlit.name} size={24} />
 					<span class="truncate text-[13px] text-fg">
-						{spotlightPinned ? 'Only' : 'Previewing'}
+						Only
 						<strong class="font-semibold">{spotlit.name}</strong>’s times
 					</span>
 				</span>
@@ -403,15 +402,13 @@
 						<span class="size-3 rounded-sm bg-heat-0 ring-1 ring-line-strong"></span> Not free
 					</span>
 				</span>
-				{#if spotlightPinned}
-					<button
-						class="btn btn-primary btn-sm rounded-full"
-						onclick={() => (app.pinnedPerson = null)}
-						title="Back to everyone (Esc)"
-					>
-						<X class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" /> Show everyone
-					</button>
-				{/if}
+				<button
+					class="btn btn-primary btn-sm rounded-full"
+					onclick={() => (app.pinnedPerson = null)}
+					title="Back to everyone (Esc)"
+				>
+					<X class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" /> Show everyone
+				</button>
 			</div>
 		{:else}
 			<span class="flex items-center gap-2">
@@ -450,6 +447,7 @@
 		style:scroll-padding-top="{headerHeight}px"
 		style:scroll-padding-left="3.25rem"
 		onscroll={() => {
+			scrolledX = scroller.scrollLeft > 0;
 			if (tipRect) hideTip();
 			queuePlaceCard();
 		}}
@@ -486,8 +484,17 @@
 			></div>
 			<div
 				bind:offsetHeight={headerHeight}
-				class="corner sticky top-0 left-0 z-20 bg-page"
+				class="corner rail sticky top-0 left-0 z-20"
+				class:scrolled={scrolledX}
 				style:grid-row="1"
+				style:grid-column="1"
+			></div>
+			<!-- One backing for the whole time column, so days scroll under it rather than between
+			     the labels. -->
+			<div
+				class="rail sticky left-0 z-[4]"
+				class:scrolled={scrolledX}
+				style:grid-row="2 / -1"
 				style:grid-column="1"
 			></div>
 			{#each grid.days as day, d (day.key)}
@@ -509,7 +516,7 @@
 			{#each grid.rows as row, i (row.minute)}
 				{#if row.hour || i === 0 || row.gapBefore}
 					<div
-						class="sticky left-0 z-[5] bg-page pr-2 text-right text-[11px] leading-none text-fg-3 tabular"
+						class="sticky left-0 z-[5] pr-2 text-right text-[11px] leading-none text-fg-3 tabular"
 						style:grid-row={layout.line[i]}
 						style:grid-column="1"
 					>
@@ -666,6 +673,21 @@
 	}
 	.dimmed .cell:not(.in-held):not(.empty) {
 		opacity: 0.45;
+	}
+	/* The time column's backing. It reaches left over the scroller's padding, which days would
+	   otherwise show through, and once days are scrolled under it, right over the column gap too.
+	   Painted like bg-page so it lines up with the page around it. */
+	.rail::before {
+		content: '';
+		position: absolute;
+		inset: 0 0 0 -1.5rem;
+		background-color: var(--canvas);
+		background-image: var(--glow);
+		background-attachment: fixed;
+	}
+	.rail.scrolled::before {
+		right: -4px;
+		box-shadow: 6px 0 8px -6px rgb(0 0 0 / 0.6);
 	}
 	.block-outline {
 		pointer-events: none;

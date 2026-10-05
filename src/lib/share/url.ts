@@ -1,6 +1,7 @@
 import { clampDuration, DEFAULT_DURATION } from '$lib/analysis/duration';
 import type { MeetingsPerWeek } from '$lib/analysis/meetingSets';
 import type { Roles, TimeRange } from '$lib/types';
+import { isAnyEventId } from '$lib/events/id';
 import { isEventId } from '$lib/w2m/id';
 
 export interface ShareState {
@@ -55,9 +56,9 @@ export const readShareParams = (url: URL): ShareState => {
 	let id = params.get('e');
 	if (!id) {
 		const bare = decodeURIComponent(url.search.slice(1));
-		if (isEventId(bare)) id = bare;
+		if (isEventId(bare)) id = bare; // v1 links only ever held When2Meet IDs
 	}
-	if (!id || !isEventId(id)) return { id: null };
+	if (!id || !isAnyEventId(id)) return { id: null };
 
 	const state: ShareState = { id };
 	const duration = Number(params.get('d'));

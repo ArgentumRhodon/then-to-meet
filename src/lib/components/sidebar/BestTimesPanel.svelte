@@ -77,7 +77,7 @@
 	const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
 </script>
 
-<Section title="Best times" count={total} collapsible={!layout.resultsBeside}>
+<Section title="Best times" count={total} collapsible={!layout.sideColumn}>
 	<div class="space-y-4 px-4 pb-5">
 		<!-- Without the heatmap, a time opened from a shared link shows up here instead. -->
 		{#if !layout.showHeatmap && app.selectedBlocks.length}
@@ -85,8 +85,8 @@
 		{/if}
 
 		<!-- Both controls read the same: label above, full-width segments. Under the heatmap there's
-		     width to set them side by side. -->
-		<div class="space-y-3 sm:grid sm:grid-cols-2 sm:space-y-0 sm:gap-x-6 xl:block xl:space-y-3">
+		     width to set them side by side; in a column of their own they stack. -->
+		<div class="space-y-3 sm:grid sm:grid-cols-2 sm:space-y-0 sm:gap-x-6 lg:block lg:space-y-3">
 			<DurationPicker />
 			<div class="space-y-1.5">
 				<span id="per-week-label" class="block text-[13px] text-fg-2">Meetings a week</span>
@@ -181,7 +181,7 @@
 					{group.title}
 					<span class="ml-1 font-normal text-fg-3 tabular">{group.items.length}</span>
 				</h3>
-				<ul class="grid items-start gap-2 sm:grid-cols-2 xl:grid-cols-1">
+				<ul class="grid items-start gap-2 sm:grid-cols-2 lg:grid-cols-1">
 					{#each open ? group.items : group.items.slice(0, LIMIT) as item (item.id)}
 						{#if sets}
 							<SetCard set={item as MeetingSet} />

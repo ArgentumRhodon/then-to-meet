@@ -1,8 +1,5 @@
-import { browser } from '$app/environment';
 import type { PeopleGroup, Person, Roles } from '$lib/types';
-import { readJson, removeKey, writeJson } from './storage';
-
-const keyFor = (eventId: string) => `ttm:groups:${eventId}`;
+import { userData } from './userData';
 
 const cleanName = (name: string) => name.trim().replace(/\s+/g, ' ');
 const sameName = (a: string, b: string) =>
@@ -35,27 +32,26 @@ export const membersIn = (group: PeopleGroup, people: Person[]): Person[] => {
 	return people.filter((p) => ids.has(p.id));
 };
 
-/** Saved groups of people for the open event. Each event keeps its own groups. */
+/**
+ * Saved groups of people for the open event. Each event keeps its own groups, in the signed-in
+ * user's account (signed out, they last for the visit).
+ */
 class Groups {
 	items = $state.raw<PeopleGroup[]>([]);
 	#eventId: string | null = null;
 
 	/**
-	 * Switches to the groups saved for an event, or clears them for `null`. Groups saved before
-	 * each one had its own roles start from `fallbackRoles`, the roles they used to share.
+	 * Switches to an event's groups (as loaded from the account), or clears them for `null`.
+	 * Groups saved before each one had its own roles start from `fallbackRoles`, the roles they
+	 * used to share.
 	 */
-	load(eventId: string | null, fallbackRoles: Roles = {}) {
+	load(eventId: string | null, stored: PeopleGroup[] = [], fallbackRoles: Roles = {}) {
 		this.#eventId = eventId;
-		const stored = eventId && browser ? readJson<PeopleGroup[]>(keyFor(eventId), []) : [];
-		this.items = Array.isArray(stored)
-			? stored
-					.filter((g) => g?.id && g?.name && Array.isArray(g.members))
-					.map((g) =>
-						g.roles && typeof g.roles === 'object'
-							? g
-							: { ...g, roles: rolesFor(g.members, fallbackRoles) }
-					)
-			: [];
+		this.items = stored.map((g) =>
+			g.roles && typeof g.roles === 'object'
+				? g
+				: { ...g, roles: rolesFor(g.members, fallbackRoles) }
+		);
 	}
 
 	get(id: string | null): PeopleGroup | undefined {
@@ -130,9 +126,7 @@ class Groups {
 
 	#save(items: PeopleGroup[]) {
 		this.items = items;
-		if (!this.#eventId) return;
-		if (items.length) writeJson(keyFor(this.#eventId), items);
-		else removeKey(keyFor(this.#eventId));
+		if (this.#eventId) userData.queueEvent(this.#eventId, { groups: items });
 	}
 }
 

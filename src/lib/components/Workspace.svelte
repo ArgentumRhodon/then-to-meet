@@ -9,6 +9,7 @@
 	import BestTimesPanel from './sidebar/BestTimesPanel.svelte';
 	import EventSwitcher from './sidebar/EventSwitcher.svelte';
 	import PeoplePanel from './sidebar/PeoplePanel.svelte';
+	import RespondCard from './sidebar/RespondCard.svelte';
 
 	/**
 	 * Escape anywhere backs out a step: the one-person view, then a pinned best time or the picked
@@ -57,38 +58,46 @@
 
 	<aside
 		class="relative z-10 border-b border-line bg-panel [grid-area:side] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:shadow-[8px_0_24px_-12px_var(--shadow-tint)]"
-		aria-label="People"
+		aria-label={layout.resultsInSide ? 'People and best times' : 'People'}
 	>
+		<!-- ThenToMeet's own events are answered right here (When2Meet's on When2Meet). Responding is
+		     what most visitors came to do, so it leads the people column. -->
+		{#if app.event?.source === 'thentomeet'}
+			<RespondCard />
+		{/if}
 		<!-- Groups and filters belong to one event, so start fresh when the event changes. -->
 		{#key app.event?.id}
 			<!-- Without the heatmap, best times is the main view, so keep people folded away. -->
 			<PeoplePanel startOpen={layout.showHeatmap} />
 		{/key}
+		<!-- Too narrow for a column of its own: best times joins people, so the heatmap keeps the
+		     whole main area. -->
+		{#if layout.resultsInSide}
+			<BestTimesPanel />
+		{/if}
 	</aside>
 
 	<!-- The results, in reading order: the heatmap, then best times. Wide screens put them side by
-	     side, each with its own scroll; a laptop-width window stacks them in one scrolling column;
-	     narrow ones let the page flow. -->
+	     side, each with its own scroll; narrow ones let the page flow. -->
 	<div
-		class="min-w-0 [grid-area:main] lg:overflow-y-auto xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[minmax(0,1fr)] xl:overflow-hidden"
+		class="min-w-0 [grid-area:main] lg:overflow-hidden xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[minmax(0,1fr)]"
 	>
 		<!-- Too narrow for the grid to read well: best times covers it instead. -->
 		{#if layout.showHeatmap}
-			<main
-				class="min-h-0 lg:flex lg:h-[70dvh] lg:flex-col xl:h-auto"
-				aria-label="Availability heatmap"
-			>
+			<main class="min-h-0 lg:flex lg:h-full lg:flex-col" aria-label="Availability heatmap">
 				<Heatmap class="lg:flex-1" />
 			</main>
 		{/if}
 
-		<div
-			class="bg-panel xl:min-h-0 xl:overflow-y-auto {layout.showHeatmap
-				? 'border-t border-line xl:border-t-0 xl:border-l'
-				: ''}"
-		>
-			<BestTimesPanel />
-		</div>
+		{#if !layout.resultsInSide}
+			<div
+				class="bg-panel xl:min-h-0 xl:overflow-y-auto {layout.showHeatmap
+					? 'border-t border-line xl:border-t-0 xl:border-l'
+					: ''}"
+			>
+				<BestTimesPanel />
+			</div>
+		{/if}
 	</div>
 
 	{#if app.status === 'loading'}

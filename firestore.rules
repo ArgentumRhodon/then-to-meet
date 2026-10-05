@@ -1,0 +1,303 @@
+rules_version = '2';
+
+// ThenToMeet has no server-side Firebase code: the browser reads and writes Firestore directly,
+// and these rules are the only gatekeeper. They follow how When2Meet works, where an event's link
+// is all anyone needs, and are meant to keep honest users honest, not to stop a determined one:
+//   - Anyone with an event's link can read it and everyone's responses.
+//   - Anyone with the link can add themselves by name and set their times, signed in or not, and
+//     can edit anyone's times by entering that name, unless that entry has a password.
+//   - A password is set when an entry is created, and from then on every change to the entry has
+//     to prove it knows the password (see src/lib/events/password.ts for how, and why the proof
+//     can't just be copied from the public entry).
+//   - An account is only needed to create an event, which makes it the owner. Owners can edit and
+//     delete their event and delete responses (which is how a forgotten password is dealt with);
+//     nobody else can.
+//   - An owner can make other accounts admins (`adminUids`). Admins can do everything the owner
+//     can except delete the event, hand it to someone else, or choose who the admins are; they can
+//     step down themselves.
+//   - Only people in an event's memberUids (its owner, and signed-in people who responded) can
+//     list events, so "my events" works and browsing doesn't.
+//   - Limits, so a public link can't be turned into a way to fill the database: a new event's fields
+//     are checked for type and size, and an event holds at most 500 people unless its owner or an
+//     admin adds more. Joining is one write that adds the response and moves the event's counters by one
+//     (and names that response in `lastJoin`), so neither can happen without the other. Only the
+//     owner and admins can lower the counters.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    match /events/{eventId} {
+      function eventPath() {
+        return /databases/$(database)/documents/events/$(eventId);
+      }
+
+      function responsePath(id) {
+        return /databases/$(database)/documents/events/$(eventId)/responses/$(id);
+      }
+
+      function secretPath(id) {
+        return /databases/$(database)/documents/events/$(eventId)/secrets/$(id);
+      }
+
+      function ownsEvent() {
+        return signedIn() && resource.data.ownerId == request.auth.uid;
+      }
+
+      // The owner or an admin of an event, going by that event's data.
+      function managesData(data) {
+        return signedIn()
+          && (data.ownerId == request.auth.uid || request.auth.uid in data.get('adminUids', []));
+      }
+
+      function managesEventDoc() {
+        return managesData(get(eventPath()).data);
+      }
+
+      // An admin changing the event: anything but its owner and its admins, except that they can
+      // take themselves off the list.
+      function adminUpdates() {
+        let before = resource.data.get('adminUids', []).toSet();
+        let after = request.resource.data.get('adminUids', []).toSet();
+        return signedIn()
+          && request.auth.uid in before
+          && request.resource.data.ownerId == resource.data.ownerId
+          && (after == before || after == before.difference([request.auth.uid].toSet()));
+      }
+
+      // What joining or changing a response does to the event.
+      function changed() {
+        return request.resource.data.diff(resource.data).affectedKeys();
+      }
+
+      // A signed-in user adding themselves, and no one else, to memberUids.
+      function addsOnlySelf() {
+        return signedIn()
+          && request.resource.data.memberUids.hasAll(resource.data.memberUids)
+          && request.resource.data.memberUids.toSet().difference(resource.data.memberUids.toSet())
+            .hasOnly([request.auth.uid]);
+      }
+
+      allow get: if true;
+      allow list: if signedIn() && request.auth.uid in resource.data.memberUids;
+
+      // Fields, types and sizes of a new event, so nobody stores junk or a megabyte of title.
+      function validNewEvent() {
+        let d = request.resource.data;
+        return d.keys().hasOnly(['ownerId', 'title', 'weekly', 'slotSeconds', 'slots', 'nextPersonId',
+            'responseCount', 'memberUids', 'source', 'createdAt', 'updatedAt'])
+          && d.keys().hasAll(['ownerId', 'title', 'weekly', 'slotSeconds', 'slots', 'nextPersonId',
+            'responseCount', 'memberUids', 'source', 'createdAt', 'updatedAt'])
+          && d.title is string && d.title.size() > 0 && d.title.size() <= 120
+          && d.weekly is bool
+          && d.slotSeconds in [900, 1800, 3600]
+          && d.slots is list && d.slots.size() <= 5000
+          && d.nextPersonId is int && d.responseCount is int && d.responseCount >= 0
+          && d.memberUids is list && d.memberUids.size() == 1
+          && d.createdAt is number && d.updatedAt is number
+          && d.source is map
+          && d.source.keys().hasOnly(['type', 'id', 'importedAt', 'syncedAt'])
+          && d.source.type in ['thentomeet', 'when2meet']
+          && (!('id' in d.source) || (d.source.id is string && d.source.id.size() <= 40));
+      }
+
+      // Someone other than the owner joining: the counters move up by one, and `lastJoin` names the
+      // one new response that goes in with them (see the responses rules, which require the same).
+      function joinsWithResponse() {
+        let before = resource.data;
+        let after = request.resource.data;
+        return after.nextPersonId == before.nextPersonId + 1
+          && after.responseCount == before.responseCount + 1
+          && after.responseCount <= 500
+          && after.lastJoin is string
+          && !exists(responsePath(after.lastJoin))
+          && existsAfter(responsePath(after.lastJoin));
+      }
+
+      allow create: if signedIn()
+        && request.resource.data.ownerId == request.auth.uid
+        && request.auth.uid in request.resource.data.memberUids
+        && validNewEvent();
+
+      allow update: if ownsEvent()
+        || adminUpdates()
+        // An edit to someone's times, which only notes when the event last changed.
+        || changed().hasOnly(['updatedAt'])
+        || (changed().hasOnly(['updatedAt', 'memberUids']) && addsOnlySelf())
+        || (changed().hasOnly(['nextPersonId', 'responseCount', 'updatedAt', 'lastJoin'])
+          && joinsWithResponse())
+        || (changed().hasOnly(['nextPersonId', 'responseCount', 'updatedAt', 'lastJoin', 'memberUids'])
+          && addsOnlySelf()
+          && joinsWithResponse());
+
+      allow delete: if ownsEvent();
+
+      match /responses/{responseId} {
+        function validResponse() {
+          let d = request.resource.data;
+          return d.keys().hasOnly(['personId', 'name', 'uid', 'available', 'updatedAt', 'salt', 'nonce', 'proof'])
+            && d.keys().hasAll(['personId', 'name', 'uid', 'available', 'updatedAt'])
+            && d.personId is int
+            && d.name is string && d.name.size() > 0 && d.name.size() <= 60
+            && d.available is list && d.available.size() <= 5000
+            && (('salt' in d) == ('nonce' in d))
+            && (!('salt' in d) || (d.salt is string && d.salt.size() <= 80))
+            && (!('nonce' in d) || (d.nonce is string && d.nonce.size() == 32))
+            && (!('proof' in d) || (d.proof is string && d.proof.size() == 64));
+        }
+
+        // The change proves the password: its proof is the hash of the entry's secret (which only
+        // these rules can read), the nonce it has now, and the new one. The rules engine's
+        // toHexString() gives UPPERCASE hex, so it's lowercased to match what the app sends.
+        function provesPassword() {
+          let d = request.resource.data;
+          return ('proof' in d)
+            && d.nonce != resource.data.nonce
+            && d.proof == hashing.sha256(
+              get(secretPath(responseId)).data.secret + '|' + resource.data.nonce + '|' + d.nonce
+            ).toHexString().lower();
+        }
+
+        // A response keeps its person ID and its account. The one change to who it belongs to is a
+        // signed-in user taking over a name no account has claimed yet.
+        function sameOwner() {
+          return request.resource.data.personId == resource.data.personId
+            && (request.resource.data.uid == resource.data.uid
+              || (resource.data.uid == null
+                && signedIn()
+                && request.resource.data.uid == request.auth.uid));
+        }
+
+        // The owner and admins add people freely (an import brings a whole poll). Anyone else adds
+        // one at a time, as the person the event counts next, along with the event's own counters
+        // (which can only go up by one, and name this response in `lastJoin`, so a batch can't slip
+        // in more than the one the count allows). Going by the event after the write is safe, since
+        // only the owner can change who the admins are.
+        function managesEventAfter() {
+          return managesData(getAfter(eventPath()).data);
+        }
+
+        function joins() {
+          let before = get(eventPath()).data;
+          let after = getAfter(eventPath()).data;
+          return request.resource.data.personId == before.nextPersonId
+            && after.nextPersonId == before.nextPersonId + 1
+            && after.responseCount == before.responseCount + 1
+            && after.responseCount <= 500
+            && after.lastJoin == responseId;
+        }
+
+        allow read: if true;
+
+        // existsAfter lets an imported poll's responses go in the same batch as its event, and a
+        // password's secret go in with its entry.
+        allow create: if validResponse()
+          && existsAfter(eventPath())
+          && (managesEventAfter() || joins())
+          && !('proof' in request.resource.data)
+          && (!('salt' in request.resource.data) || existsAfter(secretPath(responseId)))
+          && (request.resource.data.uid == null
+            || (signedIn() && request.resource.data.uid == request.auth.uid));
+
+        // Removing a password is proven the same way, with the word "remove" where the new nonce
+        // would go, since an entry with no password has no nonce to move.
+        function provesRemoval() {
+          return ('proof' in request.resource.data)
+            && request.resource.data.proof == hashing.sha256(
+              get(secretPath(responseId)).data.secret + '|' + resource.data.nonce + '|remove'
+            ).toHexString().lower();
+        }
+
+        // An entry without a password can't be given one later, or anyone could lock out its person.
+        // An entry with one changes only with its proof, and the password itself changes or goes
+        // only along with its secret (see the secrets rules below).
+        allow update: if validResponse()
+          && sameOwner()
+          && (
+            // No password before or after.
+            (!('salt' in resource.data) && !('salt' in request.resource.data))
+            // A password, and a change to the entry with its proof.
+            || (('salt' in resource.data) && ('salt' in request.resource.data)
+              && request.resource.data.salt == resource.data.salt
+              && provesPassword())
+            // The password replaced: a new salt, proven with the old password, and the secret
+            // swapped for a new one in the same write.
+            || (('salt' in resource.data) && ('salt' in request.resource.data)
+              && request.resource.data.salt != resource.data.salt
+              && provesPassword()
+              && existsAfter(secretPath(responseId))
+              && getAfter(secretPath(responseId)).data.secret != get(secretPath(responseId)).data.secret)
+            // The password removed: proven with the old password, and the secret deleted in the
+            // same write.
+            || (('salt' in resource.data) && !('salt' in request.resource.data)
+              && provesRemoval()
+              && !existsAfter(secretPath(responseId)))
+          );
+
+        allow delete: if managesEventDoc();
+      }
+
+      // The secret behind an entry's password. Nobody reads it; the rules above do. It's created
+      // along with its (new) entry, and only ever replaced or deleted as part of a change to that
+      // entry's password that proves the old one (or by the event's owner or an admin, who can
+      // delete it).
+      match /secrets/{secretId} {
+        function entryBefore() {
+          return get(responsePath(secretId)).data;
+        }
+
+        function entryAfter() {
+          return getAfter(responsePath(secretId)).data;
+        }
+
+        allow read: if false;
+
+        allow create: if !exists(responsePath(secretId))
+          && existsAfter(responsePath(secretId))
+          && request.resource.data.keys().hasOnly(['secret'])
+          && request.resource.data.secret is string
+          && request.resource.data.secret.size() == 64;
+
+        // Replaced when the entry's password is: its salt and nonce change together, with a proof
+        // worked out from this (the old) secret.
+        allow update: if request.resource.data.keys().hasOnly(['secret'])
+          && request.resource.data.secret is string
+          && request.resource.data.secret.size() == 64
+          && exists(responsePath(secretId))
+          && existsAfter(responsePath(secretId))
+          && ('salt' in entryBefore())
+          && ('salt' in entryAfter())
+          && entryAfter().salt != entryBefore().salt
+          && entryAfter().nonce != entryBefore().nonce
+          && entryAfter().proof == hashing.sha256(
+            resource.data.secret + '|' + entryBefore().nonce + '|' + entryAfter().nonce
+          ).toHexString().lower();
+
+        // Deleted by the owner or an admin (who delete the entry too), or when the password is
+        // removed from the entry in the same write, with a proof worked out from this secret.
+        allow delete: if managesEventDoc()
+          || (exists(responsePath(secretId))
+            && existsAfter(responsePath(secretId))
+            && ('salt' in entryBefore())
+            && !('salt' in entryAfter())
+            && entryAfter().proof == hashing.sha256(
+              resource.data.secret + '|' + entryBefore().nonce + '|remove'
+            ).toHexString().lower());
+      }
+    }
+
+    // A user's own settings, and their setup and groups for each event they've opened.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
+
+      match /events/{eventId} {
+        allow read, write: if signedIn() && request.auth.uid == uid;
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,5 +1,24 @@
 import type { W2MEvent } from '$lib/types';
 
+/**
+ * Whether two copies of an event say the same thing: the same title, times, people, who is free
+ * when, and who manages it. A fresh copy of an unchanged event differs only in when it was fetched.
+ */
+export const sameContent = (a: W2MEvent, b: W2MEvent): boolean =>
+	a.title === b.title &&
+	a.ownerId === b.ownerId &&
+	(a.adminUids ?? []).join() === (b.adminUids ?? []).join() &&
+	a.weekly === b.weekly &&
+	a.slotSeconds === b.slotSeconds &&
+	a.slots.length === b.slots.length &&
+	a.slots.every(
+		(slot, i) =>
+			slot.time === b.slots[i].time &&
+			slot.available.length === b.slots[i].available.length &&
+			slot.available.every((id, j) => id === b.slots[i].available[j])
+	) &&
+	JSON.stringify([a.people, a.noTimes]) === JSON.stringify([b.people, b.noTimes]);
+
 /** A short fingerprint of each person's marked times, keyed by person ID. */
 export type Snapshot = Record<number, string>;
 

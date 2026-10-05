@@ -1,4 +1,4 @@
-import { getEvent } from '$lib/server/w2m';
+import { loadEvent } from '$lib/server/events/load';
 import { buildPreview, type LinkPreview } from '$lib/share/preview';
 import { sharedView } from '$lib/share/sharedView';
 import { readShareParams } from '$lib/share/url';
@@ -17,8 +17,9 @@ const within = <T>(promise: Promise<T>, ms: number): Promise<T> => {
 };
 
 /**
- * On a first page load of an event link, fetches the event so link unfurlers get a real title,
- * description, and heatmap image, and hands it to the page so it doesn't have to fetch it again.
+ * On a first page load of an event link, fetches the event (from When2Meet or ThenToMeet) so
+ * link unfurlers get a real title, description, and heatmap image, and hands it to the page so
+ * it doesn't have to fetch it again.
  */
 export const load: PageServerLoad = async ({
 	url,
@@ -32,7 +33,8 @@ export const load: PageServerLoad = async ({
 	if (!share.id) return none;
 
 	try {
-		const event = await within(getEvent(share.id, fetch), WAIT_MS);
+		// Reads the event itself, so a page opened right after saving doesn't show an older copy.
+		const event = await within(loadEvent(share.id, fetch, { reread: true }), WAIT_MS);
 		const view = sharedView(event, share);
 		const preview = buildPreview({
 			event,

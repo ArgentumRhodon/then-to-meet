@@ -1,6 +1,10 @@
 export interface Person {
 	id: number;
 	name: string;
+	/** ThenToMeet entries only: this person set a password, so changing their times needs it. */
+	locked?: boolean;
+	/** ThenToMeet entries only: the account that responded under this name, if they were signed in. */
+	uid?: string;
 }
 
 export interface Slot {
@@ -10,6 +14,7 @@ export interface Slot {
 	available: number[];
 }
 
+/** An event as the analysis sees it, whichever service it came from. */
 export interface W2MEvent {
 	id: string;
 	title: string;
@@ -27,6 +32,17 @@ export interface W2MEvent {
 	/** People who signed in but haven't marked any times yet. */
 	noTimes: Person[];
 	fetchedAt: number;
+	/**
+	 * Where the event lives. Missing means When2Meet, so everything already parsed or saved keeps
+	 * its meaning; ThenToMeet's own events (see `$lib/events/model`) say so.
+	 */
+	source?: 'when2meet' | 'thentomeet';
+	/** For a ThenToMeet event imported from When2Meet, the ID of the poll it was copied from. */
+	importedFrom?: string;
+	/** ThenToMeet events only: the account that owns the event, who can manage it. */
+	ownerId?: string;
+	/** ThenToMeet events only: accounts the owner made admins, who can manage it but not delete it. */
+	adminUids?: string[];
 }
 
 /** A stretch of time as Unix seconds, `end` exclusive. */

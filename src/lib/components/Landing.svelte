@@ -4,11 +4,13 @@
 	import ListOrdered from '@lucide/svelte/icons/list-ordered';
 	import UserCheck from '@lucide/svelte/icons/user-check';
 	import { openEvent } from '$lib/navigation';
+	import { accounts } from '$lib/state/accounts.svelte';
 	import { app } from '$lib/state/app.svelte';
 	import { recent } from '$lib/state/recent.svelte';
 	import SettingsMenu from '$lib/ui/SettingsMenu.svelte';
 	import { DEMO_ID } from '$lib/w2m/id';
 	import LinkInput from './LinkInput.svelte';
+	import MyEvents from './MyEvents.svelte';
 	import RecentList from './RecentList.svelte';
 
 	const features = [
@@ -68,8 +70,19 @@
 				>
 					Try a demo event
 				</button>
+				{#if accounts.enabled}
+					<span class="mx-1 text-fg-3" aria-hidden="true">·</span>
+					<a
+						class="font-medium text-accent-fg underline-offset-4 hover:underline pointer-coarse:py-2"
+						href="/new"
+					>
+						Create your own
+					</a>
+				{/if}
 			</p>
 		</div>
+
+		<MyEvents onopen={openEvent} />
 
 		{#if recent.items.length}
 			<section class="mx-auto mt-10 w-full max-w-xl" aria-labelledby="recent-heading">
@@ -86,7 +99,7 @@
 					<div
 						class="flex size-9 items-center justify-center rounded-lg bg-accent-soft text-accent-fg"
 					>
-						<feature.icon class="size-[18px]" aria-hidden="true" />
+						<feature.icon class="size-4.5" aria-hidden="true" />
 					</div>
 					<h3 class="mt-4 text-sm font-semibold">{feature.title}</h3>
 					<p class="mt-1.5 text-sm text-fg-2">{feature.body}</p>

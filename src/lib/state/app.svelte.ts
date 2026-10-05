@@ -11,6 +11,7 @@ import {
 	changesSince,
 	mergeChanges,
 	NO_CHANGES,
+	sameContent,
 	snapshot,
 	type Changes,
 	type Snapshot
@@ -19,25 +20,17 @@ import { clampDuration, DEFAULT_DURATION } from '$lib/analysis/duration';
 import { buildGrid } from '$lib/analysis/grid';
 import { findMeetingSets, type MeetingSet, type MeetingsPerWeek } from '$lib/analysis/meetingSets';
 import { sameRoles, withGroup } from '$lib/analysis/roles';
+import { isNativeEventId } from '$lib/events/id';
+import type { ResyncReport } from '$lib/events/model';
+import { toast } from '$lib/ui/toast.svelte';
 import { shareSearch } from '$lib/share/url';
 import type { Role, Roles, TimeRange, W2MEvent } from '$lib/types';
 import { DEMO_ID } from '$lib/w2m/id';
+import type { EventPrefs } from '$lib/events/userModel';
+import { accounts } from './accounts.svelte';
 import { groups } from './groups.svelte';
 import { recent } from './recent.svelte';
-import { readJson, writeJson } from './storage';
-
-interface EventPrefs {
-	roles?: Roles;
-	duration?: number;
-	zone?: string;
-	/** The group being viewed, if any. */
-	group?: string;
-	/** Name of the group a shared link was showing, when it isn't one of the viewer's own. */
-	sharedGroup?: string;
-	/** Everyone's times as of the last visit, to spot what changed since. */
-	seen?: Snapshot;
-	perWeek?: MeetingsPerWeek;
-}
+import { userData } from './userData';
 
 export interface LoadOverrides {
 	roles?: Roles;
@@ -50,8 +43,6 @@ export interface LoadOverrides {
 	/** The event itself, when the server already fetched it for this page. */
 	event?: W2MEvent | null;
 }
-
-const prefsKey = (id: string) => `ttm:event:${id}`;
 
 export const localZone = (): string => {
 	try {
@@ -66,6 +57,8 @@ class AppState {
 	status = $state<'idle' | 'loading' | 'ready' | 'error'>('idle');
 	error = $state<string | null>(null);
 	refreshing = $state(false);
+	/** Whether the open event is being followed live, so new responses arrive without asking. */
+	live = $state(false);
 
 	/** Each person's role when no group is viewed. Each group keeps its own roles for its members. */
 	roles = $state.raw<Roles>({});
@@ -85,8 +78,7 @@ class AppState {
 
 	/** Slot under the pointer or keyboard focus in the heatmap. */
 	hoveredSlot = $state<number | null>(null);
-	/** Person whose availability the heatmap is showing on its own. */
-	hoveredPerson = $state<number | null>(null);
+	/** Person whose availability the heatmap is showing on its own, picked with their eye button. */
 	pinnedPerson = $state<number | null>(null);
 	/** Time block previewed from best times, and the one clicked to keep highlighted. */
 	hoveredBlock = $state.raw<TimeBlock | null>(null);
@@ -164,7 +156,6 @@ class AppState {
 				: [];
 		});
 	});
-	spotlight = $derived(this.hoveredPerson ?? this.pinnedPerson);
 	/** Slots one meeting takes. */
 	meetingSlots = $derived(
 		this.event ? Math.max(1, Math.ceil((this.duration * 60) / this.event.slotSeconds)) : 1
@@ -203,17 +194,47 @@ class AppState {
 	activeBlocks = $derived(this.previewBlocks ?? this.heldBlocks);
 
 	#loadToken = 0;
+	/** Who was signed in when the open event's setup was loaded; undefined before anything is. */
+	#knownUid: string | null | undefined;
+	#unwatch: (() => void) | null = null;
+	/** The newest copy the live listener has delivered, which a load still in progress picks up. */
+	#latest: W2MEvent | null = null;
+	/** People this browser just saved times for, so their own change isn't announced back to them. */
+	#own = new Set<number>();
 
 	async load(id: string, overrides: LoadOverrides = {}) {
 		const token = ++this.#loadToken;
 		this.status = 'loading';
 		this.error = null;
+		this.#stopWatching();
 		try {
-			const event = overrides.event?.id === id ? overrides.event : await fetchEvent(id);
+			void accounts.init();
+			// What was changed in the event being left goes out before the next one's load begins.
+			void userData.flush();
+			// The saved setup waits on who's signed in, so it's read while the event is fetched.
+			// A ThenToMeet event is opened by following it, so that first snapshot is the one read of its
+			// responses; a copy handed over by the server (a first page load) is followed afterwards.
+			const handedOver = overrides.event?.id === id;
+			const following = !handedOver && isNativeEventId(id);
+			let followed = false;
+			const [loaded, data] = await Promise.all([
+				handedOver
+					? overrides.event!
+					: following
+						? this.#readNative(id, token).then((read) => {
+								followed = read.followed;
+								return read.event;
+							})
+						: fetchEvent(id),
+				userData.loadEvent(id)
+			]);
 			if (token !== this.#loadToken) return;
-			const saved = readJson<EventPrefs>(prefsKey(id), {});
+			// Changes that arrived while the saved setup was still loading are already in.
+			const event = following && this.#latest?.id === id ? this.#latest : loaded;
+			this.#knownUid = accounts.user?.uid ?? null;
+			const saved: EventPrefs = data?.prefs ?? {};
 			const savedRoles = saved.roles ?? {};
-			groups.load(event.id, savedRoles);
+			groups.load(event.id, data?.groups, savedRoles);
 			const savedGroup = groups.get(saved.group ?? null);
 			// A link we wrote ourselves carries the group's view of the roles; restore the saved roles
 			// and group behind it. Anyone else's link is taken as-is, with its group as a label.
@@ -242,10 +263,15 @@ class AppState {
 			this.#seen = tracked ? snapshot(event) : undefined;
 			for (const range of overrides.picks ?? []) this.pick(range.start, range.end, { add: true });
 			this.status = 'ready';
+			this.#own.clear();
 			recent.remember(event);
+			if (following) this.live = followed;
+			else if (isNativeEventId(event.id)) void this.#startWatching(event.id, token);
 		} catch (e) {
 			if (token !== this.#loadToken) return;
 			this.error = e instanceof Error ? e.message : String(e);
+			// A deleted event has nothing left to open, so it leaves the recent list.
+			if (e instanceof Error && e.name === 'NativeEventNotFound') recent.forget(id);
 			// Keep showing the current event if switching to another one failed.
 			this.status = this.event ? 'ready' : 'error';
 		}
@@ -257,27 +283,14 @@ class AppState {
 	 */
 	async refresh({ auto = false } = {}): Promise<Changes | null> {
 		if (!this.event || this.refreshing) return null;
+		// A live event is already current, and reading every response again would only cost reads.
+		if (this.live && isNativeEventId(this.event.id)) return NO_CHANGES;
 		const before = this.event;
 		this.refreshing = true;
 		try {
 			const event = await fetchEvent(before.id, { fresh: !auto });
 			if (this.event?.id !== before.id) return null;
-			const fresh = this.#seen ? changesSince(this.#seen, event) : NO_CHANGES;
-			this.changes = mergeChanges(this.changes, fresh);
-			if (this.#seen) this.#seen = snapshot(event);
-			const blockId = this.pinnedBlock?.id;
-			const setId = this.pinnedSet?.id;
-			this.event = event;
-			this.hoveredBlock = null;
-			this.hoveredSet = null;
-			// Pins point at slot indices, which only hold if the poll's times didn't change. Then keep
-			// them if the same result still exists, so a background refresh doesn't close a card.
-			const sameSlots =
-				before.slots.length === event.slots.length &&
-				before.slots.every((slot, i) => slot.time === event.slots[i].time);
-			this.pinnedBlock = sameSlots && blockId ? this.#findBlock(blockId) : null;
-			this.pinnedSet = sameSlots && setId ? this.#findSet(setId) : null;
-			recent.remember(event);
+			const fresh = this.#apply(event);
 			return fresh;
 		} catch (e) {
 			if (!auto) this.error = e instanceof Error ? e.message : String(e);
@@ -285,6 +298,171 @@ class AppState {
 		} finally {
 			this.refreshing = false;
 		}
+	}
+
+	/**
+	 * Swaps in a newer copy of the open event: notes who responded or changed their times, and keeps
+	 * a pinned result if it's still there. Returns what changed.
+	 */
+	#apply(event: W2MEvent): Changes {
+		const before = this.event!;
+		let fresh = this.#seen ? changesSince(this.#seen, event) : NO_CHANGES;
+		if (this.#own.size) {
+			fresh = {
+				added: fresh.added.filter((id) => !this.#own.has(id)),
+				updated: fresh.updated.filter((id) => !this.#own.has(id))
+			};
+		}
+		this.changes = mergeChanges(this.changes, fresh);
+		if (this.#seen) this.#seen = snapshot(event);
+		const blockId = this.pinnedBlock?.id;
+		const setId = this.pinnedSet?.id;
+		this.event = event;
+		this.hoveredBlock = null;
+		this.hoveredSet = null;
+		// Pins point at slot indices, which only hold if the poll's times didn't change. Then keep
+		// them if the same result still exists, so a background refresh doesn't close a card.
+		const sameSlots =
+			before.slots.length === event.slots.length &&
+			before.slots.every((slot, i) => slot.time === event.slots[i].time);
+		this.pinnedBlock = sameSlots && blockId ? this.#findBlock(blockId) : null;
+		this.pinnedSet = sameSlots && setId ? this.#findSet(setId) : null;
+		recent.remember(event, { opened: false });
+		return fresh;
+	}
+
+	/**
+	 * Reads a ThenToMeet event by following it, or the plain way if the listener won't start. A
+	 * missing event is final either way.
+	 */
+	async #readNative(id: string, token: number): Promise<{ event: W2MEvent; followed: boolean }> {
+		try {
+			return { event: await this.#openNative(id, token), followed: true };
+		} catch (e) {
+			if ((e as Error).name === 'NativeEventNotFound') throw e;
+			return { event: await fetchEvent(id), followed: false };
+		}
+	}
+
+	/**
+	 * Opens a ThenToMeet event by following it: resolves with the first complete snapshot, which
+	 * stands in for a separate read of the event, and keeps following afterwards. Rejects if there
+	 * is none (the event is gone, or the listener couldn't start or stalled).
+	 */
+	#openNative(id: string, token: number): Promise<W2MEvent> {
+		this.#latest = null;
+		return new Promise<W2MEvent>((resolve, reject) => {
+			let settled = false;
+			let dead = false;
+			const fail = (e: unknown) => {
+				if (settled) return;
+				settled = dead = true;
+				clearTimeout(timer);
+				this.#stopWatching();
+				const error = e as Error;
+				reject(
+					error?.name === 'NativeEventNotFound'
+						? error
+						: new Error("Couldn't load that ThenToMeet event. Check your connection and try again.")
+				);
+			};
+			const timer = setTimeout(() => fail(new Error('Timed out')), OPEN_TIMEOUT_MS);
+			if (!accounts.enabled) {
+				fail(new Error('No event found at that link.'));
+				return;
+			}
+			accounts
+				.watchEvent(
+					id,
+					(event) => {
+						if (token !== this.#loadToken || dead) return;
+						this.#latest = event;
+						if (!settled) {
+							settled = true;
+							clearTimeout(timer);
+							resolve(event);
+						} else {
+							this.#onLive(event, id);
+						}
+					},
+					(error) => {
+						if (token !== this.#loadToken || dead) return;
+						if (!settled) fail(error);
+						else this.#onWatchError(error, id);
+					}
+				)
+				.then(
+					(stop) => {
+						if (dead || token !== this.#loadToken) stop();
+						else this.#unwatch = stop;
+					},
+					(e) => fail(e)
+				);
+		});
+	}
+
+	#onWatchError(error: Error, id: string) {
+		if (this.event?.id !== id) return;
+		this.live = false;
+		// Gone for good: say so. Anything else (a dropped connection) falls back to polling.
+		if (error.name === 'NativeEventNotFound') {
+			this.error = 'This event was deleted.';
+			recent.forget(id);
+		}
+	}
+
+	/** Follows a ThenToMeet event as it changes, so responses show up without refreshing. */
+	async #startWatching(id: string, token: number) {
+		try {
+			const stop = await accounts.watchEvent(
+				id,
+				(event) => this.#onLive(event, id),
+				(error) => this.#onWatchError(error, id)
+			);
+			if (token !== this.#loadToken) stop();
+			else this.#unwatch = stop;
+		} catch {
+			// No live updates; the page's polling covers it.
+		}
+	}
+
+	#stopWatching() {
+		this.#unwatch?.();
+		this.#unwatch = null;
+		this.live = false;
+	}
+
+	#onLive(event: W2MEvent, id: string) {
+		if (this.event?.id !== id) return;
+		this.live = true;
+		// Most snapshots only touch bookkeeping (a counter, a timestamp); there's nothing to redraw.
+		if (sameContent(this.event, event)) return;
+		const fresh = this.#apply(event);
+		const parts = [
+			fresh.added.length &&
+				`${fresh.added.length} new ${fresh.added.length === 1 ? 'response' : 'responses'}`,
+			fresh.updated.length && `${fresh.updated.length} updated`
+		].filter(Boolean);
+		if (parts.length) toast.show(parts.join(', '));
+	}
+
+	/**
+	 * Brings an imported event up to date with its When2Meet poll, for its owner or an admin. Returns what
+	 * changed, and what it did to people is not announced again by the live update.
+	 */
+	async resyncImport(): Promise<ResyncReport> {
+		const event = this.event;
+		if (!event?.importedFrom) throw new Error("This event wasn't imported from When2Meet.");
+		const poll = await fetchEvent(event.importedFrom, { fresh: true });
+		const report = await accounts.resyncWhen2Meet(event.id, poll);
+		for (const personId of report.touched) this.noteOwn(personId);
+		if (!this.live) await this.refresh();
+		return report;
+	}
+
+	/** Records that this browser just saved this person's times, so their own change isn't announced. */
+	noteOwn(personId: number) {
+		this.#own.add(personId);
 	}
 
 	#findBlock(id: string): TimeBlock | null {
@@ -310,6 +488,8 @@ class AppState {
 
 	reset() {
 		this.#loadToken++;
+		this.#stopWatching();
+		this.#own.clear();
 		this.event = null;
 		this.status = 'idle';
 		this.error = null;
@@ -548,7 +728,10 @@ class AppState {
 			: '';
 	}
 
-	/** Saves this event's setup (roles, group, duration, and so on) so it comes back next visit. */
+	/**
+	 * Saves this event's setup (roles, group, duration, and so on) to the signed-in user's account
+	 * so it comes back next visit. Signed out, it's only kept for this visit.
+	 */
 	persist() {
 		if (!this.event) return;
 		const prefs: EventPrefs = { roles: this.roles, duration: this.duration };
@@ -557,12 +740,23 @@ class AppState {
 		if (this.group) prefs.group = this.group.id;
 		else if (this.sharedGroup) prefs.sharedGroup = this.sharedGroup;
 		if (this.#seen) prefs.seen = this.#seen;
-		writeJson(prefsKey(this.event.id), prefs);
+		userData.queueEvent(this.event.id, { prefs });
+	}
+
+	/**
+	 * Called when someone signs in or out with an event open. Signing in brings that event's saved
+	 * setup back, replacing the visit's own; if nothing was saved, what's on screen is saved.
+	 */
+	async accountChanged(uid: string | null) {
+		if (this.#knownUid === undefined || this.#knownUid === uid) return;
+		this.#knownUid = uid;
+		const event = this.event;
+		if (!event || !uid) return;
+		if (await userData.loadEvent(event.id)) await this.load(event.id, { event });
 	}
 
 	clearHighlights() {
 		this.hoveredSlot = null;
-		this.hoveredPerson = null;
 		this.pinnedPerson = null;
 		this.hoveredBlock = null;
 		this.pinnedBlock = null;
@@ -580,7 +774,12 @@ const overlaps = (a: TimeRange, b: TimeRange) => a.start < b.end && b.start < a.
 export const withRange = (ranges: TimeRange[], range: TimeRange): TimeRange[] =>
 	[...ranges.filter((r) => !overlaps(r, range)), range].sort((a, b) => a.start - b.start);
 
+/** Longest to wait for a ThenToMeet event's first snapshot before reading it the plain way. */
+const OPEN_TIMEOUT_MS = 15_000;
+
 const fetchEvent = async (id: string, { fresh = false } = {}): Promise<W2MEvent> => {
+	// ThenToMeet's own events come straight from Firestore; When2Meet's go through the server.
+	if (isNativeEventId(id)) return accounts.loadEvent(id);
 	let response: Response;
 	try {
 		response = await fetch(`/api/event/${encodeURIComponent(id)}${fresh ? '?fresh=1' : ''}`);

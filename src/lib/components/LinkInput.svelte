@@ -1,6 +1,6 @@
 <script lang="ts">
 	import ArrowRight from '@lucide/svelte/icons/arrow-right';
-	import { extractEventId } from '$lib/w2m/id';
+	import { extractAnyEventId } from '$lib/events/id';
 
 	let {
 		onsubmit,
@@ -13,7 +13,7 @@
 	const hintId = $props.id();
 
 	const submit = (raw: string) => {
-		const id = extractEventId(raw);
+		const id = extractAnyEventId(raw);
 		invalid = !id;
 		if (id) {
 			value = '';
@@ -29,7 +29,7 @@
 	// Loading on paste saves a click in the common case.
 	const onpaste = (e: ClipboardEvent) => {
 		const text = e.clipboardData?.getData('text') ?? '';
-		if (extractEventId(text)) {
+		if (extractAnyEventId(text)) {
 			e.preventDefault();
 			submit(text);
 		}

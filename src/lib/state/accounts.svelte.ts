@@ -63,7 +63,7 @@ class Accounts {
 	enabled = accountsEnabled();
 	user = $state.raw<SessionUser | null>(null);
 	/** The name last used to add times, so the next form can start with it. For this visit only. */
-	lastName = '';
+	lastName = $state('');
 	/** Whether Firebase has said who's signed in yet (or there's no Firebase to ask). */
 	resolved = $state(false);
 	/** Settles when `resolved` turns true, for code that must know who's signed in before it reads. */

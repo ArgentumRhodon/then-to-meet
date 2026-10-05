@@ -3,6 +3,8 @@ export interface Person {
 	name: string;
 	/** ThenToMeet entries only: this person set a password, so changing their times needs it. */
 	locked?: boolean;
+	/** ThenToMeet entries only: the account that responded under this name, if they were signed in. */
+	uid?: string;
 }
 
 export interface Slot {

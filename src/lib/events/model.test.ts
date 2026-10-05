@@ -168,6 +168,17 @@ describe('toEvent', () => {
 		expect(event.noTimes).toEqual([{ id: 2, name: 'Bo' }]);
 	});
 
+	it('keeps which account answered under a name, so the page can tell which entry is yours', () => {
+		const event = toEvent('abc', doc, [
+			{ ...response(1, 'Ada', [100]), uid: 'uid-ada' },
+			response(2, 'Bo', [100])
+		]);
+		expect(event.people).toEqual([
+			{ id: 1, name: 'Ada', uid: 'uid-ada' },
+			{ id: 2, name: 'Bo' }
+		]);
+	});
+
 	it('works for an event nobody has answered yet', () => {
 		const event = toEvent('abc', doc, []);
 		expect(event.people).toEqual([]);

@@ -2,7 +2,6 @@
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import ExternalLink from '@lucide/svelte/icons/external-link';
 	import Import from '@lucide/svelte/icons/import';
-	import Pencil from '@lucide/svelte/icons/pencil';
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import X from '@lucide/svelte/icons/x';
 	import { DateTime } from 'luxon';
@@ -15,7 +14,6 @@
 	import { toast } from '$lib/ui/toast.svelte';
 	import { DEMO_ID, eventUrl } from '$lib/w2m/id';
 	import ManageMenu from './ManageMenu.svelte';
-	import RespondDialog from './RespondDialog.svelte';
 	import ShareMenu from './ShareMenu.svelte';
 
 	let { class: className = '' }: { class?: string } = $props();
@@ -29,9 +27,6 @@
 		accounts.enabled && event.source !== 'thentomeet' && isImportableId(event.id)
 	);
 	let importing = $state(false);
-	// ThenToMeet's own events can be answered right here; When2Meet's are answered on When2Meet.
-	const native = $derived(event.source === 'thentomeet');
-	let responding = $state(false);
 
 	/** Copies this When2Meet poll into the signed-in account (signing in first), then opens it. */
 	const importEvent = async () => {
@@ -147,16 +142,6 @@
 			</p>
 		</div>
 		<div class="flex flex-wrap items-center gap-1.5">
-			{#if native}
-				<button
-					class="btn btn-primary h-8 gap-1.5 px-2.5 text-[13px]"
-					onclick={() => (responding = true)}
-					title="Mark when you’re free"
-				>
-					<Pencil class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
-					Add your times
-				</button>
-			{/if}
 			<ManageMenu />
 			{#if canImport}
 				<button
@@ -189,10 +174,6 @@
 			</div>
 		</div>
 	</div>
-
-	{#if responding}
-		<RespondDialog onclose={() => (responding = false)} />
-	{/if}
 
 	{#if app.error}
 		<div

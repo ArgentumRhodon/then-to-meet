@@ -9,6 +9,7 @@
 	import BestTimesPanel from './sidebar/BestTimesPanel.svelte';
 	import EventSwitcher from './sidebar/EventSwitcher.svelte';
 	import PeoplePanel from './sidebar/PeoplePanel.svelte';
+	import RespondCard from './sidebar/RespondCard.svelte';
 
 	/**
 	 * Escape anywhere backs out a step: the one-person view, then a pinned best time or the picked
@@ -59,6 +60,11 @@
 		class="relative z-10 border-b border-line bg-panel [grid-area:side] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:shadow-[8px_0_24px_-12px_var(--shadow-tint)]"
 		aria-label="People"
 	>
+		<!-- ThenToMeet's own events are answered right here (When2Meet's on When2Meet). Responding is
+		     what most visitors came to do, so it leads the people column. -->
+		{#if app.event?.source === 'thentomeet'}
+			<RespondCard />
+		{/if}
 		<!-- Groups and filters belong to one event, so start fresh when the event changes. -->
 		{#key app.event?.id}
 			<!-- Without the heatmap, best times is the main view, so keep people folded away. -->

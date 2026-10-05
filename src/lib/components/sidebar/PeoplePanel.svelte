@@ -166,7 +166,7 @@
 		{#if !customized && !groups.items.length}
 			<p class="mt-0.5 text-fg-3">
 				{layout.showHeatmap
-					? 'Tap a role to change it. Hover a name to preview their times, or use the eye to keep them on the grid.'
+					? 'Tap a role to change it, or use the eye to show only their times on the grid.'
 					: 'Tap a role to change it, or tap names to change several at once.'}
 			</p>
 		{/if}
@@ -218,7 +218,7 @@
 	</div>
 
 	<!-- Best times lives beside the heatmap, so a long list can use the whole sidebar. -->
-	<ul class="px-2 pb-3" onpointerleave={() => (app.hoveredPerson = null)}>
+	<ul class="px-2 pb-3">
 		{#each visible as person, index (person.id)}
 			{@const role = app.roleOf(person.id)}
 			{@const pinned = app.pinnedPerson === person.id}
@@ -229,7 +229,6 @@
 					: selected
 						? 'bg-accent-soft/50'
 						: 'hover:bg-subtle'}"
-				onpointerenter={() => (app.hoveredPerson = person.id)}
 			>
 				<input
 					type="checkbox"
@@ -285,8 +284,6 @@
 							: `Show only ${person.name}’s times on the grid`}
 						title={pinned ? 'Show everyone again' : `Show only ${person.name}’s times`}
 						onclick={() => (app.pinnedPerson = pinned ? null : person.id)}
-						onfocus={() => (app.hoveredPerson = person.id)}
-						onblur={() => (app.hoveredPerson = null)}
 					>
 						<Eye class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
 					</button>

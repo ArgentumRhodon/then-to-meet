@@ -85,6 +85,7 @@ export const toEvent = (
 	for (const r of ordered) {
 		const person: Person = { id: r.personId, name: r.name };
 		if (r.salt !== undefined) person.locked = true;
+		if (r.uid) person.uid = r.uid;
 		(r.available.length ? people : noTimes).push(person);
 		for (const time of r.available) {
 			const list = free.get(time);

@@ -18,9 +18,7 @@
 	const event = $derived(app.event!);
 	const grid = $derived(app.grid!);
 	const free = $derived(event.slots.map((slot) => new Set(slot.available)));
-	const spotlit = $derived(event.people.find((p) => p.id === app.spotlight) ?? null);
-	/** Pinned from the sidebar, rather than a preview while hovering someone there. */
-	const spotlightPinned = $derived(!!spotlit && app.spotlight === app.pinnedPerson);
+	const spotlit = $derived(event.people.find((p) => p.id === app.pinnedPerson) ?? null);
 
 	/** CSS grid line for each row, with a thin spacer row wherever the day has a gap. */
 	const layout = $derived.by(() => {
@@ -51,14 +49,15 @@
 	const rowHeight = $derived(grid.rows.length > 64 ? 14 : grid.rows.length > 40 ? 16 : 20);
 
 	const heat = (slot: number): string => {
-		if (app.spotlight !== null) return free[slot].has(app.spotlight) ? mix(80) : 'var(--heat-0)';
+		if (app.pinnedPerson !== null)
+			return free[slot].has(app.pinnedPerson) ? mix(80) : 'var(--heat-0)';
 		return heatColor(app.attendance!.counts[slot], app.attendance!.total);
 	};
 
 	/** Every required person is free but an optional one isn't: striped, so it stands apart. */
-	const isPartial = (slot: number) => app.spotlight === null && !!app.attendance?.partial[slot];
+	const isPartial = (slot: number) => app.pinnedPerson === null && !!app.attendance?.partial[slot];
 	const anyPartial = $derived(
-		app.spotlight === null && !!app.attendance?.partial.some((partial) => partial)
+		app.pinnedPerson === null && !!app.attendance?.partial.some((partial) => partial)
 	);
 
 	const legendSteps = $derived.by(() => {
@@ -373,7 +372,7 @@
      page as a framed panel. -->
 <div
 	bind:this={root}
-	class="relative flex min-h-0 flex-col bg-page scheme-dark light:m-3 light:overflow-hidden light:rounded-2xl light:shadow-[0_12px_32px_-14px_rgb(14_42_53/0.45)] light:sm:m-4 {spotlightPinned
+	class="relative flex min-h-0 flex-col bg-page scheme-dark light:m-3 light:overflow-hidden light:rounded-2xl light:shadow-[0_12px_32px_-14px_rgb(14_42_53/0.45)] light:sm:m-4 {spotlit
 		? 'ring-2 ring-accent/70 ring-inset'
 		: ''} {className}"
 >
@@ -383,15 +382,13 @@
 		{#if spotlit}
 			<!-- Loud on purpose: the grid switches to one color, and that needs explaining at a glance. -->
 			<div
-				class="-my-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border py-1 pr-1 pl-1 {spotlightPinned
-					? 'border-accent/60 bg-accent-soft'
-					: 'border-dashed border-line-strong bg-subtle pr-3'}"
+				class="-my-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-accent/60 bg-accent-soft py-1 pr-1 pl-1"
 				role="status"
 			>
 				<span class="flex min-w-0 items-center gap-2">
 					<Avatar id={spotlit.id} name={spotlit.name} size={24} />
 					<span class="truncate text-[13px] text-fg">
-						{spotlightPinned ? 'Only' : 'Previewing'}
+						Only
 						<strong class="font-semibold">{spotlit.name}</strong>’s times
 					</span>
 				</span>
@@ -403,15 +400,13 @@
 						<span class="size-3 rounded-sm bg-heat-0 ring-1 ring-line-strong"></span> Not free
 					</span>
 				</span>
-				{#if spotlightPinned}
-					<button
-						class="btn btn-primary btn-sm rounded-full"
-						onclick={() => (app.pinnedPerson = null)}
-						title="Back to everyone (Esc)"
-					>
-						<X class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" /> Show everyone
-					</button>
-				{/if}
+				<button
+					class="btn btn-primary btn-sm rounded-full"
+					onclick={() => (app.pinnedPerson = null)}
+					title="Back to everyone (Esc)"
+				>
+					<X class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" /> Show everyone
+				</button>
 			</div>
 		{:else}
 			<span class="flex items-center gap-2">

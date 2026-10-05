@@ -77,8 +77,7 @@ class AppState {
 
 	/** Slot under the pointer or keyboard focus in the heatmap. */
 	hoveredSlot = $state<number | null>(null);
-	/** Person whose availability the heatmap is showing on its own. */
-	hoveredPerson = $state<number | null>(null);
+	/** Person whose availability the heatmap is showing on its own, picked with their eye button. */
 	pinnedPerson = $state<number | null>(null);
 	/** Time block previewed from best times, and the one clicked to keep highlighted. */
 	hoveredBlock = $state.raw<TimeBlock | null>(null);
@@ -156,7 +155,6 @@ class AppState {
 				: [];
 		});
 	});
-	spotlight = $derived(this.hoveredPerson ?? this.pinnedPerson);
 	/** Slots one meeting takes. */
 	meetingSlots = $derived(
 		this.event ? Math.max(1, Math.ceil((this.duration * 60) / this.event.slotSeconds)) : 1
@@ -648,7 +646,6 @@ class AppState {
 
 	clearHighlights() {
 		this.hoveredSlot = null;
-		this.hoveredPerson = null;
 		this.pinnedPerson = null;
 		this.hoveredBlock = null;
 		this.pinnedBlock = null;

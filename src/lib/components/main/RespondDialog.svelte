@@ -8,13 +8,14 @@
 	import { toast } from '$lib/ui/toast.svelte';
 	import AvailabilityPicker from './AvailabilityPicker.svelte';
 
-	let { onclose }: { onclose: () => void } = $props();
+	let { onclose, startName }: { onclose: () => void; startName?: string } = $props();
 
 	const event = $derived(app.event!);
 	const grid = $derived(app.grid!);
 
 	let dialog = $state<HTMLDialogElement>();
-	let name = $state(accounts.lastName || accounts.user?.name || '');
+	// svelte-ignore state_referenced_locally
+	let name = $state(startName || accounts.lastName || accounts.user?.name || '');
 	let password = $state('');
 	let selected = $state.raw<ReadonlySet<number>>(new Set());
 	let busy = $state(false);

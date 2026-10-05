@@ -108,7 +108,10 @@
 				{existing ? `Edit ${existing.name}’s times` : 'Add your times'}
 			</h2>
 			<p class="mt-0.5 text-[13px] text-fg-2">
-				Click or drag to mark when you’re free. Times are shown in {grid.zone.replaceAll('_', ' ')}.
+				Click, tap or drag to mark when you’re free. Times are shown in {grid.zone.replaceAll(
+					'_',
+					' '
+				)}.
 			</p>
 		</header>
 

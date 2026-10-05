@@ -1,4 +1,5 @@
 <script lang="ts">
+	import Paintbrush from '@lucide/svelte/icons/paintbrush';
 	import { formatMinuteOfDay } from '$lib/analysis/format';
 	import type { Grid } from '$lib/analysis/grid';
 
@@ -76,10 +77,24 @@
 		onchange(next);
 	};
 
+	/**
+	 * Touch painting is opt-in: a finger on the grid has to be able to scroll the page and the
+	 * grid, so unless this is on, touch only taps single cells.
+	 */
+	let painting = $state(false);
+	/** A touch that might turn out to be a tap; it becomes a scroll if the finger moves. */
+	let tap: { id: number; slot: number; x: number; y: number } | null = null;
+	const TAP_SLOP = 8;
+
 	const onpointerdown = (e: PointerEvent) => {
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
 		const slot = cellAt(e.clientX, e.clientY);
 		if (slot === null) return;
+		if (e.pointerType === 'touch' && !painting) {
+			// Marking waits for the finger to lift, so starting a scroll on a cell doesn't mark it.
+			tap = { id: e.pointerId, slot, x: e.clientX, y: e.clientY };
+			return;
+		}
 		// The first cell decides whether the drag marks or clears.
 		mode = selected.has(slot) ? 'remove' : 'add';
 		drag = { anchor: slot, base: selected };
@@ -89,6 +104,10 @@
 	};
 
 	const onpointermove = (e: PointerEvent) => {
+		if (tap?.id === e.pointerId) {
+			if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_SLOP) tap = null;
+			return;
+		}
 		if (!drag) return;
 		const slot = cellAt(e.clientX, e.clientY);
 		if (slot !== null) stretchTo(slot);
@@ -97,6 +116,21 @@
 	const end = () => {
 		mode = null;
 		drag = null;
+	};
+
+	const onpointerup = (e: PointerEvent) => {
+		if (tap?.id === e.pointerId) {
+			const { slot } = tap;
+			tap = null;
+			if (cellAt(e.clientX, e.clientY) === slot) set([slot], !selected.has(slot));
+			return;
+		}
+		end();
+	};
+
+	const onpointercancel = () => {
+		tap = null;
+		end();
 	};
 
 	/** Arrow keys walk the cells, Space or Enter turns one on or off. */
@@ -123,11 +157,30 @@
 	};
 </script>
 
+<!-- Only where a touch screen is present; with a mouse, dragging always paints. -->
+<div class="touch-only mb-2 items-center gap-3">
+	<button
+		type="button"
+		class="btn btn-secondary btn-sm shrink-0 aria-pressed:border-accent aria-pressed:bg-accent-soft"
+		aria-pressed={painting}
+		onclick={() => (painting = !painting)}
+	>
+		<Paintbrush class="size-3.5" aria-hidden="true" />
+		Drag to paint
+	</button>
+	<p class="text-xs text-fg-3" aria-live="polite">
+		{painting
+			? 'Drag over times to mark them. Turn this off to scroll.'
+			: 'Tap times to mark them, or turn on Drag to paint.'}
+	</p>
+</div>
+
 <div class="overflow-x-auto">
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<div
 		bind:this={gridEl}
 		class="picker grid"
+		class:painting
 		style:grid-template-columns="3rem repeat({grid.days.length}, minmax(2.75rem, 1fr))"
 		style:max-width="{3 + grid.days.length * 9}rem"
 		role="grid"
@@ -135,8 +188,8 @@
 		tabindex="0"
 		{onpointerdown}
 		{onpointermove}
-		onpointerup={end}
-		onpointercancel={end}
+		{onpointerup}
+		{onpointercancel}
 		onfocus={() => (cursor ??= { day: 0, row: 0 })}
 		onblur={() => (cursor = null)}
 		{onkeydown}
@@ -216,13 +269,34 @@
 		outline-offset: 4px;
 		border-radius: 8px;
 	}
-	/* Vertical swipes scroll the page on a touch screen, so painting there is by tapping or by
-	   swiping sideways; a day or hour label fills a whole line at once. */
+	.picker {
+		--cell-height: 1.25rem;
+	}
+	/* Fingers are less exact than a mouse, so the cells grow. */
+	@media (pointer: coarse) {
+		.picker {
+			--cell-height: 1.75rem;
+		}
+	}
+	.touch-only {
+		display: none;
+	}
+	@media (any-pointer: coarse) {
+		.touch-only {
+			display: flex;
+		}
+	}
+	/* A touch scrolls the page and the grid, and marks a single cell on a tap. Only the paint mode
+	   gives the grid the finger, so dragging marks instead of scrolling. */
 	.cell {
-		touch-action: pan-y;
+		touch-action: manipulation;
+		-webkit-touch-callout: none;
+	}
+	.picker.painting .cell {
+		touch-action: none;
 	}
 	.cell {
-		height: 1.25rem;
+		height: var(--cell-height);
 		background: color-mix(in oklab, var(--fg) 9%, transparent);
 		transition: background-color 80ms;
 	}
@@ -232,21 +306,26 @@
 	.cell.empty {
 		background: transparent;
 	}
-	.cell:not(.empty):hover {
-		background: color-mix(in oklab, var(--accent) 35%, transparent);
+	/* Hover only where there is a pointer to hover with, or a tapped cell would stay lit. */
+	@media (hover: hover) {
+		.cell:not(.empty):hover {
+			background: color-mix(in oklab, var(--accent) 35%, transparent);
+		}
 	}
 	.cell.on {
 		background: var(--accent);
 	}
-	.cell.on:hover {
-		background: var(--accent-hover);
+	@media (hover: hover) {
+		.cell.on:hover {
+			background: var(--accent-hover);
+		}
 	}
 	.picker:focus-visible .cell.cursor {
 		outline: 2px solid var(--fg);
 		outline-offset: -2px;
 	}
 	.label {
-		height: 1.25rem;
+		height: var(--cell-height);
 		display: flex;
 		align-items: flex-start;
 	}

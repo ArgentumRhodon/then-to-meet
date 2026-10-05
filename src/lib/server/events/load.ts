@@ -10,6 +10,19 @@ import { EventLoadError, getEvent } from '../w2m';
 const TIMEOUT_MS = 10_000;
 
 /**
+ * How long a read of a ThenToMeet event is reused. Opening a shared link reads the event for the
+ * page and again for its preview image (and each unfurler does both), and every read is one per
+ * response, so a burst of them shares one. The page itself follows the event live, so nobody
+ * looking at it sees these seconds-old copies for long.
+ */
+export const CACHE_MS = 30_000;
+const MAX_CACHED = 100;
+const cache = new Map<string, { at: number; event: Promise<W2MEvent> }>();
+
+/** Forgets what was read, for tests. */
+export const clearEventCache = () => cache.clear();
+
+/**
  * Loads an event from wherever it lives: When2Meet (fetched and parsed, as always) or ThenToMeet's
  * own store. Both come back as the same `W2MEvent`, so nothing past this point cares which. The
  * server reads Firestore as a signed-out visitor, which the rules allow for anyone with the link.
@@ -17,18 +30,32 @@ const TIMEOUT_MS = 10_000;
 export const loadEvent = (
 	id: string,
 	fetcher: typeof fetch = fetch,
-	options: { fresh?: boolean } = {}
+	options: { fresh?: boolean; reread?: boolean } = {}
 ): Promise<W2MEvent> => {
-	if (!isNativeEventId(id)) return getEvent(id, fetcher, options);
+	if (!isNativeEventId(id)) return getEvent(id, fetcher, { fresh: options.fresh });
 	if (!accountsEnabled()) {
 		return Promise.reject(new EventLoadError(404, 'No event found at that link.'));
 	}
-	return withDeadline(
+	const now = Date.now();
+	// `reread` is for a page someone is about to look at: it reads the event itself (and shares the
+	// result with what follows), where a preview image makes do with a copy a few seconds old.
+	const hit = options.fresh || options.reread ? undefined : cache.get(id);
+	if (hit && now - hit.at < CACHE_MS) return hit.event;
+
+	const event = withDeadline(
 		loadNativeEvent(getClientDb(), id).catch((e) => {
 			if (e instanceof NativeEventNotFound) throw new EventLoadError(404, e.message);
 			throw new EventLoadError(502, "Couldn't load that ThenToMeet event. Try again.");
 		})
 	);
+	cache.delete(id);
+	cache.set(id, { at: now, event });
+	// A failed read isn't kept, so the next request tries again.
+	event.catch(() => {
+		if (cache.get(id)?.event === event) cache.delete(id);
+	});
+	while (cache.size > MAX_CACHED) cache.delete(cache.keys().next().value!);
+	return event;
 };
 
 const withDeadline = <T>(work: Promise<T>): Promise<T> => {

@@ -4,7 +4,10 @@ import type { W2MEvent } from '$lib/types';
 const NATIVE = 'aB3dE5gH7jK9mN1pQ3sT';
 
 const mocks = vi.hoisted(() => ({
+	/** What the listener delivers first (or fails with), standing in for Firestore. */
+	snapshot: vi.fn(),
 	accounts: {
+		enabled: true,
 		user: null as { uid: string } | null,
 		init: vi.fn(),
 		loadEvent: vi.fn(),
@@ -42,6 +45,16 @@ const make = (people: { id: number; name: string }[], free: Record<number, numbe
 		source: 'thentomeet'
 	}) as W2MEvent;
 
+/** What the event is, both to the listener's first snapshot and to a plain read. */
+const serve = (event: W2MEvent) => {
+	mocks.snapshot.mockResolvedValue(event);
+	mocks.accounts.loadEvent.mockResolvedValue(event);
+};
+const refuse = (error: Error) => {
+	mocks.snapshot.mockRejectedValue(error);
+	mocks.accounts.loadEvent.mockRejectedValue(error);
+};
+
 const ada = { id: 1, name: 'Ada' };
 const bo = { id: 2, name: 'Bo' };
 
@@ -63,6 +76,7 @@ beforeEach(() => {
 	app.reset();
 	for (const fn of [
 		mocks.accounts.init,
+		mocks.snapshot,
 		mocks.accounts.loadEvent,
 		mocks.accounts.watchEvent,
 		mocks.accounts.resyncWhen2Meet,
@@ -74,27 +88,68 @@ beforeEach(() => {
 		fn.mockReset();
 	}
 	mocks.userData.loadEvent.mockResolvedValue(null);
-	mocks.accounts.loadEvent.mockResolvedValue(make([ada], { 1: [0] }));
+	serve(make([ada], { 1: [0] }));
 	mocks.accounts.user = null;
 	watch = { onEvent: () => {}, onError: () => {}, stop: vi.fn() };
 	mocks.accounts.watchEvent.mockImplementation(async (_id, onEvent, onError) => {
 		watch.onEvent = onEvent;
 		watch.onError = onError;
+		// The first snapshot, or the reason there isn't one, arrives after the listener is set up.
+		void mocks.snapshot(_id).then(onEvent, onError);
 		return watch.stop;
 	});
 });
 
 describe('following an event live', () => {
-	it('starts when a ThenToMeet event opens, and is not live until something arrives', async () => {
+	it('opens a ThenToMeet event by following it, so the first snapshot is the only read', async () => {
 		await open();
 		expect(mocks.accounts.watchEvent).toHaveBeenCalledWith(
 			NATIVE,
 			expect.any(Function),
 			expect.any(Function)
 		);
-		expect(app.live).toBe(false);
-		watch.onEvent(make([ada], { 1: [0] }));
+		expect(mocks.accounts.loadEvent).not.toHaveBeenCalled();
+		expect(app.status).toBe('ready');
+		expect(app.event!.people).toHaveLength(1);
 		expect(app.live).toBe(true);
+	});
+
+	it('follows a copy the server handed over, without reading the event itself', async () => {
+		const handed = make([ada, bo], { 1: [0], 2: [1] });
+		serve(handed);
+		await app.load(NATIVE, { event: handed });
+		await vi.waitFor(() => expect(mocks.accounts.watchEvent).toHaveBeenCalledTimes(1));
+		expect(mocks.accounts.loadEvent).not.toHaveBeenCalled();
+		expect(app.event).toBe(handed);
+	});
+
+	it('picks up a change that arrives while the saved setup is still loading', async () => {
+		let release!: (value: null) => void;
+		mocks.userData.loadEvent.mockReturnValue(new Promise((resolve) => (release = resolve)));
+		const loading = app.load(NATIVE);
+		await vi.waitFor(() => expect(mocks.snapshot).toHaveBeenCalled());
+		await Promise.resolve();
+		watch.onEvent(make([ada, bo], { 1: [0], 2: [1] }));
+		release(null);
+		await loading;
+		expect(app.event!.people).toHaveLength(2);
+	});
+
+	it('reads the plain way when the listener cannot start', async () => {
+		mocks.accounts.watchEvent.mockRejectedValue(new Error('no firebase'));
+		await app.load(NATIVE);
+		expect(mocks.accounts.loadEvent).toHaveBeenCalledTimes(1);
+		expect(app.status).toBe('ready');
+		expect(app.live).toBe(false);
+	});
+
+	it('does not read the event again to refresh while it is live', async () => {
+		await open();
+		await expect(app.refresh()).resolves.toEqual({ added: [], updated: [] });
+		expect(mocks.accounts.loadEvent).not.toHaveBeenCalled();
+		watch.onError(new Error('unavailable'));
+		await app.refresh();
+		expect(mocks.accounts.loadEvent).toHaveBeenCalledTimes(1);
 	});
 
 	it('does not start for a When2Meet poll', async () => {
@@ -187,7 +242,7 @@ describe('following an event live', () => {
 		expect(recent.items.some((e) => e.id === NATIVE)).toBe(true);
 		const gone = new Error('No ThenToMeet event found at that link.');
 		gone.name = 'NativeEventNotFound';
-		mocks.accounts.loadEvent.mockRejectedValue(gone);
+		refuse(gone);
 		await app.load(NATIVE);
 		expect(app.error).toBe('No ThenToMeet event found at that link.');
 		expect(recent.items.some((e) => e.id === NATIVE)).toBe(false);
@@ -195,7 +250,7 @@ describe('following an event live', () => {
 
 	it('keeps a recent event when it just could not be loaded', async () => {
 		await open();
-		mocks.accounts.loadEvent.mockRejectedValue(new Error('Check your connection.'));
+		refuse(new Error('Check your connection.'));
 		await app.load(NATIVE);
 		expect(recent.items.some((e) => e.id === NATIVE)).toBe(true);
 	});
@@ -214,7 +269,7 @@ describe('updating an import from When2Meet', () => {
 	const report = { added: 1, updated: 1, kept: 0, slotsAdded: 0, touched: [1, 2] };
 
 	it('fetches the poll fresh, hands it over, and does not announce its own changes', async () => {
-		mocks.accounts.loadEvent.mockResolvedValue(IMPORTED);
+		serve(IMPORTED);
 		const poll = { ...make([ada, bo]), id: '123-abc', source: undefined };
 		const fetchMock = vi.fn(async () => new Response(JSON.stringify(poll)));
 		vi.stubGlobal('fetch', fetchMock);
@@ -239,7 +294,7 @@ describe('updating an import from When2Meet', () => {
 	});
 
 	it('passes on the poll’s error when it can’t be fetched', async () => {
-		mocks.accounts.loadEvent.mockResolvedValue(IMPORTED);
+		serve(IMPORTED);
 		vi.stubGlobal(
 			'fetch',
 			vi.fn(async () => new Response(JSON.stringify({ message: 'No such poll.' }), { status: 404 }))

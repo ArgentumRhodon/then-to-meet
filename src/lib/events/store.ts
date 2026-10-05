@@ -22,6 +22,7 @@ import {
 	NativeEventNotFound,
 	responseKey,
 	InvalidInput,
+	MAX_RESPONSES,
 	parseName,
 	parsePassword,
 	parseResponse,
@@ -43,6 +44,8 @@ import { deriveSecret, newNonce, newSalt, proofFor } from './password';
 
 /** Firestore writes at most 500 documents per batch. */
 const BATCH = 400;
+/** How many more times to try a join that the rules refuse, in case it only lost a race. */
+const JOIN_RETRIES = 5;
 
 const eventRef = (db: Firestore, id: string) => doc(db, 'events', id);
 const responsesOf = (db: Firestore, id: string) => collection(db, 'events', id, 'responses');
@@ -114,9 +117,16 @@ export const watchNativeEvent = (
 		onError(e);
 	};
 
+	// The first snapshot of each listener has to come from the server: this browser's cache may
+	// hold only a few of the event's documents (its own response, say), and the first snapshot is
+	// what the app opens the event with. After that, local changes are reported as they happen.
+	let eventSynced = false;
+	let responsesSynced = false;
 	const stopEvent = onSnapshot(
 		eventRef(db, id),
 		(snap) => {
+			if (!eventSynced && snap.metadata?.fromCache) return;
+			eventSynced = true;
 			event = snap.exists() ? (snap.data() as EventDoc) : null;
 			schedule();
 		},
@@ -125,6 +135,8 @@ export const watchNativeEvent = (
 	const stopResponses = onSnapshot(
 		responsesOf(db, id),
 		(snap) => {
+			if (!responsesSynced && snap.metadata?.fromCache) return;
+			responsesSynced = true;
 			responses = snap.docs.map((d) => d.data() as ResponseDoc);
 			schedule();
 		},
@@ -211,63 +223,79 @@ export const submitResponse = async (
 	const mine = doc(responsesOf(db, eventId), key);
 	const secretRef = doc(db, 'events', eventId, 'secrets', key);
 	let locked = false;
-	try {
-		return await runTransaction(db, async (tx) => {
-			const [snap, existing] = await Promise.all([tx.get(ref), tx.get(mine)]);
-			if (!snap.exists()) throw new NativeEventNotFound();
-			const event = snap.data() as EventDoc;
-			const { name, available } = parseResponse(body, event.slots);
-			const now = Date.now();
+	for (let tries = 0; ; tries++) {
+		locked = false;
+		try {
+			return await runTransaction(db, async (tx) => {
+				const [snap, existing] = await Promise.all([tx.get(ref), tx.get(mine)]);
+				if (!snap.exists()) throw new NativeEventNotFound();
+				const event = snap.data() as EventDoc;
+				const { name, available } = parseResponse(body, event.slots);
+				const now = Date.now();
 
-			if (existing.exists()) {
-				const prior = existing.data() as ResponseDoc;
-				locked = prior.salt !== undefined;
-				const change: Partial<ResponseDoc> = { name, available, updatedAt: now };
-				if (prior.salt !== undefined) {
-					if (password === null) throw new PasswordRequired();
-					const secret = await deriveSecret(password, prior.salt);
-					change.nonce = newNonce();
-					change.proof = await proofFor(secret, prior.nonce ?? '', change.nonce);
-				} else if (password !== null) {
-					throw new InvalidInput("That name has no password, and one can't be added now.");
+				if (existing.exists()) {
+					const prior = existing.data() as ResponseDoc;
+					locked = prior.salt !== undefined;
+					const change: Partial<ResponseDoc> = { name, available, updatedAt: now };
+					if (prior.salt !== undefined) {
+						if (password === null) throw new PasswordRequired();
+						const secret = await deriveSecret(password, prior.salt);
+						change.nonce = newNonce();
+						change.proof = await proofFor(secret, prior.nonce ?? '', change.nonce);
+					} else if (password !== null) {
+						throw new InvalidInput("That name has no password, and one can't be added now.");
+					}
+					// A signed-in user entering a name nobody has claimed yet (like an imported person's)
+					// claims it.
+					const claims = user !== null && prior.uid === null;
+					if (claims) change.uid = user.uid;
+					tx.update(mine, change);
+					tx.update(ref, {
+						updatedAt: now,
+						...(claims ? { memberUids: arrayUnion(user.uid) } : {})
+					});
+					return { personId: prior.personId };
 				}
-				// A signed-in user entering a name nobody has claimed yet (like an imported person's)
-				// claims it.
-				const claims = user !== null && prior.uid === null;
-				if (claims) change.uid = user.uid;
-				tx.update(mine, change);
-				tx.update(ref, {
-					updatedAt: now,
-					...(claims ? { memberUids: arrayUnion(user.uid) } : {})
-				});
-				return { personId: prior.personId };
-			}
 
-			const response: ResponseDoc = {
-				personId: event.nextPersonId,
-				name,
-				uid: user?.uid ?? null,
-				available,
-				updatedAt: now
-			};
-			if (password !== null) {
-				response.salt = newSalt();
-				response.nonce = newNonce();
-				tx.set(secretRef, { secret: await deriveSecret(password, response.salt) });
-			}
-			tx.set(mine, response);
-			tx.update(ref, {
-				nextPersonId: event.nextPersonId + 1,
-				responseCount: event.responseCount + 1,
-				updatedAt: now,
-				...(user ? { memberUids: arrayUnion(user.uid) } : {})
+				if (event.responseCount >= MAX_RESPONSES && event.ownerId !== user?.uid) {
+					throw new InvalidInput(
+						`This event is full: it holds up to ${MAX_RESPONSES} people. Ask its owner to make room.`
+					);
+				}
+				const response: ResponseDoc = {
+					personId: event.nextPersonId,
+					name,
+					uid: user?.uid ?? null,
+					available,
+					updatedAt: now
+				};
+				if (password !== null) {
+					response.salt = newSalt();
+					response.nonce = newNonce();
+					tx.set(secretRef, { secret: await deriveSecret(password, response.salt) });
+				}
+				tx.set(mine, response);
+				tx.update(ref, {
+					nextPersonId: event.nextPersonId + 1,
+					responseCount: event.responseCount + 1,
+					updatedAt: now,
+					lastJoin: key,
+					...(user ? { memberUids: arrayUnion(user.uid) } : {})
+				});
+				return { personId: response.personId };
 			});
-			return { personId: response.personId };
-		});
-	} catch (e) {
-		// The rules turn a proof that doesn't match down as a plain denial.
-		if (locked && (e as { code?: string }).code === 'permission-denied') throw new WrongPassword();
-		throw e;
+		} catch (e) {
+			const denied = (e as { code?: string }).code === 'permission-denied';
+			// The rules turn a proof that doesn't match down as a plain denial.
+			if (locked && denied) throw new WrongPassword();
+			// People joining at the same moment can leave one holding a person ID that was just taken,
+			// which the rules refuse instead of retrying. Trying again reads the new one.
+			if (denied && tries < JOIN_RETRIES) {
+				await new Promise((resolve) => setTimeout(resolve, 40 + Math.random() * 120));
+				continue;
+			}
+			throw e;
+		}
 	}
 };
 

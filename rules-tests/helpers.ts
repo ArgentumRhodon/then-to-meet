@@ -6,7 +6,9 @@ import {
 	getDoc,
 	getFirestore,
 	terminate,
-	type Firestore
+	writeBatch,
+	type Firestore,
+	type WriteBatch
 } from 'firebase/firestore';
 import type { SessionUser } from '$lib/firebase/user';
 import type { W2MEvent } from '$lib/types';
@@ -94,3 +96,40 @@ export const pollOf = (names: string[]): W2MEvent => ({
 	noTimes: [],
 	fetchedAt: 1
 });
+
+/**
+ * The change to an event that joining comes with, as the rules want it: both counters up by one,
+ * naming the new response. Read from the event as it is now, so a test that joins again gets the
+ * next numbers.
+ */
+export const joinUpdate = async (db: Firestore, eventId: string, key: string) => {
+	const event = (await getDoc(doc(db, 'events', eventId))).data()!;
+	return {
+		nextPersonId: event.nextPersonId + 1,
+		responseCount: event.responseCount + 1,
+		updatedAt: Date.now(),
+		lastJoin: key
+	};
+};
+
+/**
+ * Writes a response by hand the way a join does, with the event's counters in the same batch, so a
+ * test can vary one thing about the response (or the event update, or what else is in the batch)
+ * and know that is the only reason it succeeds or is refused.
+ */
+export const joinBatch = async (
+	who: Client,
+	eventId: string,
+	key: string,
+	response: object,
+	{ event = {}, more }: { event?: object; more?: (batch: WriteBatch) => void } = {}
+): Promise<void> => {
+	const batch = writeBatch(who.db);
+	batch.update(doc(who.db, 'events', eventId), {
+		...(await joinUpdate(who.db, eventId, key)),
+		...event
+	});
+	batch.set(doc(who.db, 'events', eventId, 'responses', key), response);
+	more?.(batch);
+	await batch.commit();
+};

@@ -96,6 +96,26 @@ describe('submitResponse without a password', () => {
 		expect(event()).toMatchObject({ nextPersonId: 6, responseCount: 5, memberUids: ['owner'] });
 	});
 
+	it('names the new response on the event, as the rules want a join to', async () => {
+		await submitResponse(db, null, EVENT, { name: 'Ada', available: [0] });
+		expect(event().lastJoin).toBe(ada);
+		// Editing is not a join, so it leaves the marker where it was.
+		await submitResponse(db, null, EVENT, { name: 'Bo', available: [0] });
+		await submitResponse(db, null, EVENT, { name: 'Ada', available: [900] });
+		expect(event().lastJoin).toBe(responseKey('Bo'));
+	});
+
+	it('says when the event is full, but lets its owner and its people carry on', async () => {
+		fake.docs.set(`events/${EVENT}`, { ...event(), responseCount: 500 });
+		await expect(submitResponse(db, null, EVENT, { name: 'Late', available: [0] })).rejects.toThrow(
+			/full/
+		);
+		expect(responseAt(responseKey('Late'))).toBeUndefined();
+		const owner = { ...user, uid: 'owner' };
+		await submitResponse(db, owner, EVENT, { name: 'Owner', available: [] });
+		expect(event().responseCount).toBe(501);
+	});
+
 	it('edits the same person for the same name, however it is written', async () => {
 		await submitResponse(db, null, EVENT, { name: 'Ada', available: [0] });
 		const again = await submitResponse(db, null, EVENT, { name: '  ADA ', available: [900] });

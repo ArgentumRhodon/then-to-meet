@@ -11,8 +11,17 @@ import {
 	where
 } from 'firebase/firestore';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { responseKey } from '$lib/events/model';
 import { createEvent } from '$lib/events/store';
-import { client, closeClients, denied, resetFirestore, SLOTS } from './helpers';
+import {
+	client,
+	closeClients,
+	denied,
+	joinBatch,
+	joinUpdate,
+	resetFirestore,
+	SLOTS
+} from './helpers';
 
 beforeEach(resetFirestore);
 afterAll(closeClients);
@@ -129,49 +138,88 @@ describe('changing and deleting events', () => {
 		}
 	});
 
-	it('lets anyone bump the counters, which is how joining works, but nothing else with them', async () => {
+	const ada = (uid: string | null = null) => ({
+		personId: 1,
+		name: 'Ada',
+		uid,
+		available: [SLOTS[0]],
+		updatedAt: 1
+	});
+	const ADA = responseKey('Ada');
+
+	it('lets anyone join, which moves the counters up by one with the new response, and nothing else', async () => {
 		const { id } = await owned();
 		const visitor = await client(false);
-		await updateDoc(doc(visitor.db, 'events', id), {
+		const ref = doc(visitor.db, 'events', id);
+		const other = (change: object) => ({ event: change });
+
+		// Each of these differs from a real join in one way.
+		expect(await denied(joinBatch(visitor, id, ADA, ada(), other({ title: 'x' })))).toBe(true);
+		expect(await denied(joinBatch(visitor, id, ADA, ada(), other({ slots: [1] })))).toBe(true);
+		expect(await denied(joinBatch(visitor, id, ADA, ada(), other({ nextPersonId: 3 })))).toBe(true);
+		expect(await denied(joinBatch(visitor, id, ADA, ada(), other({ responseCount: 2 })))).toBe(
+			true
+		);
+		expect(await denied(joinBatch(visitor, id, ADA, ada(), other({ lastJoin: 'n:other' })))).toBe(
+			true
+		);
+		await joinBatch(visitor, id, ADA, ada());
+		expect((await getDoc(ref)).data()).toMatchObject({
 			nextPersonId: 2,
 			responseCount: 1,
-			updatedAt: 5
+			lastJoin: ADA
 		});
-		expect(
-			await denied(updateDoc(doc(visitor.db, 'events', id), { nextPersonId: 3, title: 'x' }))
-		).toBe(true);
-		expect(await denied(updateDoc(doc(visitor.db, 'events', id), { slots: [1] }))).toBe(true);
+	});
+
+	it('does not let the counters move without a response, or go down', async () => {
+		const { id } = await owned();
+		const visitor = await client(false);
+		const ref = doc(visitor.db, 'events', id);
+		// A bump on its own, and one naming a response that was never written.
+		expect(await denied(updateDoc(ref, await joinUpdate(visitor.db, id, ADA)))).toBe(true);
+		expect(await denied(updateDoc(ref, { nextPersonId: 2, responseCount: 1, updatedAt: 5 }))).toBe(
+			true
+		);
+		await joinBatch(visitor, id, ADA, ada());
+		const bump = await joinUpdate(visitor.db, id, 'n:bo');
+		// Down, or the same value, are not joins either.
+		expect(await denied(updateDoc(ref, { responseCount: 0, updatedAt: 5 }))).toBe(true);
+		expect(await denied(updateDoc(ref, { nextPersonId: 1, updatedAt: 5 }))).toBe(true);
+		// Only the owner can reset or hand out counters.
+		expect(await denied(updateDoc(ref, { ...bump, nextPersonId: 99 }))).toBe(true);
+	});
+
+	it('lets an edit note when the event last changed, and nothing more', async () => {
+		const { id } = await owned();
+		const visitor = await client(false);
+		const ref = doc(visitor.db, 'events', id);
+		await updateDoc(ref, { updatedAt: 7 });
+		expect((await getDoc(ref)).data()?.updatedAt).toBe(7);
+		expect(await denied(updateDoc(ref, { updatedAt: 8, title: 'x' }))).toBe(true);
 	});
 
 	it('lets a signed-in user add themselves to the members, and only themselves', async () => {
 		const { owner, id } = await owned();
 		const joiner = await client();
-		const ref = doc(joiner.db, 'events', id);
-		const counters = { nextPersonId: 2, responseCount: 1, updatedAt: 5 };
-
-		await updateDoc(ref, { ...counters, memberUids: arrayUnion(joiner.user!.uid) });
-		expect((await getDoc(ref)).data()?.memberUids).toEqual([owner.user!.uid, joiner.user!.uid]);
+		const uid = joiner.user!.uid;
+		const withMembers = (memberUids: unknown) => ({ event: { memberUids } });
 
 		expect(
-			await denied(updateDoc(ref, { ...counters, memberUids: arrayUnion('someone-else') }))
+			await denied(joinBatch(joiner, id, ADA, ada(uid), withMembers(arrayUnion('someone-else'))))
 		).toBe(true);
-		expect(await denied(updateDoc(ref, { ...counters, memberUids: [joiner.user!.uid] }))).toBe(
-			true
-		);
+		expect(await denied(joinBatch(joiner, id, ADA, ada(uid), withMembers([uid])))).toBe(true);
+		await joinBatch(joiner, id, ADA, ada(uid), withMembers(arrayUnion(uid)));
+		expect((await getDoc(doc(joiner.db, 'events', id))).data()?.memberUids).toEqual([
+			owner.user!.uid,
+			uid
+		]);
 	});
 
 	it('does not let a signed-out visitor touch the members', async () => {
 		const { id } = await owned();
 		const visitor = await client(false);
-		expect(
-			await denied(
-				updateDoc(doc(visitor.db, 'events', id), {
-					nextPersonId: 2,
-					responseCount: 1,
-					updatedAt: 5,
-					memberUids: arrayUnion('anon')
-				})
-			)
-		).toBe(true);
+		const attempt = (event: object) => joinBatch(visitor, id, ADA, ada(), { event });
+		expect(await denied(attempt({ memberUids: arrayUnion('anon') }))).toBe(true);
+		await attempt({});
 	});
 });

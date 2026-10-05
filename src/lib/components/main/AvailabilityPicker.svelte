@@ -133,6 +133,14 @@
 		end();
 	};
 
+	// The cell the arrow keys are on stays in view as they carry it past the edge.
+	$effect(() => {
+		if (cursor)
+			gridEl
+				?.querySelector('.cell.cursor')
+				?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+	});
+
 	/** Arrow keys walk the cells, Space or Enter turns one on or off. */
 	const onkeydown = (e: KeyboardEvent) => {
 		const at = cursor ?? { day: 0, row: 0 };
@@ -175,7 +183,8 @@
 	</p>
 </div>
 
-<div class="overflow-x-auto">
+<!-- The grid scrolls inside this box in both directions, so its day names and times can stay put. -->
+<div class="scroller">
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<div
 		bind:this={gridEl}
@@ -194,7 +203,7 @@
 		onblur={() => (cursor = null)}
 		{onkeydown}
 	>
-		<div></div>
+		<div class="corner"></div>
 		{#each grid.days as day, d (day.key)}
 			<button
 				type="button"
@@ -269,8 +278,41 @@
 		outline-offset: 4px;
 		border-radius: 8px;
 	}
+	/* Taller than the dialog's own padding leaves room for on a short screen is fine: the dialog
+	   scrolls too. Scrolling here keeps the day names and times in view over a long grid. */
+	.scroller {
+		overflow: auto;
+		max-height: max(18rem, 60dvh);
+	}
 	.picker {
 		--cell-height: 1.25rem;
+	}
+	/* The day names stay at the top and the times at the left. They need a background of their own
+	   or the cells show through, and a little shadow to cover the gaps between cells. */
+	.corner,
+	.day-head,
+	.label {
+		position: sticky;
+		background: var(--panel);
+	}
+	.corner {
+		top: 0;
+		left: 0;
+		z-index: 3;
+	}
+	.day-head {
+		top: 0;
+		z-index: 2;
+		box-shadow: 0 3px 0 var(--panel);
+	}
+	.label {
+		left: 0;
+		z-index: 1;
+		box-shadow: 3px 0 0 var(--panel);
+	}
+	/* Keeps a cell the arrow keys scroll into view clear of those pinned labels. */
+	.cell {
+		scroll-margin: 3rem 0 0 3.5rem;
 	}
 	/* Fingers are less exact than a mouse, so the cells grow. */
 	@media (pointer: coarse) {

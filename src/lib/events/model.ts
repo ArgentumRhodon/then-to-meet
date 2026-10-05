@@ -30,6 +30,11 @@ export interface EventDoc {
 	responseCount: number;
 	/** The owner and everyone who responded; what "my events" and the security rules look at. */
 	memberUids: string[];
+	/**
+	 * The response key of the last person to join, which the rules want in the same write as the
+	 * counters above moving (so a join can't skip either). Only joins set it.
+	 */
+	lastJoin?: string;
 	source: EventSource;
 	/** Milliseconds. */
 	createdAt: number;
@@ -69,6 +74,8 @@ export interface EventSummary {
 
 /** Most slots one event may have: a month of 15-minute slots is 2,880. */
 export const MAX_SLOTS = 5000;
+/** Most people an event holds, unless its owner adds more. firestore.rules enforces the same number. */
+export const MAX_RESPONSES = 500;
 export const MAX_TITLE = 120;
 export const MAX_NAME = 60;
 export const SLOT_SECONDS = [900, 1800, 3600] as const;

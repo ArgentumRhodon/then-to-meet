@@ -1,14 +1,15 @@
 # Handoff: ThenToMeet accounts and Firebase (branch `v2.0-users`)
 
-Updated 2026-10-04. The first round of this work is committed (`17c97cc`, `4ac4321`). The second
-round (live updates, browser-data migration, the emulator rules tests, owner controls, password
-change/removal, and a **rules bug fix**) is **uncommitted** in the working tree.
+Updated 2026-10-04. Rounds one and two (accounts, imports, live updates, owner controls, password
+change/removal, the emulator rules tests) are committed. The latest round, uncommitted, is: the
+availability picker's touch mode and sticky headers, **Update from When2Meet**, **Transfer
+ownership**, stale recents, **abuse limits** and **lower read costs**.
 
-> **The user must redeploy `firestore.rules`** (`npm run firebase:deploy`, or paste it into the
-> console). The deployed copy has a bug found by the new emulator tests: editing a password-protected
-> entry with the _right_ password was always refused, because the rules engine's `toHexString()` is
-> UPPERCASE and the app sends lowercase. The fix (`.toHexString().lower()`) is in the file, not yet
-> deployed. The new owner/password features also need the new rules.
+> **`firestore.rules` changed again and must be redeployed together with the new client**
+> (`npm run firebase:deploy`, or paste it into the console). Joining an event is now one write that
+> bumps the event's counters and names the new response in a `lastJoin` field; the new client sends
+> that, and the old rules refuse it (and the new rules refuse an old client's join). Deploy both at
+> once. Details under "Abuse limits".
 
 ## What this work is
 
@@ -89,7 +90,8 @@ one-minute polling takes over; a deleted event sets "This event was deleted."
 
 ```
 events/{eventId}                  ownerId, title, weekly, slotSeconds, slots[], nextPersonId,
-                                  responseCount, memberUids[], source, createdAt, updatedAt
+                                  responseCount, memberUids[], source, createdAt, updatedAt,
+                                  lastJoin? (response key of the last joiner; see "Abuse limits")
 events/{eventId}/responses/{key}  personId, name, uid|null, available[], updatedAt, salt?, nonce?, proof?
 events/{eventId}/secrets/{key}    secret   (nobody can read it; only the rules)
 users/{uid}                       theme, heat
@@ -142,7 +144,7 @@ failed. The gate matters: a default saved before the migration would overwrite m
 ```bash
 npm run dev          # .claude/launch.json also has "dev" on port 5180
 npm run check        # svelte-check: 0 errors expected
-npm test             # 270 pass, 2 skipped (live When2Meet tests)
+npm test             # 283 pass, 2 skipped (live When2Meet tests)
 npm run test:rules   # 99 emulator tests (needs Java on PATH; see below)
 npm run build
 npm run firebase:deploy   # pushes firestore.rules + indexes only (not hosting); or paste the rules
@@ -195,7 +197,7 @@ inside that dialog. Apply this to every new control (see memory `feedback-single
 
 ## Not built yet (suggested order)
 
-Done since the last handoff: the picker's touch mode (tap marks on release; "Drag to paint" toggle),
+Done since the last handoff: the picker's touch mode (tap marks on release; "Drag to paint" toggle) and sticky headers (the grid scrolls inside its own box),
 **Update from When2Meet** (`planResync` in `model.ts`, `resyncWhen2Meet` in `manage.ts`, owner menu),
 **Transfer ownership** (`transferOwnership`, `TransferDialog`; needs no rules change: owners can already
 update their event), and stale recents (an event found missing is dropped from the account's recent
@@ -208,11 +210,33 @@ list when it's opened, when it's deleted while open, and, for ThenToMeet IDs, on
    an owner write any `ownerId`, which is within the "not particularly tight" stance.
 2. Re-sync never removes people who left the poll, and a poll whose slot length or weekly/dated kind
    changed is refused. It only adds the poll's new times.
-3. Sticky day/hour headers in the availability picker while scrolling.
-4. Per-visit read costs are now lower for native events (live listener), but a very large event still
-   reads every response on each load.
-5. Abuse limits (anyone can respond, so anyone can add many names); acceptable per the user's
-   "not particularly tight" security stance, but worth a look if it's ever public.
+3. Per-account limits (how many events someone can create, how much a user document can hold) can't be
+   enforced without a server; the limits below are per event.
+
+## Abuse limits and read costs
+
+- `firestore.rules`: a new event's fields are checked for type and size (`validNewEvent`). An event holds
+  at most 500 people (`MAX_RESPONSES` in `model.ts`, the literal 500 in the rules) unless its owner adds more.
+- **Joining is atomic.** A non-owner's new response must have `personId == event.nextPersonId`, the event
+  update in the same write must move `nextPersonId` and `responseCount` up by exactly one, and its
+  `lastJoin` must be that response's key (`joins()` / `joinsWithResponse()`). So counters can't move
+  without a response, a batch can't add several responses for one bump (each key must equal the single
+  `lastJoin`), and the cap can't be dodged or lowered by a visitor. The owner is exempt (imports,
+  resync, adding people past the cap). Edits only touch `updatedAt`.
+- **Concurrent joins**: the loser of a race holds a stale `nextPersonId`, which the rules refuse as a
+  permission error rather than a retry; `submitResponse` retries a refused join a few times
+  (`JOIN_RETRIES`). Password failures (`locked`) are not retried.
+- The client says "This event is full" before asking the rules (`InvalidInput`).
+- **Rules tests**: hand-written writes that used to create a response alone now go through
+  `joinBatch` in `rules-tests/helpers.ts`, so a denial is for the reason the test names. Keep using it.
+- **Reads**: a native event opens by following it (`#openNative` in `app.svelte.ts`): the listener's
+  first snapshot is the load, so a visit costs one read per response instead of two. If the listener
+  can't start or stalls (15s), it falls back to a plain read and polling. `watchNativeEvent` ignores
+  cache-only first snapshots. `refresh()` is a no-op while live. A copy handed over by the server (first
+  page load) is followed afterwards. The server caches ThenToMeet reads for 30s
+  (`server/events/load.ts`) so a page and its preview image share one read; the page itself asks to
+  re-read (`reread`) so someone who just saved doesn't get an older copy.
+- Still true: a load reads every response, and the cap is what bounds that (500 reads).
 
 ## Where else the context lives
 

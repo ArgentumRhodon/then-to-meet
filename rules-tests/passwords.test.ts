@@ -12,7 +12,15 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { PasswordRequired, responseKey, WrongPassword } from '$lib/events/model';
 import { deriveSecret, newNonce, newSalt, proofFor } from '$lib/events/password';
 import { createEvent, submitResponse } from '$lib/events/store';
-import { client, closeClients, denied, resetFirestore, SLOTS, type Client } from './helpers';
+import {
+	client,
+	closeClients,
+	denied,
+	joinBatch,
+	resetFirestore,
+	SLOTS,
+	type Client
+} from './helpers';
 
 beforeEach(resetFirestore);
 afterAll(closeClients);
@@ -92,14 +100,12 @@ describe('setting a password', () => {
 		};
 
 		// No secret alongside.
-		expect(await denied(setDoc(response, locked))).toBe(true);
+		expect(await denied(joinBatch(visitor, id, responseKey('Ada'), locked))).toBe(true);
 
-		const together = async (secretData: object) => {
-			const batch = writeBatch(visitor.db);
-			batch.set(secret, secretData);
-			batch.set(response, locked);
-			await batch.commit();
-		};
+		const together = (secretData: object) =>
+			joinBatch(visitor, id, responseKey('Ada'), locked, {
+				more: (batch) => batch.set(secret, secretData)
+			});
 		expect(await denied(together({ secret: 'short' }))).toBe(true);
 		expect(await denied(together({ secret: 'a'.repeat(64), extra: 1 }))).toBe(true);
 		await together({ secret: 'a'.repeat(64) });
@@ -110,10 +116,8 @@ describe('setting a password', () => {
 		const owner = await client();
 		const id = await createEvent(owner.db, owner.user!, newEvent);
 		const visitor = await client(false);
-		const { response, secret } = refs(visitor, id);
-		const batch = writeBatch(visitor.db);
-		batch.set(secret, { secret: 'a'.repeat(64) });
-		batch.set(response, {
+		const { secret } = refs(visitor, id);
+		const withProof = {
 			personId: 1,
 			name: 'Ada',
 			uid: null,
@@ -122,8 +126,15 @@ describe('setting a password', () => {
 			salt: newSalt(),
 			nonce: newNonce(),
 			proof: 'b'.repeat(64)
-		});
-		expect(await denied(batch.commit())).toBe(true);
+		};
+		const attempt = (response: object) =>
+			joinBatch(visitor, id, responseKey('Ada'), response, {
+				more: (batch) => batch.set(secret, { secret: 'a'.repeat(64) })
+			});
+		expect(await denied(attempt(withProof))).toBe(true);
+		// The same entry without the proof goes in, so the proof is what was refused.
+		const { proof: _, ...clean } = withProof;
+		await attempt(clean);
 	});
 
 	it('cannot be added to a name that already exists without one', async () => {

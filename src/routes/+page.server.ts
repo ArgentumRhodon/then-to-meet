@@ -33,7 +33,8 @@ export const load: PageServerLoad = async ({
 	if (!share.id) return none;
 
 	try {
-		const event = await within(loadEvent(share.id, fetch), WAIT_MS);
+		// Reads the event itself, so a page opened right after saving doesn't show an older copy.
+		const event = await within(loadEvent(share.id, fetch, { reread: true }), WAIT_MS);
 		const view = sharedView(event, share);
 		const preview = buildPreview({
 			event,

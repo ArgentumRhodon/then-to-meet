@@ -197,6 +197,8 @@ class AppState {
 	/** Who was signed in when the open event's setup was loaded; undefined before anything is. */
 	#knownUid: string | null | undefined;
 	#unwatch: (() => void) | null = null;
+	/** The newest copy the live listener has delivered, which a load still in progress picks up. */
+	#latest: W2MEvent | null = null;
 	/** People this browser just saved times for, so their own change isn't announced back to them. */
 	#own = new Set<number>();
 
@@ -210,11 +212,25 @@ class AppState {
 			// What was changed in the event being left goes out before the next one's load begins.
 			void userData.flush();
 			// The saved setup waits on who's signed in, so it's read while the event is fetched.
-			const [event, data] = await Promise.all([
-				overrides.event?.id === id ? overrides.event : fetchEvent(id),
+			// A ThenToMeet event is opened by following it, so that first snapshot is the one read of its
+			// responses; a copy handed over by the server (a first page load) is followed afterwards.
+			const handedOver = overrides.event?.id === id;
+			const following = !handedOver && isNativeEventId(id);
+			let followed = false;
+			const [loaded, data] = await Promise.all([
+				handedOver
+					? overrides.event!
+					: following
+						? this.#readNative(id, token).then((read) => {
+								followed = read.followed;
+								return read.event;
+							})
+						: fetchEvent(id),
 				userData.loadEvent(id)
 			]);
 			if (token !== this.#loadToken) return;
+			// Changes that arrived while the saved setup was still loading are already in.
+			const event = following && this.#latest?.id === id ? this.#latest : loaded;
 			this.#knownUid = accounts.user?.uid ?? null;
 			const saved: EventPrefs = data?.prefs ?? {};
 			const savedRoles = saved.roles ?? {};
@@ -249,7 +265,8 @@ class AppState {
 			this.status = 'ready';
 			this.#own.clear();
 			recent.remember(event);
-			if (isNativeEventId(event.id)) void this.#startWatching(event.id, token);
+			if (following) this.live = followed;
+			else if (isNativeEventId(event.id)) void this.#startWatching(event.id, token);
 		} catch (e) {
 			if (token !== this.#loadToken) return;
 			this.error = e instanceof Error ? e.message : String(e);
@@ -266,6 +283,8 @@ class AppState {
 	 */
 	async refresh({ auto = false } = {}): Promise<Changes | null> {
 		if (!this.event || this.refreshing) return null;
+		// A live event is already current, and reading every response again would only cost reads.
+		if (this.live && isNativeEventId(this.event.id)) return NO_CHANGES;
 		const before = this.event;
 		this.refreshing = true;
 		try {
@@ -312,21 +331,93 @@ class AppState {
 		return fresh;
 	}
 
+	/**
+	 * Reads a ThenToMeet event by following it, or the plain way if the listener won't start. A
+	 * missing event is final either way.
+	 */
+	async #readNative(id: string, token: number): Promise<{ event: W2MEvent; followed: boolean }> {
+		try {
+			return { event: await this.#openNative(id, token), followed: true };
+		} catch (e) {
+			if ((e as Error).name === 'NativeEventNotFound') throw e;
+			return { event: await fetchEvent(id), followed: false };
+		}
+	}
+
+	/**
+	 * Opens a ThenToMeet event by following it: resolves with the first complete snapshot, which
+	 * stands in for a separate read of the event, and keeps following afterwards. Rejects if there
+	 * is none (the event is gone, or the listener couldn't start or stalled).
+	 */
+	#openNative(id: string, token: number): Promise<W2MEvent> {
+		this.#latest = null;
+		return new Promise<W2MEvent>((resolve, reject) => {
+			let settled = false;
+			let dead = false;
+			const fail = (e: unknown) => {
+				if (settled) return;
+				settled = dead = true;
+				clearTimeout(timer);
+				this.#stopWatching();
+				const error = e as Error;
+				reject(
+					error?.name === 'NativeEventNotFound'
+						? error
+						: new Error("Couldn't load that ThenToMeet event. Check your connection and try again.")
+				);
+			};
+			const timer = setTimeout(() => fail(new Error('Timed out')), OPEN_TIMEOUT_MS);
+			if (!accounts.enabled) {
+				fail(new Error('No event found at that link.'));
+				return;
+			}
+			accounts
+				.watchEvent(
+					id,
+					(event) => {
+						if (token !== this.#loadToken || dead) return;
+						this.#latest = event;
+						if (!settled) {
+							settled = true;
+							clearTimeout(timer);
+							resolve(event);
+						} else {
+							this.#onLive(event, id);
+						}
+					},
+					(error) => {
+						if (token !== this.#loadToken || dead) return;
+						if (!settled) fail(error);
+						else this.#onWatchError(error, id);
+					}
+				)
+				.then(
+					(stop) => {
+						if (dead || token !== this.#loadToken) stop();
+						else this.#unwatch = stop;
+					},
+					(e) => fail(e)
+				);
+		});
+	}
+
+	#onWatchError(error: Error, id: string) {
+		if (this.event?.id !== id) return;
+		this.live = false;
+		// Gone for good: say so. Anything else (a dropped connection) falls back to polling.
+		if (error.name === 'NativeEventNotFound') {
+			this.error = 'This event was deleted.';
+			recent.forget(id);
+		}
+	}
+
 	/** Follows a ThenToMeet event as it changes, so responses show up without refreshing. */
 	async #startWatching(id: string, token: number) {
 		try {
 			const stop = await accounts.watchEvent(
 				id,
 				(event) => this.#onLive(event, id),
-				(error) => {
-					if (this.event?.id !== id) return;
-					this.live = false;
-					// Gone for good: say so. Anything else (a dropped connection) falls back to polling.
-					if (error.name === 'NativeEventNotFound') {
-						this.error = 'This event was deleted.';
-						recent.forget(id);
-					}
-				}
+				(error) => this.#onWatchError(error, id)
 			);
 			if (token !== this.#loadToken) stop();
 			else this.#unwatch = stop;
@@ -682,6 +773,9 @@ const overlaps = (a: TimeRange, b: TimeRange) => a.start < b.end && b.start < a.
 /** `ranges` plus `range`, minus any it overlaps, in time order. */
 export const withRange = (ranges: TimeRange[], range: TimeRange): TimeRange[] =>
 	[...ranges.filter((r) => !overlaps(r, range)), range].sort((a, b) => a.start - b.start);
+
+/** Longest to wait for a ThenToMeet event's first snapshot before reading it the plain way. */
+const OPEN_TIMEOUT_MS = 15_000;
 
 const fetchEvent = async (id: string, { fresh = false } = {}): Promise<W2MEvent> => {
 	// ThenToMeet's own events come straight from Firestore; When2Meet's go through the server.

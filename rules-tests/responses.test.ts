@@ -8,7 +8,7 @@ import {
 	loadNativeEvent,
 	submitResponse
 } from '$lib/events/store';
-import { client, closeClients, denied, pollOf, resetFirestore, SLOTS } from './helpers';
+import { client, closeClients, denied, joinBatch, pollOf, resetFirestore, SLOTS } from './helpers';
 
 beforeEach(resetFirestore);
 afterAll(closeClients);
@@ -122,10 +122,14 @@ describe('what a response may contain', () => {
 		updatedAt: 1
 	});
 
+	const join = (who: Awaited<ReturnType<typeof client>>, id: string, name: string, doc: object) =>
+		joinBatch(who, id, responseKey(name), doc);
+
 	it('accepts a well-formed one for an event that exists', async () => {
 		const { id } = await owned();
 		const visitor = await client(false);
-		await setDoc(responseRef(visitor.db, id, 'Ada'), valid());
+		await join(visitor, id, 'Ada', valid());
+		expect((await getDoc(responseRef(visitor.db, id, 'Ada'))).data()).toMatchObject(valid());
 	});
 
 	it.each([
@@ -140,16 +144,14 @@ describe('what a response may contain', () => {
 	])('refuses %s', async (_, change) => {
 		const { id } = await owned();
 		const visitor = await client(false);
-		expect(
-			await denied(setDoc(responseRef(visitor.db, id, 'Ada'), { ...valid(), ...change }))
-		).toBe(true);
+		expect(await denied(join(visitor, id, 'Ada', { ...valid(), ...change }))).toBe(true);
 	});
 
 	it('refuses one missing a required field', async () => {
 		const { id } = await owned();
 		const visitor = await client(false);
 		const { updatedAt: _, ...partial } = valid();
-		expect(await denied(setDoc(responseRef(visitor.db, id, 'Ada'), partial))).toBe(true);
+		expect(await denied(join(visitor, id, 'Ada', partial))).toBe(true);
 	});
 
 	it('refuses a response for an event that does not exist', async () => {
@@ -160,13 +162,11 @@ describe('what a response may contain', () => {
 	it('refuses naming an account that is not yours', async () => {
 		const { id } = await owned();
 		const user = await client();
-		expect(
-			await denied(setDoc(responseRef(user.db, id, 'Ada'), { ...valid(), uid: 'someone-else' }))
-		).toBe(true);
+		expect(await denied(join(user, id, 'Ada', { ...valid(), uid: 'someone-else' }))).toBe(true);
 		const visitor = await client(false);
-		expect(
-			await denied(setDoc(responseRef(visitor.db, id, 'Bo'), { ...valid(), uid: user.user!.uid }))
-		).toBe(true);
+		expect(await denied(join(visitor, id, 'Bo', { ...valid(), uid: user.user!.uid }))).toBe(true);
+		// Their own account is fine.
+		await join(user, id, 'Ada', { ...valid(), uid: user.user!.uid });
 	});
 });
 

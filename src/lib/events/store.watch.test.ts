@@ -45,6 +45,33 @@ const settle = () => Promise.resolve();
 beforeEach(() => fake.listeners.clear());
 
 describe('watchNativeEvent', () => {
+	it('does not report from this browser’s cache before the server has answered', async () => {
+		const onEvent = vi.fn();
+		watchNativeEvent(db, 'e1', onEvent, vi.fn());
+		const listeners = fake.listeners;
+		const cached = (docs: unknown[]) => ({ metadata: { fromCache: true }, docs });
+		// Only the browser's own response is cached, and the event document is missing.
+		listeners
+			.get('events/e1')!
+			.next({ metadata: { fromCache: true }, exists: () => false, data: () => null });
+		listeners.get('events/e1/responses')!.next(cached([{ data: () => ada }]));
+		await settle();
+		expect(onEvent).not.toHaveBeenCalled();
+
+		// The server's answer is the first thing reported, and later ones follow as usual.
+		listeners.get('events/e1')!.next({
+			metadata: { fromCache: false },
+			exists: () => true,
+			data: () => event
+		});
+		listeners
+			.get('events/e1/responses')!
+			.next({ metadata: { fromCache: false }, docs: [{ data: () => ada }] });
+		await settle();
+		expect(onEvent).toHaveBeenCalledTimes(1);
+		expect(onEvent.mock.calls[0][0].people).toHaveLength(1);
+	});
+
 	it('waits until it has both the event and its responses, then reports the event', async () => {
 		const onEvent = vi.fn();
 		watchNativeEvent(db, 'e1', onEvent, vi.fn());

@@ -271,6 +271,23 @@ export const submitResponse = async (
 	}
 };
 
+/**
+ * Which of these events are definitely gone. An event that couldn't be checked (offline, say) is
+ * left out, so a bad connection never wipes anyone's list.
+ */
+export const findMissingEvents = async (db: Firestore, ids: string[]): Promise<string[]> => {
+	const gone = await Promise.all(
+		ids.map(async (id) => {
+			try {
+				return (await getDoc(eventRef(db, id))).exists() ? null : id;
+			} catch {
+				return null;
+			}
+		})
+	);
+	return gone.filter((id): id is string => id !== null);
+};
+
 /** Events the user owns or has responded to, most recently active first. */
 export const listEventsFor = async (db: Firestore, uid: string): Promise<EventSummary[]> => {
 	const found = await getDocs(

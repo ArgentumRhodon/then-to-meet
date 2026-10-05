@@ -1,4 +1,5 @@
 import type { RecentEvent } from '$lib/events/userModel';
+import { accounts } from './accounts.svelte';
 import type { W2MEvent } from '$lib/types';
 import { DEMO_ID } from '$lib/w2m/id';
 import { RECENT_MAX, userData } from './userData';
@@ -18,6 +19,16 @@ class RecentEvents {
 		// Anything opened while the list was loading stays on top.
 		const fresh = this.items.filter((e) => !saved.some((s) => s.id === e.id));
 		this.items = [...fresh, ...saved].sort((a, b) => b.openedAt - a.openedAt).slice(0, RECENT_MAX);
+		void this.#dropDeleted();
+	}
+
+	/**
+	 * Takes events off the list that their owners have deleted since, which only the account that
+	 * opened them can clean up. A check that fails changes nothing.
+	 */
+	async #dropDeleted() {
+		const missing = await accounts.missingEvents(this.items.map((e) => e.id));
+		for (const id of missing) this.forget(id);
 	}
 
 	/** Empties the list, when someone signs out, so the next person on this browser doesn't see it. */
@@ -48,8 +59,9 @@ class RecentEvents {
 		}
 	}
 
-	/** Takes an event off the list; its saved setup and groups stay. */
+	/** Takes an event off the list; its saved setup and groups stay. Does nothing if it isn't listed. */
 	forget(id: string) {
+		if (!this.items.some((e) => e.id === id)) return;
 		this.items = this.items.filter((e) => e.id !== id);
 		userData.queueEvent(id, { openedAt: 0 });
 	}

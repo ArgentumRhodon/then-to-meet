@@ -1,5 +1,6 @@
 import {
 	arrayRemove,
+	arrayUnion,
 	collection,
 	deleteDoc,
 	deleteField,
@@ -9,6 +10,7 @@ import {
 	limit,
 	query,
 	runTransaction,
+	updateDoc,
 	where,
 	writeBatch,
 	type Firestore
@@ -17,11 +19,15 @@ import {
 	InvalidInput,
 	NativeEventNotFound,
 	PasswordRequired,
+	planResync,
 	responseKey,
 	WrongPassword,
 	type EventDoc,
-	type ResponseDoc
+	type ResponseDoc,
+	type ResponseEntry,
+	type ResyncReport
 } from './model';
+import type { W2MEvent } from '$lib/types';
 import { deriveSecret, MAX_PASSWORD, newNonce, newSalt, proofFor, REMOVE } from './password';
 
 /*
@@ -187,3 +193,70 @@ export const removePassword = (
 		});
 		tx.delete(secretRef(db, eventId, key));
 	});
+
+/**
+ * Brings an imported copy up to date with its When2Meet poll, as it is now (see `planResync` for
+ * what changes and what is left alone), for the event's owner. The event's own fields go in first,
+ * so the IDs for new people are taken before anyone can join with them, then the responses.
+ */
+export const resyncWhen2Meet = async (
+	db: Firestore,
+	eventId: string,
+	poll: W2MEvent
+): Promise<ResyncReport> => {
+	const [eventSnap, responses] = await Promise.all([
+		getDoc(eventRef(db, eventId)),
+		getDocs(collection(db, 'events', eventId, 'responses'))
+	]);
+	if (!eventSnap.exists()) throw new NativeEventNotFound();
+	const existing: ResponseEntry[] = responses.docs.map((d) => ({
+		id: d.id,
+		doc: d.data() as ResponseDoc
+	}));
+	const plan = planResync(eventSnap.data() as EventDoc, existing, poll);
+	if (!Object.keys(plan.event).length) return plan.report;
+
+	for (let i = 0; i < Math.max(plan.responses.length, 1); i += BATCH) {
+		const batch = writeBatch(db);
+		if (i === 0) batch.update(eventRef(db, eventId), plan.event);
+		for (const { id, doc: response } of plan.responses.slice(i, i + BATCH)) {
+			batch.set(responseRef(db, eventId, id), response);
+		}
+		await batch.commit();
+	}
+	return plan.report;
+};
+
+/**
+ * Hands an event to someone else, for its current owner: the new owner manages it from now on, and
+ * the old one is an ordinary member. It has to be an account that responded to the event, so the
+ * event can't be handed to nobody.
+ */
+export const transferOwnership = async (
+	db: Firestore,
+	eventId: string,
+	newOwnerUid: string
+): Promise<void> => {
+	const [eventSnap, entry] = await Promise.all([
+		getDoc(eventRef(db, eventId)),
+		getDocs(
+			query(
+				collection(db, 'events', eventId, 'responses'),
+				where('uid', '==', newOwnerUid),
+				limit(1)
+			)
+		)
+	]);
+	if (!eventSnap.exists()) throw new NativeEventNotFound();
+	if ((eventSnap.data() as EventDoc).ownerId === newOwnerUid) {
+		throw new InvalidInput('That account already owns this event.');
+	}
+	if (entry.empty) {
+		throw new InvalidInput('Only someone signed in who has added their times can take over.');
+	}
+	await updateDoc(eventRef(db, eventId), {
+		ownerId: newOwnerUid,
+		memberUids: arrayUnion(newOwnerUid),
+		updatedAt: Date.now()
+	});
+};

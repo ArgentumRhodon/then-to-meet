@@ -1,5 +1,6 @@
 import { browser } from '$app/environment';
-import type { EventSummary, NewEvent } from '$lib/events/model';
+import { isNativeEventId } from '$lib/events/id';
+import type { EventSummary, NewEvent, ResyncReport } from '$lib/events/model';
 import { accountsEnabled } from '$lib/firebase/config';
 import type { SessionUser } from '$lib/firebase/user';
 import type { W2MEvent } from '$lib/types';
@@ -145,11 +146,21 @@ class Accounts {
 			const { getClientDb, loadNativeEvent } = await firebase();
 			return await loadNativeEvent(getClientDb(), id);
 		} catch (e) {
-			throw new Error(
-				(e as Error).name === 'NativeEventNotFound'
-					? (e as Error).message
-					: "Couldn't load that ThenToMeet event. Check your connection and try again."
-			);
+			// Keeps the error's name for a missing event, so callers can tell it from a bad connection.
+			if ((e as Error).name === 'NativeEventNotFound') throw e;
+			throw new Error("Couldn't load that ThenToMeet event. Check your connection and try again.");
+		}
+	}
+
+	/** Which of these events no longer exist (ThenToMeet's only; other IDs and failed checks don't count). */
+	async missingEvents(ids: string[]): Promise<string[]> {
+		const native = ids.filter(isNativeEventId);
+		if (!this.enabled || !native.length) return [];
+		try {
+			const { getClientDb, findMissingEvents } = await firebase();
+			return await findMissingEvents(getClientDb(), native);
+		} catch {
+			return [];
 		}
 	}
 
@@ -230,6 +241,26 @@ class Accounts {
 			await removePassword(db, eventId, name, current);
 		} catch (e) {
 			throw explain(e, 'remove the password');
+		}
+	}
+
+	/** Brings an imported event up to date with its When2Meet poll (see `planResync`). */
+	async resyncWhen2Meet(eventId: string, poll: W2MEvent): Promise<ResyncReport> {
+		try {
+			const { db, resyncWhen2Meet } = await manage();
+			return await resyncWhen2Meet(db, eventId, poll);
+		} catch (e) {
+			throw explain(e, 'update this event');
+		}
+	}
+
+	/** Hands an event to another account that responded to it. Only its owner can. */
+	async transferOwnership(eventId: string, newOwnerUid: string): Promise<void> {
+		try {
+			const { db, transferOwnership } = await manage();
+			await transferOwnership(db, eventId, newOwnerUid);
+		} catch (e) {
+			throw explain(e, 'transfer this event', true);
 		}
 	}
 

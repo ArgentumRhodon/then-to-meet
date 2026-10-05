@@ -142,7 +142,7 @@ failed. The gate matters: a default saved before the migration would overwrite m
 ```bash
 npm run dev          # .claude/launch.json also has "dev" on port 5180
 npm run check        # svelte-check: 0 errors expected
-npm test             # 255 pass, 2 skipped (live When2Meet tests)
+npm test             # 270 pass, 2 skipped (live When2Meet tests)
 npm run test:rules   # 99 emulator tests (needs Java on PATH; see below)
 npm run build
 npm run firebase:deploy   # pushes firestore.rules + indexes only (not hosting); or paste the rules
@@ -195,16 +195,23 @@ inside that dialog. Apply this to every new control (see memory `feedback-single
 
 ## Not built yet (suggested order)
 
-1. Re-syncing an imported poll with its When2Meet original (imports are one-time snapshots today).
-2. Mobile polish for the availability picker (touch painting is tap + sideways swipe; day/hour
-   labels fill whole lines because vertical swipes scroll).
-3. After an owner deletes an event, other people's "recent" entries for it linger until opened (it then
-   says the event isn't found). `users/{uid}/events/{id}` docs of other users can't be cleaned up by the
-   owner under the current rules.
-4. Owner transfer / co-owners; adding a password to an existing entry (deliberately disallowed).
-5. Per-visit read costs are now lower for native events (live listener), but a very large event still
+Done since the last handoff: the picker's touch mode (tap marks on release; "Drag to paint" toggle),
+**Update from When2Meet** (`planResync` in `model.ts`, `resyncWhen2Meet` in `manage.ts`, owner menu),
+**Transfer ownership** (`transferOwnership`, `TransferDialog`; needs no rules change: owners can already
+update their event), and stale recents (an event found missing is dropped from the account's recent
+list when it's opened, when it's deleted while open, and, for ThenToMeet IDs, on sign-in via
+`findMissingEvents`). Tests: `syncTransfer.test.ts` (rules), `planResync` in `model.test.ts`,
+`recent.test.ts`, and the new cases in `app.live.test.ts`.
+
+1. Co-owners (transfer is one owner at a time); adding a password to an existing entry (deliberately
+   disallowed). A transfer only checks in the client that the new owner responded; the rules would let
+   an owner write any `ownerId`, which is within the "not particularly tight" stance.
+2. Re-sync never removes people who left the poll, and a poll whose slot length or weekly/dated kind
+   changed is refused. It only adds the poll's new times.
+3. Sticky day/hour headers in the availability picker while scrolling.
+4. Per-visit read costs are now lower for native events (live listener), but a very large event still
    reads every response on each load.
-6. Abuse limits (anyone can respond, so anyone can add many names); acceptable per the user's
+5. Abuse limits (anyone can respond, so anyone can add many names); acceptable per the user's
    "not particularly tight" security stance, but worth a look if it's ever public.
 
 ## Where else the context lives

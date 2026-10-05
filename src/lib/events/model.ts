@@ -14,7 +14,9 @@ import { MAX_PASSWORD } from './password';
  */
 
 export type EventSource =
-	{ type: 'thentomeet' } | { type: 'when2meet'; id: string; importedAt: number };
+	| { type: 'thentomeet' }
+	/** `syncedAt` is the last time the copy was brought up to date with the poll (see `planResync`). */
+	| { type: 'when2meet'; id: string; importedAt: number; syncedAt?: number };
 
 export interface EventDoc {
 	ownerId: string;
@@ -118,12 +120,8 @@ export const toEvent = (
 export const responseKey = (name: string): string =>
 	'n:' + encodeURIComponent(name.normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase());
 
-/** The documents for a copy of a When2Meet poll owned by `ownerId`. */
-export const importDocs = (
-	poll: W2MEvent,
-	ownerId: string,
-	now = Date.now()
-): { event: EventDoc; responses: ResponseEntry[] } => {
+/** The slot times each person in a poll is free for, by person ID. */
+const timesByPerson = (poll: W2MEvent): Map<number, number[]> => {
 	const times = new Map<number, number[]>();
 	for (const slot of poll.slots) {
 		for (const pid of slot.available) {
@@ -132,15 +130,37 @@ export const importDocs = (
 			else times.set(pid, [slot.time]);
 		}
 	}
-	const everyone = [...poll.people, ...poll.noTimes];
+	return times;
+};
+
+/**
+ * The document ID each person in a poll is filed under. A poll never has two people with one name,
+ * but if it somehow does, neither is lost.
+ */
+const pollKeys = (people: Person[]): Map<number, string> => {
 	const taken = new Set<string>();
-	const responses = everyone.map(({ id, name }) => {
-		// A poll never has two people with one name, but if it somehow does, neither is lost.
+	const keys = new Map<number, string>();
+	for (const { id, name } of people) {
 		let key = responseKey(name);
 		if (taken.has(key)) key += `~${id}`;
 		taken.add(key);
+		keys.set(id, key);
+	}
+	return keys;
+};
+
+/** The documents for a copy of a When2Meet poll owned by `ownerId`. */
+export const importDocs = (
+	poll: W2MEvent,
+	ownerId: string,
+	now = Date.now()
+): { event: EventDoc; responses: ResponseEntry[] } => {
+	const times = timesByPerson(poll);
+	const everyone = [...poll.people, ...poll.noTimes];
+	const keys = pollKeys(everyone);
+	const responses = everyone.map(({ id, name }) => {
 		return {
-			id: key,
+			id: keys.get(id)!,
 			doc: {
 				personId: id,
 				name,
@@ -164,6 +184,107 @@ export const importDocs = (
 		updatedAt: now
 	};
 	return { event, responses };
+};
+
+/** What bringing an imported copy up to date with its poll did, or would do. */
+export interface ResyncReport {
+	/** People who are new on When2Meet. */
+	added: number;
+	/** People whose times changed on When2Meet. */
+	updated: number;
+	/** People changed in this copy since the import, whose times were left as they are. */
+	kept: number;
+	/** Times the poll gained since the last sync. */
+	slotsAdded: number;
+	/** Person IDs added or updated. */
+	touched: number[];
+}
+
+export interface ResyncPlan {
+	report: ResyncReport;
+	/** The fields of the event document that change. Empty when nothing needs writing. */
+	event: Partial<EventDoc>;
+	/** Responses to write, in full (a new entry or a changed one). */
+	responses: ResponseEntry[];
+}
+
+const sameTimes = (a: readonly number[], b: readonly number[]) =>
+	a.length === b.length && a.every((t) => b.includes(t));
+
+/**
+ * Works out how to bring an imported copy up to date with its When2Meet poll, as it is now.
+ *
+ * The poll wins for the people who came from it, but never over something done in the copy. An
+ * entry counts as the poll's when nobody here has touched it since the last sync: no account has
+ * claimed it, it has no password, and it hasn't changed since. Those get the poll's times.
+ * Anyone else is left as they are and counted as `kept`. People new on the poll are added, with
+ * IDs from the copy's own counter (the poll's could clash with people who joined here). People
+ * who left the poll stay, and the poll's new times are added to the copy's.
+ */
+export const planResync = (
+	event: EventDoc,
+	existing: ResponseEntry[],
+	poll: W2MEvent,
+	now = Date.now()
+): ResyncPlan => {
+	if (event.source.type !== 'when2meet') {
+		throw new InvalidInput("This event wasn't imported from When2Meet.");
+	}
+	if (poll.weekly !== event.weekly || poll.slotSeconds !== event.slotSeconds) {
+		throw new InvalidInput(
+			'That poll has different kinds of times than this copy, so it can’t be merged.'
+		);
+	}
+	const baseline = event.source.syncedAt ?? event.source.importedAt;
+	const report: ResyncReport = { added: 0, updated: 0, kept: 0, slotsAdded: 0, touched: [] };
+
+	const known = new Set(event.slots);
+	const gained = poll.slots.map((s) => s.time).filter((t) => !known.has(t));
+	if (event.slots.length + gained.length > MAX_SLOTS) {
+		throw new InvalidInput('That poll has more times than ThenToMeet can hold.');
+	}
+	report.slotsAdded = gained.length;
+
+	const times = timesByPerson(poll);
+	const everyone = [...poll.people, ...poll.noTimes];
+	const keys = pollKeys(everyone);
+	const byKey = new Map(existing.map((e) => [e.id, e.doc]));
+	let nextPersonId = event.nextPersonId;
+	const responses: ResponseEntry[] = [];
+
+	for (const { id, name } of everyone) {
+		const key = keys.get(id)!;
+		const available = [...(times.get(id) ?? [])].sort((a, b) => a - b);
+		const prior = byKey.get(key);
+		if (!prior) {
+			const personId = nextPersonId++;
+			responses.push({ id: key, doc: { personId, name, uid: null, available, updatedAt: now } });
+			report.added++;
+			report.touched.push(personId);
+		} else if (!sameTimes(prior.available, available)) {
+			if (prior.uid === null && prior.salt === undefined && prior.updatedAt <= baseline) {
+				responses.push({ id: key, doc: { ...prior, available, updatedAt: now } });
+				report.updated++;
+				report.touched.push(prior.personId);
+			} else {
+				report.kept++;
+			}
+		}
+	}
+
+	const changed = report.added || report.updated || report.slotsAdded;
+	if (!changed) return { report, event: {}, responses: [] };
+	return {
+		report,
+		responses,
+		event: {
+			...(gained.length ? { slots: [...event.slots, ...gained].sort((a, b) => a - b) } : {}),
+			nextPersonId,
+			responseCount: event.responseCount + report.added,
+			source: { ...event.source, syncedAt: now },
+			updatedAt: now
+		}
+	};
 };
 
 export interface NewEvent {

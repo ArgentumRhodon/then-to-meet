@@ -14,6 +14,7 @@ import {
 	parseResponse,
 	responseKey,
 	parseNewEvent,
+	planResync,
 	toEvent,
 	type EventDoc,
 	type ResponseDoc
@@ -291,5 +292,123 @@ describe('password errors', () => {
 		expect(new PasswordRequired().message).toMatch(/Enter it/);
 		expect(new WrongPassword().message).toMatch(/wrong/);
 		expect(new PasswordRequired()).toBeInstanceOf(Error);
+	});
+});
+
+describe('planResync', () => {
+	const T = [1000, 1900, 2800, 3700];
+	const pollWith = (
+		people: [number, string, number[]][],
+		times = T,
+		extra: Partial<W2MEvent> = {}
+	): W2MEvent => ({
+		id: '1-abc',
+		title: 'Sync',
+		weekly: false,
+		slotSeconds: 900,
+		slots: times.map((time) => ({
+			time,
+			available: people.filter(([, , free]) => free.includes(time)).map(([id]) => id)
+		})),
+		people: people.map(([id, name]) => ({ id, name })),
+		noTimes: [],
+		fetchedAt: 1,
+		...extra
+	});
+	const copyOf = (p: W2MEvent) => importDocs(p, OWNER, 1000);
+
+	it('does nothing when the poll is unchanged', () => {
+		const p = pollWith([[1, 'Ada', [T[0]]]]);
+		const { event, responses } = copyOf(p);
+		const plan = planResync(event, responses, p, 5000);
+		expect(plan.event).toEqual({});
+		expect(plan.responses).toEqual([]);
+		expect(plan.report).toEqual({ added: 0, updated: 0, kept: 0, slotsAdded: 0, touched: [] });
+	});
+
+	it('updates people whose times changed, and adds new ones with the copy’s own IDs', () => {
+		const before = pollWith([
+			[1, 'Ada', [T[0]]],
+			[2, 'Bo', [T[1]]]
+		]);
+		const { event, responses } = copyOf(before);
+		const after = pollWith([
+			[1, 'Ada', [T[0], T[2]]],
+			[2, 'Bo', [T[1]]],
+			[2000, 'Cy', [T[3]]]
+		]);
+		const plan = planResync(event, responses, after, 5000);
+		expect(plan.report).toMatchObject({ added: 1, updated: 1, kept: 0, touched: [1, 3] });
+		expect(plan.responses.map((r) => [r.doc.name, r.doc.personId, r.doc.available])).toEqual([
+			['Ada', 1, [T[0], T[2]]],
+			['Cy', 3, [T[3]]]
+		]);
+		expect(plan.event).toMatchObject({
+			nextPersonId: 4,
+			responseCount: 3,
+			updatedAt: 5000,
+			source: { type: 'when2meet', id: '1-abc', importedAt: 1000, syncedAt: 5000 }
+		});
+	});
+
+	it('leaves people alone who changed here, own an account, or have a password', () => {
+		const before = pollWith([
+			[1, 'Ada', [T[0]]],
+			[2, 'Bo', [T[0]]],
+			[3, 'Cy', [T[0]]],
+			[4, 'Di', [T[0]]]
+		]);
+		const { event, responses } = copyOf(before);
+		const edited = responses.map((r) => {
+			if (r.doc.name === 'Ada') return { ...r, doc: { ...r.doc, updatedAt: 2000 } };
+			if (r.doc.name === 'Bo') return { ...r, doc: { ...r.doc, uid: 'u-bo' } };
+			if (r.doc.name === 'Cy') return { ...r, doc: { ...r.doc, salt: 's', nonce: 'n' } };
+			return r;
+		});
+		const after = pollWith(
+			before.people.map((p) => [p.id, p.name, [T[1]]] as [number, string, number[]])
+		);
+		const plan = planResync(event, edited, after, 5000);
+		expect(plan.report).toMatchObject({ added: 0, updated: 1, kept: 3, touched: [4] });
+		expect(plan.responses.map((r) => r.doc.name)).toEqual(['Di']);
+	});
+
+	it('treats a person as the poll’s again once synced, unless they change after that', () => {
+		const before = pollWith([[1, 'Ada', [T[0]]]]);
+		const { event, responses } = copyOf(before);
+		const second = planResync(event, responses, pollWith([[1, 'Ada', [T[1]]]]), 5000);
+		const synced = { ...event, ...second.event } as EventDoc;
+		const third = planResync(synced, second.responses, pollWith([[1, 'Ada', [T[2]]]]), 9000);
+		expect(third.report.updated).toBe(1);
+		const touched = [
+			{ ...second.responses[0], doc: { ...second.responses[0].doc, updatedAt: 6000 } }
+		];
+		const fourth = planResync(synced, touched, pollWith([[1, 'Ada', [T[2]]]]), 9000);
+		expect(fourth.report).toMatchObject({ updated: 0, kept: 1 });
+	});
+
+	it('keeps people who left the poll, and adds the poll’s new times', () => {
+		const before = pollWith([
+			[1, 'Ada', [T[0]]],
+			[2, 'Bo', [T[0]]]
+		]);
+		const { event, responses } = copyOf(before);
+		const after = pollWith([[1, 'Ada', [T[0]]]], [...T, 4600]);
+		const plan = planResync(event, responses, after, 5000);
+		expect(plan.report).toMatchObject({ added: 0, updated: 0, slotsAdded: 1 });
+		expect(plan.event.slots).toEqual([...T, 4600]);
+		expect(plan.responses).toEqual([]);
+	});
+
+	it('refuses a poll of another kind, or an event that was not imported', () => {
+		const p = pollWith([[1, 'Ada', [T[0]]]]);
+		const { event, responses } = copyOf(p);
+		expect(() => planResync(event, responses, { ...p, slotSeconds: 1800 }, 1)).toThrow(
+			InvalidInput
+		);
+		expect(() => planResync(event, responses, { ...p, weekly: true }, 1)).toThrow(InvalidInput);
+		expect(() => planResync({ ...event, source: { type: 'thentomeet' } }, responses, p, 1)).toThrow(
+			InvalidInput
+		);
 	});
 });

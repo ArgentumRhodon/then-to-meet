@@ -8,7 +8,8 @@ const mocks = vi.hoisted(() => ({
 		user: null as { uid: string } | null,
 		init: vi.fn(),
 		loadEvent: vi.fn(),
-		watchEvent: vi.fn()
+		watchEvent: vi.fn(),
+		resyncWhen2Meet: vi.fn()
 	},
 	userData: {
 		flush: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock('./userData', () => ({ userData: mocks.userData, RECENT_MAX: 12 }));
 vi.mock('$lib/ui/toast.svelte', () => ({ toast: { show: mocks.toast } }));
 
 import { app } from './app.svelte';
+import { recent } from './recent.svelte';
 
 const make = (people: { id: number; name: string }[], free: Record<number, number[]> = {}) =>
 	({
@@ -63,6 +65,7 @@ beforeEach(() => {
 		mocks.accounts.init,
 		mocks.accounts.loadEvent,
 		mocks.accounts.watchEvent,
+		mocks.accounts.resyncWhen2Meet,
 		mocks.userData.flush,
 		mocks.userData.loadEvent,
 		mocks.userData.queueEvent,
@@ -175,6 +178,26 @@ describe('following an event live', () => {
 		expect(app.live).toBe(false);
 		expect(app.error).toBe('This event was deleted.');
 		expect(app.event).not.toBeNull();
+		// Nothing is left to open, so it leaves the recent list too.
+		expect(mocks.userData.queueEvent).toHaveBeenCalledWith(NATIVE, { openedAt: 0 });
+	});
+
+	it('takes a deleted event off the recent list when its link is opened', async () => {
+		await open();
+		expect(recent.items.some((e) => e.id === NATIVE)).toBe(true);
+		const gone = new Error('No ThenToMeet event found at that link.');
+		gone.name = 'NativeEventNotFound';
+		mocks.accounts.loadEvent.mockRejectedValue(gone);
+		await app.load(NATIVE);
+		expect(app.error).toBe('No ThenToMeet event found at that link.');
+		expect(recent.items.some((e) => e.id === NATIVE)).toBe(false);
+	});
+
+	it('keeps a recent event when it just could not be loaded', async () => {
+		await open();
+		mocks.accounts.loadEvent.mockRejectedValue(new Error('Check your connection.'));
+		await app.load(NATIVE);
+		expect(recent.items.some((e) => e.id === NATIVE)).toBe(true);
 	});
 
 	it('keeps working if starting the listener fails', async () => {
@@ -183,5 +206,47 @@ describe('following an event live', () => {
 		await Promise.resolve();
 		expect(app.status).toBe('ready');
 		expect(app.live).toBe(false);
+	});
+});
+
+describe('updating an import from When2Meet', () => {
+	const IMPORTED = { ...make([ada], { 1: [0] }), importedFrom: '123-abc' };
+	const report = { added: 1, updated: 1, kept: 0, slotsAdded: 0, touched: [1, 2] };
+
+	it('fetches the poll fresh, hands it over, and does not announce its own changes', async () => {
+		mocks.accounts.loadEvent.mockResolvedValue(IMPORTED);
+		const poll = { ...make([ada, bo]), id: '123-abc', source: undefined };
+		const fetchMock = vi.fn(async () => new Response(JSON.stringify(poll)));
+		vi.stubGlobal('fetch', fetchMock);
+		mocks.accounts.resyncWhen2Meet.mockResolvedValue(report);
+		await open();
+
+		await expect(app.resyncImport()).resolves.toEqual(report);
+		expect(fetchMock).toHaveBeenCalledWith('/api/event/123-abc?fresh=1');
+		expect(mocks.accounts.resyncWhen2Meet).toHaveBeenCalledWith(NATIVE, poll);
+
+		// The live update that follows shows the changes without a toast of its own.
+		watch.onEvent(make([ada, bo], { 1: [0], 2: [1] }));
+		expect(app.event!.people).toHaveLength(2);
+		expect(mocks.toast).not.toHaveBeenCalled();
+		vi.unstubAllGlobals();
+	});
+
+	it('fails for an event that was not imported', async () => {
+		await open();
+		await expect(app.resyncImport()).rejects.toThrow(/imported/);
+		expect(mocks.accounts.resyncWhen2Meet).not.toHaveBeenCalled();
+	});
+
+	it('passes on the poll’s error when it can’t be fetched', async () => {
+		mocks.accounts.loadEvent.mockResolvedValue(IMPORTED);
+		vi.stubGlobal(
+			'fetch',
+			vi.fn(async () => new Response(JSON.stringify({ message: 'No such poll.' }), { status: 404 }))
+		);
+		await open();
+		await expect(app.resyncImport()).rejects.toThrow('No such poll.');
+		expect(mocks.accounts.resyncWhen2Meet).not.toHaveBeenCalled();
+		vi.unstubAllGlobals();
 	});
 });

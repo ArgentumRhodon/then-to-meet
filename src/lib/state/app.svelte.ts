@@ -21,6 +21,7 @@ import { buildGrid } from '$lib/analysis/grid';
 import { findMeetingSets, type MeetingSet, type MeetingsPerWeek } from '$lib/analysis/meetingSets';
 import { sameRoles, withGroup } from '$lib/analysis/roles';
 import { isNativeEventId } from '$lib/events/id';
+import type { ResyncReport } from '$lib/events/model';
 import { toast } from '$lib/ui/toast.svelte';
 import { shareSearch } from '$lib/share/url';
 import type { Role, Roles, TimeRange, W2MEvent } from '$lib/types';
@@ -252,6 +253,8 @@ class AppState {
 		} catch (e) {
 			if (token !== this.#loadToken) return;
 			this.error = e instanceof Error ? e.message : String(e);
+			// A deleted event has nothing left to open, so it leaves the recent list.
+			if (e instanceof Error && e.name === 'NativeEventNotFound') recent.forget(id);
 			// Keep showing the current event if switching to another one failed.
 			this.status = this.event ? 'ready' : 'error';
 		}
@@ -319,7 +322,10 @@ class AppState {
 					if (this.event?.id !== id) return;
 					this.live = false;
 					// Gone for good: say so. Anything else (a dropped connection) falls back to polling.
-					if (error.name === 'NativeEventNotFound') this.error = 'This event was deleted.';
+					if (error.name === 'NativeEventNotFound') {
+						this.error = 'This event was deleted.';
+						recent.forget(id);
+					}
 				}
 			);
 			if (token !== this.#loadToken) stop();
@@ -347,6 +353,20 @@ class AppState {
 			fresh.updated.length && `${fresh.updated.length} updated`
 		].filter(Boolean);
 		if (parts.length) toast.show(parts.join(', '));
+	}
+
+	/**
+	 * Brings an imported event up to date with its When2Meet poll, for its owner. Returns what
+	 * changed, and what it did to people is not announced again by the live update.
+	 */
+	async resyncImport(): Promise<ResyncReport> {
+		const event = this.event;
+		if (!event?.importedFrom) throw new Error("This event wasn't imported from When2Meet.");
+		const poll = await fetchEvent(event.importedFrom, { fresh: true });
+		const report = await accounts.resyncWhen2Meet(event.id, poll);
+		for (const personId of report.touched) this.noteOwn(personId);
+		if (!this.live) await this.refresh();
+		return report;
 	}
 
 	/** Records that this browser just saved this person's times, so their own change isn't announced. */

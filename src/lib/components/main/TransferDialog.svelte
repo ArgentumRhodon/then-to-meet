@@ -48,7 +48,7 @@
 	<form onsubmit={transfer}>
 		<header class="border-b border-line px-5 py-4">
 			<h2 id="transfer-title" class="text-base font-semibold tracking-tight">Transfer ownership</h2>
-			<p class="mt-0.5 text-[13px] text-fg-2">
+			<p class="mt-0.5 text-13 text-fg-2">
 				Pick who takes over. They can delete the event and remove people, and you can’t, unless they
 				hand it back.
 			</p>
@@ -72,7 +72,7 @@
 
 		<footer class="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">
 			{#if error}
-				<p class="flex min-w-0 flex-1 items-start gap-1.5 text-[13px] text-danger" role="alert">
+				<p class="flex min-w-0 flex-1 items-start gap-1.5 text-13 text-danger" role="alert">
 					<CircleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
 					<span>{error}</span>
 				</p>

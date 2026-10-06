@@ -18,7 +18,7 @@
 	};
 
 	const arrow =
-		'flex h-10 w-11 shrink-0 items-center justify-center text-accent-fg transition-colors hover:bg-accent/20 active:bg-accent/30 disabled:pointer-events-none disabled:opacity-30';
+		'flex h-10 w-11 shrink-0 items-center justify-center text-accent-fg transition-colors hover:bg-accent/20 active:bg-accent/30 aria-disabled:cursor-not-allowed aria-disabled:opacity-30 aria-disabled:hover:bg-transparent';
 </script>
 
 <div
@@ -28,25 +28,25 @@
 >
 	<button
 		class={arrow}
-		disabled={position <= 0}
-		onclick={(e) => step(-1, e)}
+		aria-disabled={position <= 0}
+		onclick={(e) => position > 0 && step(-1, e)}
 		aria-label="Start earlier"
-		title="Start earlier (Shift: 30 min, Ctrl+Shift: 1 hour)"
+		title="Start earlier (Shift: 30m, Ctrl+Shift: 1h)"
 	>
 		<ChevronLeft class="size-5" />
 	</button>
 	<output
-		class="min-w-0 flex-1 text-center text-[15px] font-semibold tracking-tight tabular"
+		class="min-w-0 flex-1 text-center text-15 font-semibold tracking-tight tabular"
 		aria-live="polite"
 	>
 		{label}
 	</output>
 	<button
 		class={arrow}
-		disabled={position >= count - 1}
-		onclick={(e) => step(1, e)}
+		aria-disabled={position >= count - 1}
+		onclick={(e) => position < count - 1 && step(1, e)}
 		aria-label="Start later"
-		title="Start later (Shift: 30 min, Ctrl+Shift: 1 hour)"
+		title="Start later (Shift: 30m, Ctrl+Shift: 1h)"
 	>
 		<ChevronRight class="size-5" />
 	</button>

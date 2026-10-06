@@ -6,7 +6,7 @@
 	import Link from '@lucide/svelte/icons/link';
 	import { page } from '$app/state';
 	import type { TimeBlock } from '$lib/analysis/bestTimes';
-	import { formatDay, formatTimeRange } from '$lib/analysis/format';
+	import { formatDay, formatTimeRange, formatZone } from '$lib/analysis/format';
 	import { downloadIcs, googleCalendarUrl, meetingFor } from '$lib/share/calendar';
 	import { app } from '$lib/state/app.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
@@ -43,14 +43,14 @@
 	const copy = () =>
 		copyText(
 			`${event.title}: ${dayLabel} · ${formatTimeRange(start, end, zone)}` +
-				(event.weekly ? '' : ` (${zone.replaceAll('_', ' ')})`)
+				(event.weekly ? '' : `, ${formatZone(zone, start)}`)
 		);
 </script>
 
 <li
 	data-result
 	class="rounded-xl border transition-colors {pinned
-		? 'border-accent bg-surface shadow-card'
+		? 'border-accent-strong bg-surface shadow-card'
 		: 'border-line bg-surface hover:border-line-strong'}"
 	onpointerenter={() => (app.hoveredBlock = block)}
 	onpointerleave={() => (app.hoveredBlock = null)}
@@ -71,7 +71,7 @@
 				/>
 			</span>
 			{#if !stepping}
-				<span class="mt-0.5 block text-[15px] font-semibold tracking-tight tabular">
+				<span class="mt-0.5 block text-15 font-semibold tracking-tight tabular">
 					{formatTimeRange(pinned ? start : block.start, pinned ? end : block.end, zone)}
 				</span>
 			{/if}
@@ -101,7 +101,7 @@
 					rel="noopener noreferrer"
 				>
 					<CalendarPlus class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
-					Google Calendar
+					Google Calendar<span class="sr-only"> (opens in new tab)</span>
 				</a>
 				<button
 					class="btn btn-ghost btn-sm btn-icon"

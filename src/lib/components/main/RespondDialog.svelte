@@ -5,6 +5,7 @@
 	import { InvalidInput, PasswordRequired, responseKey, WrongPassword } from '$lib/events/model';
 	import { accounts } from '$lib/state/accounts.svelte';
 	import { app } from '$lib/state/app.svelte';
+	import { formatZone } from '$lib/analysis/format';
 	import { toast } from '$lib/ui/toast.svelte';
 	import AvailabilityPicker from './AvailabilityPicker.svelte';
 
@@ -107,11 +108,10 @@
 			<h2 id="respond-title" class="text-base font-semibold tracking-tight">
 				{existing ? `Edit ${existing.name}’s times` : 'Add your times'}
 			</h2>
-			<p class="mt-0.5 text-[13px] text-fg-2">
-				Click, tap or drag to mark when you’re free. Times are shown in {grid.zone.replaceAll(
-					'_',
-					' '
-				)}.
+			<p class="mt-0.5 text-13 text-fg-2">
+				Click, tap or drag to mark when you’re free.
+				<!-- Weekly events aren't tied to a zone, so there's nothing to say about one. -->
+				{#if !event.weekly}Times are in {formatZone(grid.zone, event.slots[0]?.time)}.{/if}
 			</p>
 		</header>
 
@@ -119,16 +119,20 @@
 			<div class="grid gap-4 sm:grid-cols-2">
 				<div>
 					<label for="respond-name" class="eyebrow mb-1.5 block">Your name</label>
+					<!-- The dialog opens on the name, not on the scrolling area around it. -->
+					<!-- svelte-ignore a11y_autofocus -->
 					<input
 						id="respond-name"
+						autofocus
 						class="input"
 						type="text"
 						autocomplete="name"
 						maxlength="60"
 						required
+						aria-describedby="respond-name-help"
 						bind:value={name}
 					/>
-					<p class="mt-1.5 text-xs text-fg-3">
+					<p id="respond-name-help" class="mt-1.5 text-xs text-fg-3">
 						{#if existing}
 							That name is already in this event, so you’re editing its times.
 						{:else}
@@ -161,6 +165,7 @@
 					<p
 						id="respond-password-help"
 						class="mt-1.5 text-xs {passwordError ? 'text-danger' : 'text-fg-3'}"
+						role={passwordError ? 'alert' : undefined}
 					>
 						{#if passwordError}
 							{passwordError}
@@ -187,16 +192,16 @@
 						<button
 							type="button"
 							class="btn btn-ghost btn-sm"
-							onclick={() => setSelected(allSlots())}
-							disabled={selected.size === event.slots.length}
+							onclick={() => selected.size < event.slots.length && setSelected(allSlots())}
+							aria-disabled={selected.size === event.slots.length}
 						>
 							Select all
 						</button>
 						<button
 							type="button"
 							class="btn btn-ghost btn-sm"
-							onclick={() => setSelected(new Set())}
-							disabled={selected.size === 0}
+							onclick={() => selected.size && setSelected(new Set())}
+							aria-disabled={selected.size === 0}
 						>
 							Clear
 						</button>
@@ -208,7 +213,7 @@
 
 		<footer class="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">
 			{#if error}
-				<p class="flex min-w-0 flex-1 items-start gap-1.5 text-[13px] text-danger" role="alert">
+				<p class="flex min-w-0 flex-1 items-start gap-1.5 text-13 text-danger" role="alert">
 					<CircleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
 					<span>{error}</span>
 				</p>

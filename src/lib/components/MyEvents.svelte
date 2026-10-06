@@ -25,7 +25,7 @@
 
 {#if items.length}
 	<section class="mx-auto mt-10 w-full max-w-xl" aria-labelledby="mine-heading">
-		<h2 id="mine-heading" class="eyebrow mb-2 px-3">Your events</h2>
+		<h2 id="mine-heading" class="eyebrow mb-2 px-3 text-fg-2">Your events</h2>
 		<ul class="card space-y-0.5 p-1.5">
 			{#each items as item (item.id)}
 				<li>

@@ -30,7 +30,7 @@
 	{#if you && answered}
 		<div class="flex items-center gap-3">
 			<Avatar id={you.id} name={you.name} size={32} />
-			<h2 id="respond-card-title" class="min-w-0 flex-1 truncate text-[13px] font-medium">
+			<h2 id="respond-card-title" class="min-w-0 flex-1 truncate text-13 font-medium">
 				You’re in as {you.name}
 			</h2>
 			<button class="btn btn-secondary btn-sm" onclick={() => (responding = true)}>
@@ -40,22 +40,22 @@
 		</div>
 	{:else}
 		<div class="rounded-xl border border-accent/30 bg-accent-soft/50 p-4">
-			<h2 id="respond-card-title" class="text-[15px] font-semibold tracking-tight">
-				{you ? `${you.name}, you haven’t marked any times` : 'When are you free?'}
+			<h2 id="respond-card-title" class="text-15 font-semibold tracking-tight">
+				{you ? `${you.name}, you haven’t added any times` : 'When are you free?'}
 			</h2>
-			<p class="mt-1 text-[13px] text-fg-2">
+			<p class="mt-1 text-13 text-fg-2">
 				{#if others}
 					{others}
 					{others === 1 ? 'person has' : 'people have'} added their times. Add yours so the best times
 					include you.
 				{:else}
-					Nobody has added times yet. Mark yours to get things started.
+					Nobody has added times yet. Add yours to get things started.
 				{/if}
 				{#if !accounts.user}No account needed.{/if}
 			</p>
 			<button class="btn btn-primary mt-3 w-full" onclick={() => (responding = true)}>
 				<Pencil class="size-4" aria-hidden="true" />
-				{you ? 'Mark your times' : 'Add your times'}
+				Add your times
 			</button>
 		</div>
 	{/if}

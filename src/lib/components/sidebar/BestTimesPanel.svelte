@@ -4,6 +4,7 @@
 	import { DURATION_STEP, MIN_DURATION } from '$lib/analysis/duration';
 	import { formatDuration } from '$lib/analysis/format';
 	import type { MeetingSet, MeetingsPerWeek } from '$lib/analysis/meetingSets';
+	import { tick } from 'svelte';
 	import { app } from '$lib/state/app.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
 	import PickedTime from '../main/PickedTime.svelte';
@@ -75,10 +76,33 @@
 		return `Nothing fits ${only?.name ?? 'the one required person'} either.`;
 	});
 	const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+	/**
+	 * Runs a "Nothing fits" fix, whose button goes away with the box, then puts focus on the first
+	 * result it found, or on what's left of the box if it still found nothing.
+	 */
+	let body = $state<HTMLElement>();
+	const tryFix = async (fix: () => void) => {
+		fix();
+		await tick();
+		body?.querySelector<HTMLElement>('[data-result] button, [data-nothing-fits] button')?.focus();
+	};
+
+	/** The results in a sentence, read out when the search changes (the list itself isn't live). */
+	const announcement = $derived.by(() => {
+		if (!results) return '';
+		if (considered === 0) return 'Everyone is skipped.';
+		const meeting = `a ${formatDuration(app.duration)} meeting${sets ? ` ${phrase}` : ''}`;
+		if (!total) return `Nothing fits ${who} for ${meeting}.`;
+		return `${plural(total, sets ? 'option' : 'best time')} for ${meeting}${app.viewLabel ? `, ${app.viewLabel} only` : ''}.`;
+	});
 </script>
 
+<!-- Outside the section, so it's listening even while best times is folded away. -->
+<p class="sr-only" aria-live="polite">{announcement}</p>
+
 <Section title="Best times" count={total} collapsible={!layout.sideColumn}>
-	<div class="space-y-4 px-4 pb-5">
+	<div class="space-y-4 px-4 pb-5" bind:this={body}>
 		<!-- Without the heatmap, a time opened from a shared link shows up here instead. -->
 		{#if !layout.showHeatmap && app.selectedBlocks.length}
 			<PickedTime />
@@ -89,7 +113,7 @@
 		<div class="space-y-3 sm:grid sm:grid-cols-2 sm:space-y-0 sm:gap-x-6 lg:block lg:space-y-3">
 			<DurationPicker />
 			<div class="space-y-1.5">
-				<span id="per-week-label" class="block text-[13px] text-fg-2">Meetings a week</span>
+				<span id="per-week-label" class="block text-13 text-fg-2">Meetings a week</span>
 				<div
 					class="grid grid-cols-3 rounded-lg bg-subtle p-0.5"
 					role="group"
@@ -99,7 +123,7 @@
 						<button
 							class="h-7 rounded-md text-xs font-medium whitespace-nowrap transition-colors pointer-coarse:h-9 {app.perWeek ===
 							option.value
-								? 'bg-accent text-on-accent'
+								? 'bg-accent text-on-accent light:ring-1 light:ring-accent-strong'
 								: 'text-fg-2 hover:text-fg'}"
 							aria-pressed={app.perWeek === option.value}
 							onclick={() => app.setPerWeek(option.value)}
@@ -123,7 +147,7 @@
 		{/if}
 
 		{#if results && considered === 0}
-			<p class="text-[13px] text-fg-2">
+			<p class="text-13 text-fg-2">
 				Everyone is skipped. Mark someone as required or optional to find times.
 			</p>
 		{:else if results && total === 0}
@@ -131,7 +155,7 @@
 				MIN_DURATION,
 				Math.floor(app.duration / 2 / DURATION_STEP) * DURATION_STEP
 			)}
-			<div class="rounded-lg bg-subtle px-3 py-3 text-[13px]">
+			<div class="rounded-lg bg-subtle px-3 py-3 text-13" data-nothing-fits>
 				<p class="font-medium text-fg">
 					Nothing fits {who} for a {formatDuration(app.duration)} meeting{sets ? ` ${phrase}` : ''}
 				</p>
@@ -146,7 +170,7 @@
 								</span>
 								<button
 									class="btn btn-ghost btn-sm shrink-0"
-									onclick={() => app.setRole(blocker.id, unblock.role)}
+									onclick={() => tryFix(() => app.setRole(blocker.id, unblock.role))}
 								>
 									{unblock.label}
 								</button>
@@ -159,13 +183,19 @@
 				{#if app.duration > MIN_DURATION || app.perWeek > 1}
 					<div class="mt-2.5 flex flex-wrap gap-1.5">
 						{#if app.duration > MIN_DURATION}
-							<button class="btn btn-secondary btn-sm" onclick={() => app.setDuration(shorter)}>
+							<button
+								class="btn btn-secondary btn-sm"
+								onclick={() => tryFix(() => app.setDuration(shorter))}
+							>
 								Try {formatDuration(shorter)}
 							</button>
 						{/if}
 						{#if app.perWeek > 1}
 							{@const fewer = PER_WEEK[app.perWeek - 2]}
-							<button class="btn btn-secondary btn-sm" onclick={() => app.setPerWeek(fewer.value)}>
+							<button
+								class="btn btn-secondary btn-sm"
+								onclick={() => tryFix(() => app.setPerWeek(fewer.value))}
+							>
 								Try {fewer.phrase}
 							</button>
 						{/if}

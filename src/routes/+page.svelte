@@ -38,7 +38,13 @@
 
 	const pendingId = $derived(readShareParams(page.url).id);
 	const name = $derived(app.event?.title ?? data.preview?.title);
-	const title = $derived(name ? `${name} · ThenToMeet` : 'ThenToMeet');
+	const title = $derived(
+		name
+			? `${name} · ThenToMeet`
+			: app.status === 'error' && app.error
+				? 'Event not found · ThenToMeet'
+				: 'ThenToMeet'
+	);
 </script>
 
 <svelte:head>

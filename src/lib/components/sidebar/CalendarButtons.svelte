@@ -41,7 +41,9 @@
 				: 'Add to Google Calendar'}
 		>
 			<CalendarPlus class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
-			{meetings.length > 1 ? label(meeting) : 'Google Calendar'}
+			{meetings.length > 1 ? label(meeting) : 'Google Calendar'}<span class="sr-only">
+				(opens in new tab)</span
+			>
 		</a>
 	{/each}
 	<span class="ml-auto flex items-center gap-1">

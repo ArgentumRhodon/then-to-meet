@@ -44,6 +44,11 @@
 
 	const past = (date: string) => today !== null && date < today;
 
+	/** Months before this one have no dates left to pick. Stays focusable, so keyboard focus isn't lost. */
+	const atFirstMonth = $derived(
+		!month || (today !== null && month.startOf('month') <= DateTime.fromISO(today).startOf('month'))
+	);
+
 	const set = (date: string, on: boolean) => {
 		if (past(date) || chosen.has(date) === on) return;
 		const next = new Set(chosen);
@@ -55,10 +60,21 @@
 	const dateAt = (x: number, y: number): string | null =>
 		document.elementFromPoint(x, y)?.closest<HTMLElement>('[data-date]')?.dataset.date ?? null;
 
+	/**
+	 * A touch that might be a tap. It picks its date only once the finger lifts on the same date
+	 * without moving, so starting to scroll the page on the calendar doesn't pick one.
+	 */
+	let tap: { id: number; date: string; x: number; y: number } | null = null;
+	const TAP_SLOP = 8;
+
 	const onpointerdown = (e: PointerEvent) => {
 		if (e.pointerType === 'mouse' && e.button !== 0) return;
 		const date = dateAt(e.clientX, e.clientY);
 		if (!date || past(date)) return;
+		if (e.pointerType === 'touch') {
+			tap = { id: e.pointerId, date, x: e.clientX, y: e.clientY };
+			return;
+		}
 		mode = chosen.has(date) ? 'remove' : 'add';
 		lastX = e.clientX;
 		lastY = e.clientY;
@@ -68,6 +84,10 @@
 	};
 
 	const onpointermove = (e: PointerEvent) => {
+		if (tap?.id === e.pointerId) {
+			if (Math.hypot(e.clientX - tap.x, e.clientY - tap.y) > TAP_SLOP) tap = null;
+			return;
+		}
 		if (!mode) return;
 		sweep(lastX, lastY, e.clientX, e.clientY, (x, y) => {
 			const date = dateAt(x, y);
@@ -77,7 +97,20 @@
 		lastY = e.clientY;
 	};
 
-	const end = () => (mode = null);
+	const onpointerup = (e: PointerEvent) => {
+		if (tap?.id === e.pointerId) {
+			const { date } = tap;
+			tap = null;
+			if (dateAt(e.clientX, e.clientY) === date) set(date, !chosen.has(date));
+			return;
+		}
+		mode = null;
+	};
+
+	const end = () => {
+		tap = null;
+		mode = null;
+	};
 </script>
 
 <div class="select-none">
@@ -85,16 +118,15 @@
 		<button
 			type="button"
 			class="btn btn-ghost btn-icon btn-sm"
-			onclick={() => (month = month!.minus({ months: 1 }))}
-			disabled={!month ||
-				(today !== null && month.startOf('month') <= DateTime.fromISO(today).startOf('month'))}
+			onclick={() => !atFirstMonth && (month = month!.minus({ months: 1 }))}
+			aria-disabled={atFirstMonth}
 			aria-label="Previous month"
 		>
 			<ChevronLeft class="size-4" aria-hidden="true" />
 		</button>
-		<h3 class="flex-1 text-center text-sm font-semibold" aria-live="polite">
+		<p class="flex-1 text-center text-sm font-semibold" aria-live="polite">
 			{month ? month.toLocaleString({ month: 'long', year: 'numeric' }) : ' '}
-		</h3>
+		</p>
 		<button
 			type="button"
 			class="btn btn-ghost btn-icon btn-sm"
@@ -107,7 +139,7 @@
 	</div>
 
 	<div
-		class="grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-fg-3 uppercase"
+		class="grid grid-cols-7 gap-1 text-center text-11 font-medium text-fg-3 uppercase"
 		aria-hidden="true"
 	>
 		{#each ['S', 'M', 'T', 'W', 'T', 'F', 'S'] as letter, i (i)}
@@ -122,7 +154,7 @@
 		aria-label="Dates. Click or drag to choose them."
 		{onpointerdown}
 		{onpointermove}
-		onpointerup={end}
+		{onpointerup}
 		onpointercancel={end}
 	>
 		{#each weeks as week, w (w)}
@@ -137,6 +169,7 @@
 							data-date={date}
 							disabled={past(date)}
 							aria-pressed={chosen.has(date)}
+							aria-current={date === today ? 'date' : undefined}
 							aria-label={DateTime.fromISO(date).toLocaleString(DateTime.DATE_HUGE)}
 							onclick={(e) => e.detail === 0 && set(date, !chosen.has(date))}
 						>
@@ -171,12 +204,15 @@
 		cursor: not-allowed;
 	}
 	.day.today {
-		box-shadow: inset 0 0 0 1px var(--line-strong);
+		box-shadow: inset 0 0 0 1px var(--field-border);
 	}
+	/* The ring is for the light theme, where cyan alone is under 3:1 against an unpicked day; on
+	   dark it's the same color as the fill. */
 	.day.on {
 		background: var(--accent);
 		color: var(--on-accent);
 		font-weight: 600;
+		box-shadow: 0 0 0 1px var(--accent-strong);
 	}
 	.day:focus-visible {
 		outline: 2px solid var(--fg);

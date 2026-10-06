@@ -39,7 +39,7 @@
 
 <div class="border-b border-line p-2">
 	<input
-		class="input h-8 text-[13px] pointer-coarse:text-base"
+		class="input h-8 text-13 pointer-coarse:text-base"
 		type="search"
 		placeholder="Search city or region"
 		aria-label="Search timezones"
@@ -50,23 +50,24 @@
 		}}
 	/>
 </div>
-<ul class="max-h-72 overflow-y-auto p-1" role="listbox" aria-label="Timezones">
+<!-- Plain buttons, not a listbox: a listbox's options can't hold buttons, and these need no arrow keys. -->
+<ul class="max-h-72 overflow-y-auto p-1" aria-label="Timezones">
 	{#each results as zone (zone)}
-		<li role="option" aria-selected={zone === app.zone}>
+		<li>
 			<button
+				aria-current={zone === app.zone ? 'true' : undefined}
 				class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left hover:bg-subtle pointer-coarse:py-2.5"
 				onclick={() => choose(zone)}
 			>
 				<span class="min-w-0 flex-1">
-					<span class="block truncate text-[13px] text-fg">
+					<span class="block truncate text-13 text-fg">
 						{place(zone)}
-						{#if zone === local}<span class="ml-1 text-[11px] text-accent-fg">Your timezone</span
-							>{/if}
+						{#if zone === local}<span class="ml-1 text-11 text-accent-fg">Your timezone</span>{/if}
 					</span>
-					{#if region(zone)}<span class="block truncate text-[11px] text-fg-3">{region(zone)}</span
+					{#if region(zone)}<span class="block truncate text-11 text-fg-3">{region(zone)}</span
 						>{/if}
 				</span>
-				<span class="text-[11px] text-fg-3 tabular">{formatOffset(zone)}</span>
+				<span class="text-11 text-fg-3 tabular">{formatOffset(zone)}</span>
 				<Check
 					class="size-3.5 shrink-0 pointer-coarse:size-4.5 {zone === app.zone
 						? 'text-accent'
@@ -76,6 +77,6 @@
 			</button>
 		</li>
 	{:else}
-		<li class="px-2.5 py-3 text-[13px] text-fg-3">No timezones match.</li>
+		<li class="px-2.5 py-3 text-13 text-fg-3">No timezones match.</li>
 	{/each}
 </ul>

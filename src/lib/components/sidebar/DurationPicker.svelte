@@ -5,9 +5,9 @@
 </script>
 
 <div class="space-y-1.5">
-	<span id="duration-label" class="block text-[13px] text-fg-2">Meeting length</span>
+	<span id="duration-label" class="block text-13 text-fg-2">Meeting length</span>
 	<div
-		class="grid grid-cols-6 rounded-lg bg-subtle p-0.5"
+		class="grid grid-cols-3 rounded-lg bg-subtle p-0.5 sm:grid-cols-6"
 		role="group"
 		aria-labelledby="duration-label"
 	>
@@ -15,7 +15,7 @@
 			<button
 				class="h-7 rounded-md text-xs font-medium whitespace-nowrap tabular transition-colors pointer-coarse:h-9 {app.duration ===
 				minutes
-					? 'bg-accent text-on-accent'
+					? 'bg-accent text-on-accent light:ring-1 light:ring-accent-strong'
 					: 'text-fg-2 hover:text-fg'}"
 				aria-pressed={app.duration === minutes}
 				onclick={() => app.setDuration(minutes)}

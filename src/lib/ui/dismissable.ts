@@ -1,6 +1,6 @@
 import type { Attachment } from 'svelte/attachments';
 
-/** Calls `onDismiss` on a pointer press outside the element or on Escape. */
+/** Calls `onDismiss` on a pointer press outside the element, on Escape, or when focus leaves it. */
 export const dismissable =
 	(onDismiss: () => void): Attachment<HTMLElement> =>
 	(node) => {
@@ -13,10 +13,17 @@ export const dismissable =
 			e.preventDefault();
 			onDismiss();
 		};
+		// Tabbing past a popup closes it, so it doesn't sit over whatever has focus next.
+		const onFocusOut = (e: FocusEvent) => {
+			const next = e.relatedTarget as Node | null;
+			if (next && !node.contains(next)) onDismiss();
+		};
 		document.addEventListener('pointerdown', onPointer, true);
 		document.addEventListener('keydown', onKey);
+		node.addEventListener('focusout', onFocusOut);
 		return () => {
 			document.removeEventListener('pointerdown', onPointer, true);
 			document.removeEventListener('keydown', onKey);
+			node.removeEventListener('focusout', onFocusOut);
 		};
 	};

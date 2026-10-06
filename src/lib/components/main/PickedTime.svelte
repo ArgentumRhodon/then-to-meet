@@ -2,13 +2,15 @@
 	import Copy from '@lucide/svelte/icons/copy';
 	import Link from '@lucide/svelte/icons/link';
 	import X from '@lucide/svelte/icons/x';
+	import { tick } from 'svelte';
 	import { page } from '$app/state';
 	import {
 		formatDay,
 		formatDuration,
 		formatList,
 		formatTimeRange,
-		formatWeekday
+		formatWeekday,
+		formatZone
 	} from '$lib/analysis/format';
 	import { meetingFor, meetingsFor } from '$lib/share/calendar';
 	import { app } from '$lib/state/app.svelte';
@@ -48,7 +50,7 @@
 	const copySummary = () => {
 		const when = (b: (typeof blocks)[number]) =>
 			`${formatDay(b.start, zone, event.weekly)} · ${formatTimeRange(b.start, b.end, zone)}`;
-		const where = event.weekly ? '' : ` (${zone.replaceAll('_', ' ')})`;
+		const where = event.weekly ? '' : `, ${formatZone(zone, blocks[0].start)}`;
 		const lines = blocks.map((b) => `- ${when(b)}`).join('\n');
 		copyText(
 			several ? `${event.title}${where}:\n${lines}` : `${event.title}: ${when(blocks[0])}${where}`,
@@ -70,7 +72,7 @@
 		<div class="min-w-0 flex-1">
 			{#if several}
 				<p class="text-xs text-fg-2">{blocks.length} picked times</p>
-				<p class="text-[15px] font-semibold tracking-tight">
+				<p class="text-15 font-semibold tracking-tight">
 					{formatList(blocks.map((b) => formatWeekday(b.start, zone)))}
 				</p>
 			{:else}
@@ -79,7 +81,7 @@
 						(blocks[0].end - blocks[0].start) / 60
 					)}
 				</p>
-				<p class="text-[15px] font-semibold tracking-tight tabular">
+				<p class="text-15 font-semibold tracking-tight tabular">
 					{formatTimeRange(blocks[0].start, blocks[0].end, zone)}
 				</p>
 			{/if}
@@ -91,7 +93,12 @@
 		</span>
 		<button
 			class="btn btn-ghost btn-sm btn-icon -mt-0.5 -mr-1"
-			onclick={() => app.clearPick()}
+			onclick={async () => {
+				app.clearPick();
+				// The card goes away; carry on from the grid it was picked on.
+				await tick();
+				document.querySelector<HTMLElement>('.heatmap')?.focus({ preventScroll: true });
+			}}
 			aria-label={several ? 'Clear picked times' : 'Clear picked time'}
 			title="Clear (Esc)"
 		>
@@ -111,8 +118,18 @@
 						</span>
 						<button
 							class="btn btn-ghost btn-sm btn-icon -my-1 -mr-1 shrink-0"
-							onclick={() => app.unpick(block.start)}
-							aria-label="Remove {formatDay(block.start, zone, event.weekly)}"
+							onclick={async (e) => {
+								const card = e.currentTarget.closest('[role="region"]');
+								app.unpick(block.start);
+								// Its row goes away; stay in the card, on its Clear button.
+								await tick();
+								card?.querySelector<HTMLElement>('[aria-label^="Clear picked"]')?.focus();
+							}}
+							aria-label="Remove {formatDay(block.start, zone, event.weekly)}, {formatTimeRange(
+								block.start,
+								block.end,
+								zone
+							)}"
 							title="Remove this time"
 						>
 							<X class="size-3.5 pointer-coarse:size-4.5" />
@@ -149,7 +166,7 @@
 				meetings[0].start,
 				app.zone,
 				false
-			)}, in {app.zone.replaceAll('_', ' ')} time.
+			)}, in {formatZone(app.zone, meetings[0].start)}.
 		</p>
 	{:else if several}
 		<label class="mt-1.5 flex items-center gap-2 text-xs text-fg-2 pointer-coarse:min-h-9">

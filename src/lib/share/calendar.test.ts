@@ -86,7 +86,7 @@ describe('meetingsFor (several meetings)', () => {
 	it('describes the whole schedule and who can make each meeting', () => {
 		const [only] = meetingsFor(event, plan(mwf), zone, true, nameOf);
 		const lines = only.details.split('\n');
-		expect(lines[0]).toBe('Meets three times a week (America/New York):');
+		expect(lines[0]).toBe('Meets three times a week, New York time (GMT-4):');
 		expect(lines[1]).toMatch(/^• Monday, 2:00.*3:00.PM: everyone can make it$/);
 		expect(lines[2]).toMatch(/^• Wednesday, 2:00.*: without Cy$/);
 		expect(lines[3]).toMatch(/^• Friday, /);
@@ -104,7 +104,7 @@ describe('meetingsFor (several meetings)', () => {
 			'RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;COUNT=3'
 		);
 		// One-offs keep their dates.
-		expect(only.details).toMatch(/^3 meetings \(America\/New York\):\n• Mon, Sep 28, /);
+		expect(only.details).toMatch(/^3 meetings, New York time \(GMT-4\):\n• Mon, Sep 28, /);
 	});
 
 	it('gives each meeting its own event when the times differ, and marks which is which', () => {

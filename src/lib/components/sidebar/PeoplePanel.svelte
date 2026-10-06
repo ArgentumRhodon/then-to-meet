@@ -2,13 +2,14 @@
 	import Eye from '@lucide/svelte/icons/eye';
 	import MessageSquare from '@lucide/svelte/icons/message-square';
 	import Search from '@lucide/svelte/icons/search';
-	import Sparkles from '@lucide/svelte/icons/sparkles';
+	import History from '@lucide/svelte/icons/history';
 	import X from '@lucide/svelte/icons/x';
 	import { splitSignIns } from '$lib/analysis/signIns';
 	import { buildReminder } from '$lib/share/reminder';
 	import { app } from '$lib/state/app.svelte';
 	import { groups, membersIn } from '$lib/state/groups.svelte';
 	import type { Person, Role } from '$lib/types';
+	import { tick } from 'svelte';
 	import Avatar from '$lib/ui/Avatar.svelte';
 	import { layout } from '$lib/ui/layout.svelte';
 	import { copyText } from '$lib/ui/toast.svelte';
@@ -27,7 +28,7 @@
 	const CHIP: Record<Role, string> = {
 		required: 'bg-secondary-soft text-secondary-fg border-transparent',
 		optional: 'bg-subtle text-fg-2 border-transparent',
-		skip: 'border-dashed border-line-strong text-fg-3'
+		skip: 'border-dashed border-field-border text-fg-3'
 	};
 
 	let query = $state('');
@@ -93,6 +94,12 @@
 
 	const isChecked = (id: number) => (editing ? members.has(id) : app.selected.has(id));
 
+	/** After a control removes itself, focus moves on to the next stable one. */
+	const focusNext = async (selector: string) => {
+		await tick();
+		document.querySelector<HTMLElement>(selector)?.focus();
+	};
+
 	const setChecked = (ids: number[], on: boolean) => {
 		if (editing) {
 			if (on) groups.addMembers(editing.id, ids);
@@ -138,36 +145,49 @@
 >
 	{#snippet actions()}
 		{#if customized}
-			<button class="btn btn-ghost btn-sm" onclick={() => app.resetRoles()}>Reset roles</button>
+			<button
+				class="btn btn-ghost btn-sm"
+				onclick={() => {
+					app.resetRoles();
+					// The button goes once everyone is required again; on to the list it changed.
+					focusNext('[aria-label$="everyone shown"]');
+				}}>Reset roles</button
+			>
 		{/if}
 	{/snippet}
 
-	{#if newCount}
-		<div
-			class="mx-3 mb-2 flex items-start gap-2 rounded-lg bg-accent-soft/60 py-2 pr-1.5 pl-3 text-xs text-accent-fg"
-			role="status"
-		>
-			<Sparkles class="mt-px size-3.5 shrink-0" aria-hidden="true" />
-			<p class="min-w-0 flex-1">
-				Since your last visit:
-				{#if added.size}
-					<strong class="font-semibold">{nameList(app.changes.added)}</strong>
-					responded{updated.size ? ';' : '.'}
-				{/if}
-				{#if updated.size}
-					<strong class="font-semibold">{nameList(app.changes.updated)}</strong>
-					changed their times.
-				{/if}
-			</p>
-			<button
-				class="-my-1 flex size-6 shrink-0 items-center justify-center rounded hover:bg-accent/10 pointer-coarse:-my-2 pointer-coarse:size-9"
-				onclick={() => app.dismissChanges()}
-				aria-label="Dismiss"
+	<!-- The status region is always there, so a note that arrives with a live update is read out. -->
+	<div role="status">
+		{#if newCount}
+			<div
+				class="mx-3 mb-2 flex items-start gap-2 rounded-lg bg-accent-soft/60 py-2 pr-1.5 pl-3 text-xs text-accent-fg"
 			>
-				<X class="size-3.5 pointer-coarse:size-4.5" />
-			</button>
-		</div>
-	{/if}
+				<History class="mt-px size-3.5 shrink-0" aria-hidden="true" />
+				<p class="min-w-0 flex-1">
+					Since your last visit:
+					{#if added.size}
+						<strong class="font-semibold">{nameList(app.changes.added)}</strong>
+						responded{updated.size ? ';' : '.'}
+					{/if}
+					{#if updated.size}
+						<strong class="font-semibold">{nameList(app.changes.updated)}</strong>
+						changed their times.
+					{/if}
+				</p>
+				<button
+					class="-my-1 flex size-6 shrink-0 items-center justify-center rounded hover:bg-accent/10 pointer-coarse:-my-2 pointer-coarse:size-9"
+					onclick={() => {
+						app.dismissChanges();
+						// The note goes; the group chips come next.
+						focusNext('[aria-label="Show a group"] button');
+					}}
+					aria-label="Dismiss"
+				>
+					<X class="size-3.5 pointer-coarse:size-4.5" />
+				</button>
+			</div>
+		{/if}
+	</div>
 
 	<!-- <div class="px-4 text-xs">
 		<p class="text-fg-2">{summary}</p>
@@ -189,7 +209,7 @@
 				aria-hidden="true"
 			/>
 			<input
-				class="input h-8 pl-8 text-[13px] pointer-coarse:text-base"
+				class="input h-8 pl-8 text-13 pointer-coarse:text-base"
 				type="search"
 				placeholder="Find a person"
 				aria-label="Find a person"
@@ -232,9 +252,12 @@
 			{@const pinned = app.pinnedPerson === person.id}
 			{@const selected = isChecked(person.id)}
 			{@const manager = managerLabel(person)}
+			<!-- Dimmed when skipped, left out of a view of just the selected people, or outside the group
+			     being edited. -->
+			{@const dim = editing ? !selected : role === 'skip' || (app.onlySelected && !selected)}
 			<li
 				class="group flex items-center gap-2 rounded-lg px-2 py-1.5 transition-colors {pinned
-					? 'bg-accent-soft/40 ring-1 ring-accent/60 ring-inset'
+					? 'bg-accent-soft/40 ring-1 ring-accent-strong ring-inset'
 					: selected
 						? 'bg-accent-soft/50'
 						: 'hover:bg-subtle'}"
@@ -248,38 +271,37 @@
 				/>
 				<!-- The name selects the person, like the checkbox. Showing only their times on the grid
 				     is the eye button's job, so a stray click never changes what the heatmap means. -->
-				<!-- Dimmed when skipped, left out of a view of just the selected people, or outside the
-				     group being edited. -->
+				<!-- Dimming is done with the text color and the avatar, not opacity on the name, so the
+				     name stays readable (4.5:1). -->
 				<button
-					class="ml-0.5 flex min-w-0 flex-1 items-center gap-2.5 self-stretch text-left pointer-coarse:-my-1.5 {(
-						editing ? !selected : role === 'skip' || (app.onlySelected && !selected)
-					)
-						? 'opacity-55'
-						: ''}"
-					aria-pressed={selected}
+					class="ml-0.5 flex min-w-0 flex-1 items-center gap-2.5 self-stretch text-left pointer-coarse:-my-1.5"
+					aria-hidden="true"
 					tabindex={-1}
 					onclick={(e) => check(e, index)}
 				>
-					<Avatar id={person.id} name={person.name} />
+					<Avatar id={person.id} name={person.name} class={dim ? 'opacity-55' : ''} />
 					<span class="flex min-w-0 flex-1 items-center gap-1.5">
 						<span
-							class="truncate text-[13px] font-medium {role === 'skip' && !editing
+							dir="auto"
+							title={person.name}
+							class="truncate text-13 font-medium {dim ? 'text-fg-3' : ''} {role === 'skip' &&
+							!editing
 								? 'line-through'
 								: ''}"
 						>
 							{person.name}
 						</span>
 						{#if manager}
-							<span class="shrink-0 text-[11px] font-medium text-fg-3">{manager}</span>
+							<span class="shrink-0 text-11 font-medium text-fg-3">{manager}</span>
 						{/if}
 						{#if added.has(person.id)}
 							<span
-								class="shrink-0 rounded-full bg-accent-soft px-1.5 text-[11px] font-semibold text-accent-fg"
+								class="shrink-0 rounded-full bg-accent-soft px-1.5 text-11 font-semibold text-accent-fg"
 								>New</span
 							>
 						{:else if updated.has(person.id)}
 							<span
-								class="shrink-0 rounded-full bg-warn-soft px-1.5 text-[11px] font-semibold text-warn"
+								class="shrink-0 rounded-full bg-warn-soft px-1.5 text-11 font-semibold text-warn"
 								>Updated</span
 							>
 						{/if}
@@ -291,9 +313,7 @@
 							? 'bg-accent text-on-accent hover:bg-accent-hover'
 							: 'btn-ghost pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:focus-visible:opacity-100'}"
 						aria-pressed={pinned}
-						aria-label={pinned
-							? `Stop showing only ${person.name}’s times`
-							: `Show only ${person.name}’s times on the grid`}
+						aria-label="Show only {person.name}’s times on the grid"
 						title={pinned ? 'Show everyone again' : `Show only ${person.name}’s times`}
 						onclick={() => (app.pinnedPerson = pinned ? null : person.id)}
 					>
@@ -303,7 +323,7 @@
 				<!-- Roles step aside while a group is edited, so every click in the list is about who's in it. -->
 				{#if !editing}
 					<button
-						class="h-6 shrink-0 rounded-full border px-2.5 text-[11px] font-medium transition-colors hover:border-line-strong pointer-coarse:h-8 pointer-coarse:px-3 pointer-coarse:text-xs {CHIP[
+						class="h-6 shrink-0 rounded-full border px-2.5 text-11 font-medium transition-colors hover:border-line-strong pointer-coarse:h-8 pointer-coarse:px-3 pointer-coarse:text-xs {CHIP[
 							role
 						]}"
 						onclick={() => app.setRole(person.id, NEXT[role])}
@@ -317,11 +337,11 @@
 				{/if}
 			</li>
 		{:else}
-			<li class="px-2 py-3 text-[13px] text-fg-3">
+			<li class="px-2 py-3 text-13 text-fg-3">
 				{#if query.trim()}
 					No one matches that search.
 				{:else if app.group}
-					No one in {app.group.name} is in this poll anymore.
+					No one in {app.group.name} is in this event anymore.
 				{:else}
 					No one has marked any times yet.
 				{/if}
@@ -333,8 +353,8 @@
 		<div class="mx-4 mb-4 space-y-1.5 rounded-lg bg-subtle py-2 pr-1.5 pl-3 text-xs">
 			{#if signIns.waiting.length}
 				<div class="flex items-start gap-2">
-					<p class="min-w-0 flex-1 text-fg-3">
-						<span class="font-medium text-fg-2">Signed in without marking times:</span>
+					<p class="min-w-0 flex-1 text-fg-2">
+						<span class="font-medium text-fg">Signed in without adding times:</span>
 						{signIns.waiting.map((p) => p.name).join(', ')}
 					</p>
 					<button
@@ -349,17 +369,17 @@
 			{/if}
 			{#if signIns.extras.length}
 				<!-- Left out of the list and the reminder, but shown on request in case a match is wrong. -->
-				<details class="text-fg-3">
-					<summary class="cursor-pointer py-0.5 select-none hover:text-fg-2 pointer-coarse:py-2">
+				<details class="text-fg-2">
+					<summary class="cursor-pointer py-0.5 select-none hover:text-fg pointer-coarse:py-2">
 						{signIns.extras.length} extra sign-in{signIns.extras.length === 1 ? '' : 's'} left out
 					</summary>
-					<p class="mt-1 mb-0.5 text-fg-3">
-						These signed in without marking times, but look like someone who did:
+					<p class="mt-1 mb-0.5">
+						These signed in without adding times, but look like someone who did:
 					</p>
 					<ul class="space-y-0.5">
 						{#each signIns.extras as { person, like } (person.id)}
 							<li>
-								<span class="text-fg-2">{person.name}</span> → {like.name}
+								<span class="text-fg">{person.name}</span> → {like.name}
 							</li>
 						{/each}
 					</ul>

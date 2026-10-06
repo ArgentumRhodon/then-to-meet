@@ -63,11 +63,27 @@ export const formatMinuteOfDay = (minute: number): string => {
 	return dt.toLocaleString(minute % 60 ? DateTime.TIME_SIMPLE : { hour: 'numeric' });
 };
 
-/** "GMT-4" style offset label for a zone right now. */
-export const formatOffset = (zone: string): string => {
-	const dt = DateTime.now().setZone(zone);
+/**
+ * "GMT-4" style offset label for a zone, right now or at `at` (Unix seconds), which matters for
+ * a time on the far side of a daylight saving change.
+ */
+export const formatOffset = (zone: string, at?: number): string => {
+	const dt = (at === undefined ? DateTime.now() : DateTime.fromSeconds(at)).setZone(zone);
 	if (!dt.isValid) return '';
 	return dt.offset === 0 ? 'GMT' : `GMT${dt.toFormat('Z')}`;
+};
+
+/** A zone by its city: "New York" for America/New_York, and "UTC" as itself. */
+export const zonePlace = (zone: string): string => zone.split('/').pop()!.replaceAll('_', ' ');
+
+/**
+ * A zone as people read it, the same everywhere it's shown: "New York time (GMT-4)". Pass `at`
+ * for a specific time, so the offset is the one in effect then.
+ */
+export const formatZone = (zone: string, at?: number): string => {
+	const offset = formatOffset(zone, at);
+	if (zone === 'UTC' || zone === 'Etc/UTC') return 'UTC';
+	return offset ? `${zonePlace(zone)} time (${offset})` : `${zonePlace(zone)} time`;
 };
 
 export const initials = (name: string): string => {

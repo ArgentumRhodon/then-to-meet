@@ -118,7 +118,7 @@ describe('buildSummary with meeting sets', () => {
 			link: 'https://ttm.example/?e=demo'
 		});
 		expect(text).toMatch(
-			/^Design team sync: best times for 1h twice a week · times in America\/New York/
+			/^Design team sync: best times for 1h twice a week · New York time \(GMT-4\)/
 		);
 		expect(text).toContain('All required people, every time');
 		expect(text).toMatch(

@@ -52,7 +52,7 @@
 		<h2 id="confirm-title" class="text-base font-semibold tracking-tight">{title}</h2>
 		<p id="confirm-body" class="mt-1.5 text-sm text-fg-2">{body}</p>
 		{#if error}
-			<p class="mt-3 flex items-start gap-1.5 text-[13px] text-danger" role="alert">
+			<p class="mt-3 flex items-start gap-1.5 text-13 text-danger" role="alert">
 				<CircleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
 				<span>{error}</span>
 			</p>
@@ -64,7 +64,7 @@
 		</button>
 		<button
 			type="button"
-			class="btn bg-danger text-white hover:opacity-90"
+			class="btn bg-danger text-on-danger hover:opacity-90"
 			onclick={confirm}
 			disabled={busy}
 		>

@@ -31,9 +31,9 @@
 </script>
 
 {#snippet label()}
-	<span id="{id}-title" class="text-[13px] font-semibold text-fg">{title}</span>
+	<span id="{id}-title" class="text-13 font-semibold text-fg">{title}</span>
 	{#if count !== undefined}
-		<span class="rounded-full bg-subtle px-1.5 py-px text-[11px] font-medium text-fg-2 tabular">
+		<span class="rounded-full bg-subtle px-1.5 py-px text-11 font-medium text-fg-2 tabular">
 			{count}
 		</span>
 	{/if}
@@ -47,7 +47,7 @@
 				<button
 					class="-ml-1 flex h-10 items-center gap-1.5 rounded-md px-1 text-left"
 					aria-expanded={open}
-					aria-controls="{id}-body"
+					aria-controls={open ? `${id}-body` : undefined}
 					onclick={() => (folded = !folded)}
 				>
 					{@render label()}

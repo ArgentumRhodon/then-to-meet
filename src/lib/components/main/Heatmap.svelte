@@ -1,9 +1,10 @@
 <script lang="ts">
 	import X from '@lucide/svelte/icons/x';
 	import { tick, untrack } from 'svelte';
+	import { prefersReducedMotion } from 'svelte/motion';
 	import { MediaQuery } from 'svelte/reactivity';
 	import type { TimeBlock } from '$lib/analysis/bestTimes';
-	import { formatDay, formatMinuteOfDay, formatTimeRange } from '$lib/analysis/format';
+	import { formatDay, formatList, formatMinuteOfDay, formatTimeRange } from '$lib/analysis/format';
 	import type { MeetingSet } from '$lib/analysis/meetingSets';
 	import { app, withRange } from '$lib/state/app.svelte';
 	import type { TimeRange } from '$lib/types';
@@ -46,7 +47,11 @@
 		return pos;
 	});
 
-	const rowHeight = $derived(grid.rows.length > 64 ? 14 : grid.rows.length > 40 ? 16 : 20);
+	// Fingers get rows of at least 24px, the smallest comfortable target; the page scrolls instead.
+	const coarse = new MediaQuery('(pointer: coarse)');
+	const rowHeight = $derived(
+		Math.max(grid.rows.length > 64 ? 14 : grid.rows.length > 40 ? 16 : 20, coarse.current ? 24 : 0)
+	);
 
 	const heat = (slot: number): string => {
 		if (app.pinnedPerson !== null)
@@ -83,17 +88,28 @@
 	let gridEl: HTMLDivElement;
 	/** True when the grid took focus because the mouse moved over it, not from Tab. */
 	let pointerFocused = $state(false);
+	/** Where focus was before the mouse took it, to give it back when the mouse leaves. */
+	let focusBefore: HTMLElement | null = null;
+	/**
+	 * The slot the arrow keys were last on. It outlives the tooltip, so leaving the grid (or
+	 * pressing Escape to hide the details) and coming back carries on from the same place.
+	 */
+	let keySlot: number | null = null;
+	/** Where a Shift+arrow range started, while Shift is held. */
+	let keyAnchor: number | null = null;
 	let tipRect = $state<DOMRect | null>(null);
 	let tipHeight = $state(0);
+	let tipWidth = $state(0);
 	let viewport = $state({ w: 1024, h: 768 });
 
 	const tipStyle = $derived.by(() => {
 		if (!tipRect) return '';
-		const width = 256;
+		const width = tipWidth || 256;
 		let left = tipRect.right + 10;
 		if (left + width > viewport.w - 8) left = tipRect.left - 10 - width;
 		left = Math.max(8, left);
-		const top = Math.min(Math.max(8, tipRect.top - 12), viewport.h - tipHeight - 8);
+		// Kept on screen, top edge first: a tooltip taller than the window still shows its time.
+		const top = Math.max(8, Math.min(tipRect.top - 12, viewport.h - tipHeight - 8));
 		return `left:${left}px;top:${top}px`;
 	});
 
@@ -218,6 +234,7 @@
 			!isTyping(document.activeElement)
 		) {
 			pointerFocused = true;
+			focusBefore = document.activeElement instanceof HTMLElement ? document.activeElement : null;
 			gridEl.focus({ preventScroll: true });
 		}
 	};
@@ -226,8 +243,14 @@
 		// On touch, keep the tooltip up after the finger lifts; the next tap moves or clears it.
 		if (e.pointerType === 'touch') return;
 		hideTip();
-		// Hand focus back so the arrow keys scroll the page again.
-		if (pointerFocused && document.activeElement === gridEl) gridEl.blur();
+		// Hand focus back to where it was (a keyboard user's place), or let it go so the arrow keys
+		// scroll the page again.
+		if (pointerFocused && document.activeElement === gridEl) {
+			if (focusBefore?.isConnected && focusBefore !== document.body) {
+				focusBefore.focus({ preventScroll: true });
+			} else gridEl.blur();
+		}
+		focusBefore = null;
 	};
 
 	const focusSlot = async (slot: number) => {
@@ -235,7 +258,22 @@
 		const el = scroller.querySelector<HTMLElement>(`[data-slot="${slot}"]`);
 		if (!el) return;
 		el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+		keySlot = slot;
 		showTip(slot, el);
+		// The picked-time card moves out of the way of the keys, as it does for the picks.
+		queuePlaceCard();
+	};
+
+	/** Shift+Up/Down: picks exactly the slots from where Shift went down to here, in that day. */
+	const extendTo = (slot: number) => {
+		if (keyAnchor === null) return;
+		const day = grid.days[position[keyAnchor].day];
+		const target = day.slotByMinute.get(grid.rows[position[slot].row].minute);
+		if (target === undefined) return;
+		const [first, last] = reach(keyAnchor, target);
+		app.setPicks([
+			{ start: event.slots[first].time, end: event.slots[last].time + event.slotSeconds }
+		]);
 	};
 
 	const onkeydown = (e: KeyboardEvent) => {
@@ -245,8 +283,13 @@
 			ArrowLeft: [-1, 0],
 			ArrowRight: [1, 0]
 		};
-		// The workspace's handler takes it from here, backing out of whatever's pinned or picked.
-		if (e.key === 'Escape') return hideTip();
+		// The first Escape only hides the details, as any popup should (WCAG 1.4.13). After that,
+		// the workspace's handler backs out of whatever's pinned or picked.
+		if (e.key === 'Escape') {
+			if (!tipRect) return;
+			e.preventDefault();
+			return hideTip();
+		}
 		if ((e.key === 'Enter' || e.key === ' ') && app.hoveredSlot !== null) {
 			e.preventDefault();
 			return pickAt(app.hoveredSlot, e.shiftKey);
@@ -254,8 +297,13 @@
 		const move = moves[e.key];
 		if (!move) return;
 		e.preventDefault();
-		const current = app.hoveredSlot !== null ? position[app.hoveredSlot] : null;
+		const from = app.hoveredSlot ?? keySlot;
+		const current = from !== null ? position[from] : null;
 		if (!current) return focusSlot(grid.days[0].slotByMinute.values().next().value!);
+		// Shift with Up or Down selects a range, a keyboard drag; anything else starts over.
+		const ranging = e.shiftKey && move[0] === 0;
+		if (!ranging) keyAnchor = null;
+		else keyAnchor ??= from;
 
 		let { day, row } = current;
 		// Step until we land on a real slot, skipping blank cells.
@@ -264,8 +312,14 @@
 			row += move[1];
 			if (day < 0 || day >= grid.days.length || row < 0 || row >= grid.rows.length) return;
 			const slot = grid.days[day].slotByMinute.get(grid.rows[row].minute);
-			if (slot !== undefined) return focusSlot(slot);
+			if (slot === undefined) continue;
+			if (ranging) extendTo(slot);
+			return focusSlot(slot);
 		}
+	};
+
+	const onkeyup = (e: KeyboardEvent) => {
+		if (e.key === 'Shift') keyAnchor = null;
 	};
 
 	/** Height of the sticky day header, so scrolling a slot into view stops below it. */
@@ -277,9 +331,11 @@
 	$effect(() => {
 		if (!app.pinnedBlock && !app.pinnedSet) return;
 		tick().then(() =>
-			gridEl
-				?.querySelector('.block-outline')
-				?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' })
+			gridEl?.querySelector('.block-outline')?.scrollIntoView({
+				block: 'nearest',
+				inline: 'nearest',
+				behavior: prefersReducedMotion.current ? 'auto' : 'smooth'
+			})
 		);
 	});
 
@@ -290,7 +346,7 @@
 	let cardSpot = $state<{ left: number; top: number } | null>(null);
 	/** Which spot the card is in, kept while it stays clear so it doesn't hop around. */
 	let spotIndex = 0;
-	const wide = new MediaQuery('(min-width: 640px)');
+	const wide = new MediaQuery('(min-width: 40rem)');
 	const cardPad = $derived(wide.current ? 24 : 16);
 
 	const placeCard = () => {
@@ -299,8 +355,13 @@
 		const view = scroller.getBoundingClientRect();
 		const dayRow = gridEl.querySelector<HTMLElement>('.corner')?.offsetHeight ?? 0;
 		const visibleTop = view.top + dayRow;
-		// The picked times on screen, in page coordinates.
-		const picked = app.selectedBlocks.flatMap((block) => {
+		// The picked times on screen, in page coordinates, and the cell the arrow keys are on.
+		const cursorSlot = !pointerFocused && app.hoveredSlot !== null ? app.hoveredSlot : null;
+		const covers = [
+			...app.selectedBlocks,
+			...(cursorSlot === null ? [] : [{ startSlot: cursorSlot, endSlot: cursorSlot }])
+		];
+		const picked = covers.flatMap((block) => {
 			const first = gridEl.querySelector(`[data-slot="${block.startSlot}"]`);
 			const last = gridEl.querySelector(`[data-slot="${block.endSlot}"]`);
 			if (!first || !last) return [];
@@ -361,10 +422,27 @@
 	});
 
 	const hovered = $derived(app.hoveredSlot);
+	/**
+	 * The slot the arrow keys are on, in words: when, how many are free, and who isn't (the
+	 * tooltip's list, which a screen reader can't otherwise reach).
+	 */
 	const liveLabel = $derived.by(() => {
 		if (hovered === null || !app.attendance) return '';
 		const t = event.slots[hovered].time;
-		return `${formatDay(t, grid.zone, event.weekly)}, ${formatTimeRange(t, t + event.slotSeconds, grid.zone)}: ${app.attendance.counts[hovered]} of ${app.attendance.total} available`;
+		const when = `${formatDay(t, grid.zone, event.weekly)}, ${formatTimeRange(t, t + event.slotSeconds, grid.zone)}`;
+		if (spotlit)
+			return `${when}: ${spotlit.name} is ${free[hovered].has(spotlit.id) ? 'free' : 'not free'}`;
+		const away = event.people
+			.filter((p) => app.effectiveRoleOf(p.id) !== 'skip' && !free[hovered].has(p.id))
+			.map((p) => p.name + (app.effectiveRoleOf(p.id) === 'optional' ? ' (optional)' : ''));
+		const count =
+			`${app.attendance.counts[hovered]} of ${app.attendance.total} available` +
+			(isPartial(hovered) ? ', all required free' : '') +
+			(inHeld(hovered) ? ', picked' : '');
+		if (!away.length) return `${when}: ${count}, everyone can make it`;
+		return away.length > 8
+			? `${when}: ${count}`
+			: `${when}: ${count}. Can’t make it: ${formatList(away)}`;
 	});
 </script>
 
@@ -385,11 +463,10 @@
 			<!-- Loud on purpose: the grid switches to one color, and that needs explaining at a glance. -->
 			<div
 				class="-my-0.5 flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 rounded-2xl border border-accent/60 bg-accent-soft py-1 pr-1 pl-1"
-				role="status"
 			>
 				<span class="flex min-w-0 items-center gap-2">
 					<Avatar id={spotlit.id} name={spotlit.name} size={24} />
-					<span class="truncate text-[13px] text-fg">
+					<span class="truncate text-13 text-fg">
 						Only
 						<strong class="font-semibold">{spotlit.name}</strong>’s times
 					</span>
@@ -404,7 +481,11 @@
 				</span>
 				<button
 					class="btn btn-primary btn-sm rounded-full"
-					onclick={() => (app.pinnedPerson = null)}
+					onclick={() => {
+						app.pinnedPerson = null;
+						// The button goes with the banner; carry on from the grid.
+						gridEl.focus({ preventScroll: true });
+					}}
 					title="Back to everyone (Esc)"
 				>
 					<X class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" /> Show everyone
@@ -443,7 +524,7 @@
 	<!-- isolate keeps the sticky headers' z-index inside the grid, below the app's menus. -->
 	<div
 		bind:this={scroller}
-		class="relative isolate max-h-[75dvh] min-h-0 flex-1 overflow-auto overscroll-contain px-4 pb-6 sm:px-6 lg:max-h-none"
+		class="relative isolate max-h-[75dvh] min-h-0 flex-1 overflow-auto px-4 pb-6 sm:px-6 lg:max-h-none lg:overscroll-contain"
 		style:scroll-padding-top="{headerHeight}px"
 		style:scroll-padding-left="3.25rem"
 		onscroll={() => {
@@ -463,14 +544,20 @@
 			style:grid-template-columns="3.25rem repeat({grid.days.length}, minmax(2.75rem, 1fr))"
 			style:grid-template-rows={layout.template}
 			style:max-width="{3.25 + grid.days.length * 10}rem"
-			role="group"
-			aria-label="Availability by day and time. Use arrow keys to move between time slots, Enter to check a meeting starting at one, Shift+Enter to add another, and Escape to clear."
-			aria-describedby="heatmap-live"
+			role="application"
+			aria-roledescription="availability grid"
+			aria-label="Availability by day and time"
+			aria-describedby="heatmap-keys"
 			tabindex="0"
 			{onpointerdown}
 			{onpointerover}
 			{onpointerleave}
 			{onkeydown}
+			{onkeyup}
+			onfocus={() => {
+				// Back from a Tab away: show where the keys left off.
+				if (!pointerFocused && keySlot !== null) focusSlot(keySlot);
+			}}
 			onfocusout={() => {
 				hideTip();
 				pointerFocused = false;
@@ -503,9 +590,9 @@
 					style:grid-row="1"
 					style:grid-column={d + 2}
 				>
-					<div class="text-[11px] font-medium text-fg-3 uppercase">{day.weekday}</div>
+					<div class="text-11 font-medium text-fg-3 uppercase">{day.weekday}</div>
 					{#if day.date}
-						<div class="text-[13px] font-semibold text-fg tabular">
+						<div class="text-13 font-semibold text-fg tabular">
 							<span class="sm:hidden">{day.dayOfMonth}</span>
 							<span class="hidden sm:inline">{day.date}</span>
 						</div>
@@ -516,7 +603,7 @@
 			{#each grid.rows as row, i (row.minute)}
 				{#if row.hour || i === 0 || row.gapBefore}
 					<div
-						class="sticky left-0 z-[5] pr-2 text-right text-[11px] leading-none text-fg-3 tabular"
+						class="sticky left-0 z-[5] pr-2 text-right text-11 leading-none text-fg-3 tabular"
 						style:grid-row={layout.line[i]}
 						style:grid-column="1"
 					>
@@ -574,7 +661,7 @@
 		     whichever spot keeps the picked times in view. -->
 		<div
 			bind:this={card}
-			class="absolute z-20 motion-safe:transition-[left,top] motion-safe:duration-200 {dragged
+			class="absolute z-20 max-h-[calc(100%-2rem)] overflow-y-auto rounded-xl motion-safe:transition-[left,top] motion-safe:duration-200 {dragged
 				? 'pointer-events-none'
 				: ''}"
 			style:width="min(28rem, calc(100% - {cardPad * 2}px))"
@@ -587,6 +674,12 @@
 	{/if}
 </div>
 
+<p id="heatmap-keys" class="sr-only">
+	Arrow keys move between time slots. Enter checks a meeting starting at one, Shift+Enter adds
+	another, and Shift with Up or Down checks an exact range. Escape hides the details, then clears.
+</p>
+<!-- Always present, so switching to one person's times (or back) is announced. -->
+<p class="sr-only" role="status">{spotlit ? `Showing only ${spotlit.name}’s times` : ''}</p>
 <p id="heatmap-live" class="sr-only" aria-live="polite">{liveLabel}</p>
 
 {#if tipRect && hovered !== null}
@@ -594,6 +687,7 @@
 		class="popover pointer-events-none fixed z-40 scheme-dark"
 		style={tipStyle}
 		bind:clientHeight={tipHeight}
+		bind:clientWidth={tipWidth}
 		role="tooltip"
 	>
 		<SlotTooltip slot={hovered} />
@@ -606,7 +700,7 @@
 		min-width: max-content;
 		user-select: none;
 	}
-	@media (min-width: 640px) {
+	@media (min-width: 40rem) {
 		.heatmap {
 			min-width: 0;
 		}
@@ -639,7 +733,7 @@
 					transparent 75%
 				)
 				0 0 / var(--tile) var(--tile),
-			linear-gradient(rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.3)),
+			linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.45)),
 			var(--base, var(--heat-0));
 	}
 	.cell:not(.empty) {
@@ -667,8 +761,11 @@
 			color-mix(in oklab, var(--line) 70%, transparent) 4px 5px
 		);
 	}
+	/* Two tones, so the cursor shows on the palest cells as well as the darkest. */
 	.cell.hovered {
-		box-shadow: inset 0 0 0 2px var(--fg);
+		box-shadow:
+			inset 0 0 0 2px var(--fg),
+			inset 0 0 0 4px var(--canvas);
 		z-index: 1;
 	}
 	.dimmed .cell:not(.in-held):not(.empty) {
@@ -696,7 +793,7 @@
 		box-shadow:
 			0 0 0 2px var(--accent),
 			0 0 0 4px var(--canvas);
-		opacity: 0.55;
+		opacity: 0.85;
 	}
 	.block-outline.is-held {
 		opacity: 1;

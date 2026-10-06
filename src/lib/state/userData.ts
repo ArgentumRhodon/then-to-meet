@@ -57,7 +57,7 @@ const warn = (e: unknown) => {
 	console.warn('Saving to your account failed', e);
 	if (warned) return;
 	warned = true;
-	toast.show("Couldn't save to your account. Recent changes may not stick.");
+	toast.fail("Couldn't save to your account. Recent changes may not stick.");
 };
 
 const flush = async () => {

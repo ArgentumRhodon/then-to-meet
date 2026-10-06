@@ -13,10 +13,12 @@
 
 	/**
 	 * Escape anywhere backs out a step: the one-person view, then a pinned best time or the picked
-	 * times. A menu or text field that used the key first keeps it.
+	 * times. A menu or text field that used the key first keeps it, and so does an open dialog,
+	 * whose Escape closes it and nothing else.
 	 */
 	const onkeydown = (e: KeyboardEvent) => {
 		if (e.key !== 'Escape' || e.defaultPrevented || isTyping(document.activeElement)) return;
+		if (document.querySelector('dialog[open]')) return;
 		const card = document.activeElement?.closest('[data-result]');
 		const left = app.back();
 		if (!left) return;
@@ -28,14 +30,22 @@
 
 <svelte:window {onkeydown} />
 
+<!-- Past the event header and the people list, which can be long, to the answer. -->
+<a
+	href="#results"
+	class="sr-only z-50 rounded-lg bg-accent px-3 py-2 text-sm font-medium text-on-accent focus:not-sr-only focus:fixed focus:top-2 focus:left-2"
+>
+	Skip to results
+</a>
+
 <div class="workspace grid min-h-dvh lg:h-dvh lg:overflow-hidden">
 	<!-- Above the sidebar (z-10) so its menus open over it. -->
 	<div
-		class="relative z-30 flex h-14 items-center gap-2 border-b border-line bg-panel px-4 [grid-area:brand] lg:h-auto lg:border-r"
+		class="relative z-30 flex min-h-14 flex-wrap items-center gap-2 border-b border-line bg-panel px-4 [grid-area:brand] lg:h-auto lg:border-r"
 	>
 		<a
 			href="/"
-			class="flex h-10 items-center rounded-md text-[15px] font-semibold tracking-tight"
+			class="flex h-10 items-center rounded-md text-15 font-semibold tracking-tight"
 			onclick={(e) => {
 				e.preventDefault();
 				closeEvent();
@@ -58,35 +68,40 @@
 
 	<aside
 		class="relative z-10 border-b border-line bg-panel [grid-area:side] lg:overflow-y-auto lg:border-r lg:border-b-0 lg:shadow-[8px_0_24px_-12px_var(--shadow-tint)]"
-		aria-label={layout.resultsInSide ? 'People and best times' : 'People'}
+		aria-label={layout.resultsInSide ? 'Best times and people' : 'People'}
 	>
 		<!-- ThenToMeet's own events are answered right here (When2Meet's on When2Meet). Responding is
 		     what most visitors came to do, so it leads the people column. -->
 		{#if app.event?.source === 'thentomeet'}
 			<RespondCard />
 		{/if}
+		<!-- Too narrow for a column of its own: best times joins people, so the heatmap keeps the
+		     whole main area. It goes first, since it's the answer, and a long people list would
+		     otherwise push it out of sight. -->
+		{#if layout.resultsInSide}
+			<BestTimesPanel />
+		{/if}
 		<!-- Groups and filters belong to one event, so start fresh when the event changes. -->
 		{#key app.event?.id}
 			<!-- Without the heatmap, best times is the main view, so keep people folded away. -->
 			<PeoplePanel startOpen={layout.showHeatmap} />
 		{/key}
-		<!-- Too narrow for a column of its own: best times joins people, so the heatmap keeps the
-		     whole main area. -->
-		{#if layout.resultsInSide}
-			<BestTimesPanel />
-		{/if}
 	</aside>
 
 	<!-- The results, in reading order: the heatmap, then best times. Wide screens put them side by
 	     side, each with its own scroll; narrow ones let the page flow. -->
-	<div
-		class="min-w-0 [grid-area:main] lg:overflow-hidden xl:grid xl:grid-cols-[minmax(0,1fr)_22rem] xl:grid-rows-[minmax(0,1fr)]"
+	<!-- The page's main landmark at every width, heatmap or not: this is where the answer is. -->
+	<main
+		class="min-w-0 outline-none [grid-area:main] lg:overflow-hidden xl:grid xl:grid-cols-[minmax(0,1fr)_min(22rem,30vw)] xl:grid-rows-[minmax(0,1fr)]"
+		id="results"
+		tabindex="-1"
+		aria-label="Results"
 	>
 		<!-- Too narrow for the grid to read well: best times covers it instead. -->
 		{#if layout.showHeatmap}
-			<main class="min-h-0 lg:flex lg:h-full lg:flex-col" aria-label="Availability heatmap">
+			<section class="min-h-0 lg:flex lg:h-full lg:flex-col" aria-label="Availability heatmap">
 				<Heatmap class="lg:flex-1" />
-			</main>
+			</section>
 		{/if}
 
 		{#if !layout.resultsInSide}
@@ -98,7 +113,7 @@
 				<BestTimesPanel />
 			</div>
 		{/if}
-	</div>
+	</main>
 
 	{#if app.status === 'loading'}
 		<div
@@ -121,7 +136,9 @@
 	}
 	@media (min-width: 64rem) {
 		.workspace {
-			grid-template-columns: 23rem minmax(0, 1fr);
+			/* Capped by the window too, so very large text can't squeeze the heatmap out. At the
+			   default size it's 23rem from 1024px up. */
+			grid-template-columns: min(23rem, 36vw) minmax(0, 1fr);
 			grid-template-rows: auto minmax(0, 1fr);
 			grid-template-areas: 'brand header' 'side main';
 		}

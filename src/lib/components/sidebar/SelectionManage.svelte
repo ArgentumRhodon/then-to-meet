@@ -68,7 +68,7 @@
 			if (!app.live) await app.refresh();
 			toast.show(admin ? `${person.name} is now an admin` : `${person.name} is no longer an admin`);
 		} catch (e) {
-			toast.show(e instanceof Error ? e.message : 'Couldn’t change that. Try again.');
+			toast.fail(e instanceof Error ? e.message : 'Couldn’t change that. Try again.');
 		} finally {
 			settingAdmin = false;
 		}
@@ -78,7 +78,8 @@
 {#if canRemove || lockedPerson}
 	<!-- Changes to people themselves, not to how they're viewed, so they sit apart from the rest. -->
 	<div class="space-y-1 border-t border-accent/20 pt-1.5">
-		<p class="eyebrow px-0.5">Manage</p>
+		<!-- "Manage" only when there's managing to do; a password alone is about this one entry. -->
+		<p class="eyebrow px-0.5">{canRemove || adminCandidate ? 'Manage' : 'Entry'}</p>
 		<div class="grid grid-cols-2 gap-1.5">
 			{#if lockedPerson}
 				<button

@@ -11,6 +11,7 @@
 	import { closeEvent } from '$lib/navigation';
 	import { dismissable } from '$lib/ui/dismissable';
 	import { keepInView } from '$lib/ui/keepInView';
+	import { menu } from '$lib/ui/menu';
 	import { toast } from '$lib/ui/toast.svelte';
 	import TransferDialog from './TransferDialog.svelte';
 
@@ -19,6 +20,16 @@
 	let transferring = $state(false);
 	let updating = $state(false);
 	let steppingDown = $state(false);
+	let button = $state<HTMLButtonElement>();
+
+	/**
+	 * Dialogs opened from the menu hand focus back to its button: the item that opened them went
+	 * with the menu, so the browser has nowhere to return it.
+	 */
+	const closed = (done: () => void) => () => {
+		done();
+		button?.focus();
+	};
 
 	/**
 	 * Managing the event as a whole is for its owner and admins (admins can't delete or transfer it);
@@ -55,7 +66,7 @@
 					: `Already up to date.${left}`
 			);
 		} catch (e) {
-			toast.show(e instanceof Error ? e.message : "Couldn't update from When2Meet. Try again.");
+			toast.fail(e instanceof Error ? e.message : "Couldn't update from When2Meet. Try again.");
 		} finally {
 			updating = false;
 		}
@@ -65,9 +76,10 @@
 {#if (owner || admin) && app.event}
 	<div class="relative" {@attach open ? dismissable(() => (open = false)) : undefined}>
 		<button
-			class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"
+			class="btn btn-secondary h-8 gap-1.5 px-2.5 text-13"
 			onclick={() => (open = !open)}
 			aria-haspopup="menu"
+			bind:this={button}
 			aria-expanded={open}
 			title="Manage this event"
 		>
@@ -76,10 +88,11 @@
 		</button>
 		{#if open}
 			<div
-				class="popover absolute top-full right-0 z-30 mt-1.5 w-60 p-1"
+				class="popover absolute top-full right-0 z-30 mt-1.5 max-h-[calc(100dvh-8rem)] w-60 overflow-y-auto p-1"
 				role="menu"
 				aria-label="Manage event"
 				{@attach keepInView}
+				{@attach menu(() => (open = false))}
 			>
 				{#if app.event.importedFrom}
 					<button
@@ -89,9 +102,8 @@
 					>
 						<RefreshCw class="size-4 shrink-0 text-fg-2 pointer-coarse:size-5" aria-hidden="true" />
 						<span class="flex-1">
-							<span class="block text-[13px]">Update from When2Meet</span>
-							<span class="block text-[11px] text-fg-3"
-								>New people and times; edits made here stay</span
+							<span class="block text-13">Update from When2Meet</span>
+							<span class="block text-11 text-fg-3">New people and times; edits made here stay</span
 							>
 						</span>
 					</button>
@@ -107,8 +119,8 @@
 					>
 						<LogOut class="size-4 shrink-0 text-fg-2 pointer-coarse:size-5" aria-hidden="true" />
 						<span class="flex-1">
-							<span class="block text-[13px]">Step down as admin…</span>
-							<span class="block text-[11px] text-fg-3">Only the owner can make you one again</span>
+							<span class="block text-13">Step down as admin…</span>
+							<span class="block text-11 text-fg-3">Only the owner can make you one again</span>
 						</span>
 					</button>
 				{/if}
@@ -127,8 +139,8 @@
 							aria-hidden="true"
 						/>
 						<span class="flex-1">
-							<span class="block text-[13px]">Transfer ownership…</span>
-							<span class="block text-[11px] text-fg-3">
+							<span class="block text-13">Transfer ownership…</span>
+							<span class="block text-11 text-fg-3">
 								{heirs.length
 									? 'Hand the event to someone else'
 									: 'Needs someone signed in who’s responded'}
@@ -145,8 +157,8 @@
 					>
 						<Trash2 class="size-4 shrink-0 pointer-coarse:size-5" aria-hidden="true" />
 						<span class="flex-1">
-							<span class="block text-[13px]">Delete event…</span>
-							<span class="block text-[11px] text-fg-3">And everyone’s responses</span>
+							<span class="block text-13">Delete event…</span>
+							<span class="block text-11 text-fg-3">And everyone’s responses</span>
 						</span>
 					</button>
 				{/if}
@@ -164,7 +176,7 @@
 				if (!app.live) await app.refresh();
 				toast.show('You’re no longer an admin of this event');
 			}}
-			onclose={() => (steppingDown = false)}
+			onclose={closed(() => (steppingDown = false))}
 		/>
 	{/if}
 
@@ -180,11 +192,11 @@
 				toast.show('Event deleted');
 				await closeEvent();
 			}}
-			onclose={() => (deleting = false)}
+			onclose={closed(() => (deleting = false))}
 		/>
 	{/if}
 
 	{#if transferring}
-		<TransferDialog candidates={heirs} onclose={() => (transferring = false)} />
+		<TransferDialog candidates={heirs} onclose={closed(() => (transferring = false))} />
 	{/if}
 {/if}

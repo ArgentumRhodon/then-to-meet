@@ -5,6 +5,7 @@
 	import RefreshCw from '@lucide/svelte/icons/refresh-cw';
 	import X from '@lucide/svelte/icons/x';
 	import { DateTime } from 'luxon';
+	import { tick } from 'svelte';
 	import { formatDay } from '$lib/analysis/format';
 	import { isImportableId } from '$lib/events/id';
 	import { openEvent } from '$lib/navigation';
@@ -15,6 +16,7 @@
 	import { DEMO_ID, eventUrl } from '$lib/w2m/id';
 	import ManageMenu from './ManageMenu.svelte';
 	import ShareMenu from './ShareMenu.svelte';
+	import ZoneMenu from './ZoneMenu.svelte';
 
 	let { class: className = '' }: { class?: string } = $props();
 
@@ -30,7 +32,7 @@
 
 	/** Copies this When2Meet poll into the signed-in account (signing in first), then opens it. */
 	const importEvent = async () => {
-		if (importing) return;
+		if (importing || accounts.busy) return;
 		importing = true;
 		try {
 			if (!accounts.user && !(await accounts.signIn())) return;
@@ -55,6 +57,17 @@
 		return days.length > 1
 			? `${formatDay(first, zone, false)} – ${formatDay(last, zone, false)}`
 			: formatDay(first, zone, false);
+	});
+
+	// A newly opened event starts keyboard and screen reader users at its name, unless something
+	// else already has focus (a link input that was just used, say).
+	let heading = $state<HTMLHeadingElement>();
+	$effect(() => {
+		void eventId;
+		tick().then(() => {
+			const active = document.activeElement;
+			if (!active || active === document.body) heading?.focus({ preventScroll: true });
+		});
 	});
 
 	// Re-render the "updated" label every 30s so it stays honest.
@@ -111,43 +124,63 @@
 	<div class="flex flex-wrap items-start gap-x-4 gap-y-3">
 		<div class="min-w-0 flex-1 basis-64">
 			<div class="flex items-center gap-2">
-				<h1 class="truncate text-lg font-semibold tracking-tight">{event.title}</h1>
+				<h1
+					bind:this={heading}
+					tabindex="-1"
+					dir="auto"
+					class="truncate text-lg font-semibold tracking-tight outline-none"
+					title={event.title}
+				>
+					{event.title}
+				</h1>
 				{#if event.id === DEMO_ID}
-					<span
-						class="shrink-0 rounded-full bg-warn-soft px-2 py-0.5 text-[11px] font-medium text-warn"
+					<span class="shrink-0 rounded-full bg-warn-soft px-2 py-0.5 text-11 font-medium text-warn"
 						>Demo</span
 					>
 				{/if}
 				<button
 					class="btn btn-ghost btn-icon size-7 shrink-0"
-					onclick={() => refresh()}
-					disabled={app.refreshing}
+					onclick={() => !app.refreshing && refresh()}
+					aria-disabled={app.refreshing}
 					aria-label="Refresh responses"
 					title="Pull the latest responses"
 				>
 					<RefreshCw class="size-4 pointer-coarse:size-5 {app.refreshing ? 'animate-spin' : ''}" />
 				</button>
 			</div>
-			<p class="mt-0.5 text-[13px] text-fg-2 sm:truncate">
-				{event.people.length}
-				{event.people.length === 1 ? 'person' : 'people'} responded · {range}
-				{#if event.weekly}· weekly{/if}
-				{#if app.live}
-					<span class="text-fg-3" title="New responses appear as they come in">
-						· <span class="live-dot" aria-hidden="true"></span> live
+			<!-- Wraps rather than truncating, so the timezone (a button with a popup) is never cut off. -->
+			<div class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-13 text-fg-2">
+				<p>
+					{event.people.length}
+					{event.people.length === 1 ? 'person' : 'people'} responded · {range}
+					{#if event.weekly}· weekly{/if}
+					{#if app.live}
+						<span title="New responses appear as they come in">
+							· <span class="live-dot" aria-hidden="true"></span> live<span class="sr-only"
+								>: new responses appear as they come in</span
+							>
+						</span>
+					{:else}
+						<span>· updated {updated}</span>
+					{/if}
+				</p>
+				<!-- Weekly events have no timezone: everyone sees the same times. -->
+				{#if !event.weekly}
+					<!-- The dot wraps with the zone, so a line never ends on it. -->
+					<span class="inline-flex items-center gap-1.5">
+						<span aria-hidden="true">·</span>
+						<ZoneMenu />
 					</span>
-				{:else}
-					<span class="text-fg-3">· updated {updated}</span>
 				{/if}
-			</p>
+			</div>
 		</div>
 		<div class="flex flex-wrap items-center gap-1.5">
 			<ManageMenu />
 			{#if canImport}
 				<button
-					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"
+					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-13"
 					onclick={importEvent}
-					disabled={importing || accounts.busy}
+					aria-disabled={importing || accounts.busy}
 					title="Copy this poll into your ThenToMeet account"
 				>
 					<Import class="size-3.5 text-fg-2 pointer-coarse:size-4.5" aria-hidden="true" />
@@ -156,15 +189,14 @@
 			{/if}
 			{#if event.id !== DEMO_ID && w2mId}
 				<a
-					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-[13px]"
+					class="btn btn-secondary h-8 gap-1.5 px-2.5 text-13"
 					href={eventUrl(w2mId)}
 					target="_blank"
 					rel="noopener noreferrer"
-					aria-label="W2M: open in When2Meet"
-					title="Open in When2Meet"
+					title="Open this poll on When2Meet"
 				>
 					<ExternalLink class="size-3.5 text-fg-2 pointer-coarse:size-4.5" aria-hidden="true" />
-					W2M
+					When2Meet<span class="sr-only"> (opens in new tab)</span>
 				</a>
 			{/if}
 			<ShareMenu />
@@ -177,7 +209,7 @@
 
 	{#if app.error}
 		<div
-			class="mt-3 flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-[13px] text-danger"
+			class="mt-3 flex items-start gap-2 rounded-lg bg-danger-soft px-3 py-2 text-13 text-danger"
 			role="alert"
 		>
 			<CircleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />

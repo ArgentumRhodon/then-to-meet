@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./accounts.svelte', () => ({ accounts: mocks.accounts }));
 vi.mock('./migrate', () => ({ migrateLegacy: mocks.migrateLegacy }));
-vi.mock('$lib/ui/toast.svelte', () => ({ toast: { show: mocks.toast } }));
+vi.mock('$lib/ui/toast.svelte', () => ({ toast: { show: mocks.toast, fail: mocks.toast } }));
 vi.mock('$lib/firebase/client', () => ({ getClientDb: () => 'db' }));
 vi.mock('$lib/events/userStore', () => ({
 	saveEventData: mocks.saveEventData,

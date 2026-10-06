@@ -3,7 +3,7 @@
 	import Copy from '@lucide/svelte/icons/copy';
 	import Link from '@lucide/svelte/icons/link';
 	import { page } from '$app/state';
-	import { formatDay, formatMeetingSet, formatTimeRange } from '$lib/analysis/format';
+	import { formatDay, formatMeetingSet, formatTimeRange, formatZone } from '$lib/analysis/format';
 	import type { MeetingSet } from '$lib/analysis/meetingSets';
 	import { meetingsFor } from '$lib/share/calendar';
 	import { app } from '$lib/state/app.svelte';
@@ -65,7 +65,7 @@
 		const { days, times } = formatMeetingSet(starts, app.duration, zone);
 		copyText(
 			`${event.title}: ${days} · ${times}` +
-				(event.weekly ? '' : ` (${zone.replaceAll('_', ' ')})`) +
+				(event.weekly ? '' : `, ${formatZone(zone, starts[0])}`) +
 				(event.weekly || repeat ? ', every week' : '')
 		);
 	};
@@ -74,7 +74,7 @@
 <li
 	data-result
 	class="rounded-xl border transition-colors {pinned
-		? 'border-accent bg-surface shadow-card'
+		? 'border-accent-strong bg-surface shadow-card'
 		: 'border-line bg-surface hover:border-line-strong'}"
 	onpointerenter={() => (app.hoveredSet = set)}
 	onpointerleave={() => (app.hoveredSet = null)}
@@ -97,8 +97,8 @@
 			{#if !stepping}
 				<span
 					class="mt-0.5 block font-semibold tracking-tight tabular {set.spread === 0
-						? 'text-[15px]'
-						: 'text-[13px]'}"
+						? 'text-15'
+						: 'text-13'}"
 				>
 					{#if pinned}
 						{times}

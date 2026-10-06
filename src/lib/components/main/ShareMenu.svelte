@@ -7,6 +7,7 @@
 	import { app } from '$lib/state/app.svelte';
 	import { dismissable } from '$lib/ui/dismissable';
 	import { keepInView } from '$lib/ui/keepInView';
+	import { menu } from '$lib/ui/menu';
 	import { copyText } from '$lib/ui/toast.svelte';
 
 	let open = $state(false);
@@ -39,7 +40,7 @@
 
 <div class="relative" {@attach open ? dismissable(() => (open = false)) : undefined}>
 	<button
-		class="btn btn-primary h-8 px-3 text-[13px]"
+		class="btn btn-primary h-8 px-3 text-13"
 		onclick={() => (open = !open)}
 		aria-haspopup="menu"
 		aria-expanded={open}
@@ -49,9 +50,11 @@
 	</button>
 	{#if open}
 		<div
-			class="popover absolute top-full right-0 z-30 mt-1.5 w-72 p-1"
+			class="popover absolute top-full right-0 z-30 mt-1.5 max-h-[calc(100dvh-8rem)] w-72 overflow-y-auto p-1"
 			role="menu"
+			aria-label="Share"
 			{@attach keepInView}
+			{@attach menu(() => (open = false))}
 		>
 			<button
 				class="flex w-full gap-3 rounded-lg px-3 py-2.5 text-left hover:bg-subtle"
@@ -60,7 +63,7 @@
 			>
 				<Link class="mt-0.5 size-4 shrink-0 text-fg-2" aria-hidden="true" />
 				<span>
-					<span class="block text-[13px] font-medium">Copy link</span>
+					<span class="block text-13 font-medium">Copy link</span>
 					<span class="block text-xs text-fg-3"
 						>Opens this event with your roles and meeting length{app.selection.length
 							? `, and your picked time${app.selection.length > 1 ? 's' : ''}`
@@ -75,7 +78,7 @@
 			>
 				<FileText class="mt-0.5 size-4 shrink-0 text-fg-2" aria-hidden="true" />
 				<span>
-					<span class="block text-[13px] font-medium">Copy summary</span>
+					<span class="block text-13 font-medium">Copy summary</span>
 					<span class="block text-xs text-fg-3"
 						>The best times as text for Slack, Discord, or email.</span
 					>

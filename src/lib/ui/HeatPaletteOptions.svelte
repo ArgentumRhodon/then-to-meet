@@ -33,8 +33,8 @@
 			{/each}
 		</span>
 		<span class="min-w-0 flex-1">
-			<span class="block text-[13px]">{palette.label}</span>
-			<span class="block text-[11px] text-fg-3">{palette.hint}</span>
+			<span class="block text-13">{palette.label}</span>
+			<span class="block text-11 text-fg-3">{palette.hint}</span>
 		</span>
 		<Check
 			class="size-3.5 shrink-0 pointer-coarse:size-4.5 {heatPalette.current === palette.value

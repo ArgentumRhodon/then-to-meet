@@ -141,7 +141,13 @@
 				?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 	});
 
-	/** Arrow keys walk the cells, Space or Enter turns one on or off. */
+	const slotAt = (at: { day: number; row: number }) =>
+		grid.days[at.day].slotByMinute.get(grid.rows[at.row].minute);
+
+	/**
+	 * Arrow keys walk the cells, Space or Enter turns one on or off. Shift with an arrow carries the
+	 * cell's state along, so a run of times takes one Space and a held Shift, as a drag would.
+	 */
 	const onkeydown = (e: KeyboardEvent) => {
 		const at = cursor ?? { day: 0, row: 0 };
 		const step: Record<string, [number, number]> = {
@@ -153,20 +159,36 @@
 		if (e.key in step) {
 			e.preventDefault();
 			const [dx, dy] = step[e.key];
+			const from = slotAt(at);
 			cursor = {
 				day: Math.min(Math.max(at.day + dx, 0), grid.days.length - 1),
 				row: Math.min(Math.max(at.row + dy, 0), grid.rows.length - 1)
 			};
+			const to = slotAt(cursor);
+			if (e.shiftKey && from !== undefined && to !== undefined) set([to], selected.has(from));
 		} else if (e.key === ' ' || e.key === 'Enter') {
 			e.preventDefault();
-			const slot = grid.days[at.day].slotByMinute.get(grid.rows[at.row].minute);
+			const slot = slotAt(at);
 			if (slot !== undefined) set([slot], !selected.has(slot));
 		}
 	};
+
+	/** What the arrow keys are on, read out as they move and as it's marked or cleared. */
+	const cursorLabel = $derived.by(() => {
+		if (!cursor) return '';
+		const day = grid.days[cursor.day];
+		const slot = slotAt(cursor);
+		const when = `${day.weekday}${day.date ? ` ${day.date}` : ''}, ${formatMinuteOfDay(grid.rows[cursor.row].minute)}`;
+		if (slot === undefined) return `${when}: not part of this event`;
+		return `${when}: ${selected.has(slot) ? 'marked free' : 'not marked'}`;
+	});
+	const id = $props.id();
 </script>
 
 <!-- Only where a touch screen is present; with a mouse, dragging always paints. -->
-<div class="touch-only mb-2 items-center gap-3">
+<!-- Sticks to the top of the dialog as it scrolls, so the switch is at hand when its hint says to
+     turn it off to scroll. -->
+<div class="touch-only sticky top-0 z-10 -mx-1 mb-2 items-center gap-3 bg-panel px-1 py-1.5">
 	<button
 		type="button"
 		class="btn btn-secondary btn-sm shrink-0 aria-pressed:border-accent aria-pressed:bg-accent-soft"
@@ -185,15 +207,17 @@
 
 <!-- The grid scrolls inside this box in both directions, so its day names and times can stay put. -->
 <div class="scroller">
-	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+	<!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
 	<div
 		bind:this={gridEl}
 		class="picker grid"
 		class:painting
 		style:grid-template-columns="3rem repeat({grid.days.length}, minmax(2.75rem, 1fr))"
 		style:max-width="{3 + grid.days.length * 9}rem"
-		role="grid"
-		aria-label="Your availability. Use arrow keys to move between time slots and Space to mark or clear one."
+		role="application"
+		aria-roledescription="availability grid"
+		aria-label="Your availability"
+		aria-describedby="{id}-keys {id}-cursor"
 		tabindex="0"
 		{onpointerdown}
 		{onpointermove}
@@ -212,9 +236,9 @@
 				tabindex="-1"
 				aria-label="{day.date ?? day.weekday}: mark or clear the whole day"
 			>
-				<span class="block text-[11px] font-medium text-fg-3 uppercase">{day.weekday}</span>
+				<span class="block text-11 font-medium text-fg-3 uppercase">{day.weekday}</span>
 				{#if day.date}
-					<span class="block text-[13px] font-semibold text-fg tabular">
+					<span class="block text-13 font-semibold text-fg tabular">
 						<span class="sm:hidden">{day.dayOfMonth}</span>
 						<span class="hidden sm:inline">{day.date}</span>
 					</span>
@@ -227,7 +251,7 @@
 				{#if row.hour || i === 0 || row.gapBefore}
 					<button
 						type="button"
-						class="w-full pr-2 text-right text-[11px] leading-none text-fg-3 tabular hover:text-fg"
+						class="w-full self-stretch pr-2 text-right text-11 leading-none text-fg-3 tabular hover:text-fg"
 						onclick={() => toggleGroup(slotsOfHour(Math.floor(row.minute / 60)))}
 						tabindex="-1"
 						aria-label="{formatMinuteOfDay(
@@ -248,8 +272,6 @@
 						class:on={selected.has(slot)}
 						class:hour={row.hour && i > 0}
 						class:cursor={cursor?.day === d && cursor?.row === i}
-						role="gridcell"
-						aria-selected={selected.has(slot)}
 						data-slot={slot}
 						style:grid-row={i + 2}
 						style:grid-column={d + 2}
@@ -259,6 +281,11 @@
 		{/each}
 	</div>
 </div>
+<p id="{id}-keys" class="sr-only">
+	Arrow keys move between times. Space marks or clears one; hold Shift with the arrow keys to mark
+	or clear the times you pass over.
+</p>
+<p id="{id}-cursor" class="sr-only" aria-live="polite">{cursorLabel}</p>
 
 <style>
 	.picker {
@@ -268,13 +295,13 @@
 		user-select: none;
 		-webkit-user-select: none;
 	}
-	@media (min-width: 640px) {
+	@media (min-width: 40rem) {
 		.picker {
 			min-width: 0;
 		}
 	}
 	.picker:focus-visible {
-		outline: 2px solid var(--accent);
+		outline: 2px solid var(--focus);
 		outline-offset: 4px;
 		border-radius: 8px;
 	}
@@ -285,7 +312,7 @@
 		max-height: max(18rem, 60dvh);
 	}
 	.picker {
-		--cell-height: 1.25rem;
+		--cell-height: 1.5rem;
 	}
 	/* The day names stay at the top and the times at the left. They need a background of their own
 	   or the cells show through, and a little shadow to cover the gaps between cells. */
@@ -354,17 +381,20 @@
 			background: color-mix(in oklab, var(--accent) 35%, transparent);
 		}
 	}
+	/* Marked: the accent, deepened on light, where cyan barely differs from an empty cell. */
 	.cell.on {
-		background: var(--accent);
+		background: var(--accent-strong);
 	}
 	@media (hover: hover) {
 		.cell.on:hover {
 			background: var(--accent-hover);
 		}
 	}
+	/* Two tones, so the cursor shows on marked and empty cells alike. */
 	.picker:focus-visible .cell.cursor {
 		outline: 2px solid var(--fg);
 		outline-offset: -2px;
+		box-shadow: inset 0 0 0 4px var(--panel);
 	}
 	.label {
 		height: var(--cell-height);

@@ -1,14 +1,18 @@
 import { MediaQuery } from 'svelte/reactivity';
 import { app } from '$lib/state/app.svelte';
 
-/** Narrowest day column that still reads comfortably in the heatmap. */
-const MIN_DAY_WIDTH = 60;
-/** Time labels plus page padding around the heatmap. */
-const HEATMAP_CHROME = 100;
-/** Phones never get the heatmap. */
-const MIN_WIDTH = 640;
+// Widths are in rem, like Tailwind's breakpoints, so the layout tracks the browser's font size:
+// with larger text, a window counts as narrower here just as it does in CSS.
 
-const desktop = new MediaQuery('(min-width: 1024px)');
+/** Narrowest day column that still reads comfortably in the heatmap (60px at the default size). */
+const MIN_DAY_WIDTH = 3.75;
+/** Time labels plus page padding around the heatmap. */
+const HEATMAP_CHROME = 6.25;
+/** Phones never get the heatmap. Matches Tailwind's `sm`. */
+const MIN_WIDTH = 40;
+
+/** Matches Tailwind's `lg`. */
+const desktop = new MediaQuery('(min-width: 64rem)');
 /** Room for people, the heatmap, and best times side by side. Matches Tailwind's `xl`. */
 const wide = new MediaQuery('(min-width: 80rem)');
 
@@ -16,7 +20,7 @@ class Layout {
 	/** Room for every day at a readable width, as a media query so it tracks resizes and rotation. */
 	#fits = $derived(
 		new MediaQuery(
-			`(min-width: ${Math.max(MIN_WIDTH, HEATMAP_CHROME + (app.grid?.days.length ?? 7) * MIN_DAY_WIDTH)}px)`
+			`(min-width: ${Math.max(MIN_WIDTH, HEATMAP_CHROME + (app.grid?.days.length ?? 7) * MIN_DAY_WIDTH)}rem)`
 		)
 	);
 

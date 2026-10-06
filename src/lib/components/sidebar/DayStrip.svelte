@@ -44,7 +44,7 @@
 
 <!-- Dark like the heatmap it stands in for. -->
 <div class="rounded-lg bg-canvas p-2.5 scheme-dark">
-	<p class="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 text-[11px] text-fg-3">
+	<p class="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 text-11 text-fg-3">
 		<span>{day.weekday}{day.date ? `, ${day.date}` : ''} at a glance</span>
 		{#if anyPartial}
 			<span class="flex items-center gap-1.5">
@@ -83,7 +83,7 @@
 						></span>
 					{/if}
 				</div>
-				<p class="mt-1 truncate text-[11px] text-fg-3 tabular">{range(segment)}</p>
+				<p class="mt-1 truncate text-11 text-fg-3 tabular">{range(segment)}</p>
 			</div>
 		{/each}
 	</div>
@@ -98,7 +98,7 @@
 	.partial {
 		background:
 			linear-gradient(to bottom, var(--heat-high) 50%, transparent 50%) 0 0 / 100% 4px,
-			linear-gradient(rgb(0 0 0 / 0.3), rgb(0 0 0 / 0.3)),
+			linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.45)),
 			var(--base, var(--heat-0));
 	}
 </style>

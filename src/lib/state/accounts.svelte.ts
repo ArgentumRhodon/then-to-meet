@@ -123,7 +123,7 @@ class Accounts {
 			return true;
 		} catch (e) {
 			if (!CANCELLED.includes((e as { code?: string }).code ?? '')) {
-				toast.show('Sign-in failed. Try again.');
+				toast.fail('Sign-in failed. Try again.');
 			}
 			return false;
 		} finally {
@@ -138,7 +138,7 @@ class Accounts {
 			await getClientAuth().signOut();
 			this.user = null;
 		} catch {
-			toast.show("Couldn't sign out. Try again.");
+			toast.fail("Couldn't sign out. Try again.");
 		} finally {
 			this.busy = false;
 		}
@@ -301,7 +301,7 @@ class Accounts {
 			const { getClientDb, importWhen2Meet } = await firebase();
 			return await importWhen2Meet(getClientDb(), user, poll);
 		} catch {
-			toast.show("Couldn't import that event. Try again.");
+			toast.fail("Couldn't import that event. Try again.");
 			return null;
 		}
 	}

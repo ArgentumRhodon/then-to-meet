@@ -34,14 +34,14 @@
 
 <div class="flex min-h-dvh flex-col">
 	<header class="mx-auto flex w-full max-w-5xl items-center justify-between px-5 py-4">
-		<span class="text-[15px] font-semibold tracking-tight">ThenToMeet</span>
+		<span class="text-15 font-semibold tracking-tight">ThenToMeet</span>
 		<SettingsMenu />
 	</header>
 
 	<main class="mx-auto flex w-full max-w-5xl flex-1 flex-col px-5 pt-10 pb-16 sm:pt-20">
 		<div class="mx-auto w-full max-w-xl text-center">
 			<h1
-				class="text-3xl font-semibold tracking-tight text-balance sm:text-[40px] sm:leading-[1.1]"
+				class="text-3xl font-semibold tracking-tight text-balance sm:text-[2.5rem] sm:leading-[1.1]"
 			>
 				Find the time that actually works
 			</h1>
@@ -62,18 +62,18 @@
 					<span>{app.error}</span>
 				</div>
 			{/if}
-			<p class="mt-3 text-center text-sm text-fg-3">
+			<p class="mt-3 text-center text-sm text-fg-2">
 				No link handy?
 				<button
-					class="font-medium text-accent-fg underline-offset-4 hover:underline pointer-coarse:py-2"
+					class="font-medium text-accent-fg underline underline-offset-4 pointer-coarse:py-2"
 					onclick={() => openEvent(DEMO_ID)}
 				>
 					Try a demo event
 				</button>
 				{#if accounts.enabled}
-					<span class="mx-1 text-fg-3" aria-hidden="true">·</span>
+					<span class="mx-1 text-fg-2" aria-hidden="true">·</span>
 					<a
-						class="font-medium text-accent-fg underline-offset-4 hover:underline pointer-coarse:py-2"
+						class="font-medium text-accent-fg underline underline-offset-4 pointer-coarse:py-2"
 						href="/new"
 					>
 						Create your own
@@ -86,14 +86,15 @@
 
 		{#if recent.items.length}
 			<section class="mx-auto mt-10 w-full max-w-xl" aria-labelledby="recent-heading">
-				<h2 id="recent-heading" class="eyebrow mb-2 px-3">Recent events</h2>
+				<h2 id="recent-heading" class="eyebrow mb-2 px-3 text-fg-2">Recent events</h2>
 				<div class="card p-1.5">
 					<RecentList onopen={openEvent} limit={6} />
 				</div>
 			</section>
 		{/if}
 
-		<section class="mt-16 grid gap-4 sm:grid-cols-3" aria-label="Features">
+		<section class="mt-16 grid gap-4 sm:grid-cols-3" aria-labelledby="features-heading">
+			<h2 id="features-heading" class="sr-only">Features</h2>
 			{#each features as feature (feature.title)}
 				<div class="card p-5">
 					<div
@@ -108,7 +109,7 @@
 		</section>
 	</main>
 
-	<footer class="mx-auto w-full max-w-5xl px-5 py-6 text-xs text-fg-3">
+	<footer class="mx-auto w-full max-w-5xl px-5 py-6 text-xs text-fg-2">
 		ThenToMeet reads public When2Meet polls. It isn’t affiliated with When2Meet.
 	</footer>
 </div>

@@ -13,7 +13,7 @@ const WEEKLY_CUTOFF = Date.UTC(1980, 0, 1) / 1000;
 
 export class EventNotFoundError extends Error {
 	constructor() {
-		super('No When2Meet event found at that link.');
+		super('No When2Meet poll found at that link.');
 		this.name = 'EventNotFoundError';
 	}
 }

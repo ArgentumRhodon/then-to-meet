@@ -58,9 +58,7 @@
 			<h2 id="password-title" class="text-base font-semibold tracking-tight">
 				Password for {person.name}
 			</h2>
-			<p class="mt-0.5 text-[13px] text-fg-2">
-				Change it, or take it off. You need the current one.
-			</p>
+			<p class="mt-0.5 text-13 text-fg-2">Change it, or take it off. You need the current one.</p>
 		</header>
 
 		<div class="space-y-4 px-5 py-4">
@@ -74,12 +72,14 @@
 					maxlength="100"
 					required
 					aria-invalid={currentError !== null}
-					aria-describedby="password-current-error"
+					aria-describedby={currentError ? 'password-current-error' : undefined}
 					bind:value={current}
 					oninput={() => (currentError = null)}
 				/>
 				{#if currentError}
-					<p id="password-current-error" class="mt-1.5 text-xs text-danger">{currentError}</p>
+					<p id="password-current-error" class="mt-1.5 text-xs text-danger" role="alert">
+						{currentError}
+					</p>
 				{/if}
 			</div>
 
@@ -96,7 +96,7 @@
 				/>
 			</div>
 
-			<label class="flex items-start gap-2 text-[13px]">
+			<label class="flex items-start gap-2 text-13">
 				<input
 					class="mt-0.5"
 					type="checkbox"
@@ -114,7 +114,7 @@
 
 		<footer class="flex flex-wrap items-center gap-2 border-t border-line px-5 py-3">
 			{#if error}
-				<p class="flex min-w-0 flex-1 items-start gap-1.5 text-[13px] text-danger" role="alert">
+				<p class="flex min-w-0 flex-1 items-start gap-1.5 text-13 text-danger" role="alert">
 					<CircleAlert class="mt-0.5 size-4 shrink-0" aria-hidden="true" />
 					<span>{error}</span>
 				</p>

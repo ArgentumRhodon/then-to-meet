@@ -56,7 +56,7 @@ const loadEvent = async (id: string, fetcher: typeof fetch): Promise<W2MEvent> =
 		if (e instanceof EventNotFoundError) {
 			throw new EventLoadError(
 				404,
-				'No When2Meet event found at that link. Double-check it and try again.'
+				'No When2Meet poll found at that link. Double-check it and try again.'
 			);
 		}
 		if (e instanceof EventFormatError) {

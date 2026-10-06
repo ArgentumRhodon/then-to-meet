@@ -4,7 +4,8 @@ import {
 	formatList,
 	formatMeetingSet,
 	formatTimeRange,
-	formatWeekday
+	formatWeekday,
+	formatZone
 } from '$lib/analysis/format';
 import type { BestTimes, TimeBlock } from '$lib/analysis/bestTimes';
 import type { MeetingSet, MeetingSets } from '$lib/analysis/meetingSets';
@@ -52,7 +53,7 @@ export const buildSummary = ({
 		return `• ${days} · ${times}${withMissing && misses.length ? ` (without ${misses.join('; ')})` : ''}`;
 	};
 
-	const zoneNote = event.weekly ? '' : ` · times in ${zone.replaceAll('_', ' ')}`;
+	const zoneNote = event.weekly ? '' : ` · ${formatZone(zone, event.slots[0]?.time)}`;
 	const who = group ? ` (${group})` : '';
 	const how = sets
 		? `${formatDuration(duration)} ${perWeekPhrase(perWeek)}`

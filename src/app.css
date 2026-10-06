@@ -13,6 +13,8 @@
 	--subtle: light-dark(rgb(14 42 53 / 0.05), rgb(255 255 255 / 0.07));
 	--line: light-dark(#dce5ea, #4b5768);
 	--line-strong: light-dark(#c3d1d9, #5a687d);
+	/* A field's outline, which has to read as a control (3:1), unlike the softer dividers. */
+	--field-border: light-dark(#78909c, #8797ad);
 	--fg: light-dark(#0e2a35, #cdf0f6);
 	--fg-2: light-dark(#44606c, #c1c7d1);
 	--fg-3: light-dark(#56717d, #aab3c0);
@@ -22,6 +24,11 @@
 	--accent-soft: light-dark(#d9f4fa, #294f5e);
 	--accent-fg: light-dark(#0a6c82, #9be2ee);
 	--on-accent: light-dark(#032a33, #000000);
+	/* The accent where it must stand out from what's around it at 3:1 or more: focus rings, marked
+	   and selected states. It's the accent itself on dark and its deep text shade on light, where
+	   cyan on white is only 2.4:1. */
+	--accent-strong: light-dark(#0a6c82, #06b6d4);
+	--focus: var(--accent-strong);
 	/* Secondary: blue, v1's color for selected people. */
 	--secondary: #3b82f6;
 	--secondary-soft: light-dark(#e0ebfe, #334868);
@@ -33,7 +40,9 @@
 	--heat-fade: oklch(0.38 0 none);
 	--warn: light-dark(#8a5f00, #f4c12a);
 	--warn-soft: light-dark(#fdf3d3, #54513f);
-	--danger: light-dark(#b52c55, #e2557c);
+	/* Dark is lighter than rocket's #e2557c, which was under 3:1 as text on the panels. */
+	--danger: light-dark(#b52c55, #f797b0);
+	--on-danger: light-dark(#ffffff, #1a0710);
 	--danger-soft: light-dark(#fbe4ec, #4f3647);
 	--ok: light-dark(#2f870d, #4ccb15);
 	--ok-soft: light-dark(#e4f7dc, #34502f);
@@ -52,10 +61,12 @@
    heatmap is always dark. */
 :root,
 [data-heat='standard'] {
-	/* v1's red-to-green, through rocket's error, warning, and success. */
+	/* v1's red-to-green, through rocket's error and warning. The green is lighter than rocket's
+	   success (#4ccb15, still --ok), which is darker than the amber before it: "everyone free" has to
+	   be the brightest cell, for every kind of color vision, not a dimmer one. */
 	--heat-low: #ec5757;
 	--heat-mid: #f4c12a;
-	--heat-high: #4ccb15;
+	--heat-high: #9be86a;
 }
 
 /* Red-green (green-weak): blue to yellow through neutral, the axis deuteranopes keep. */
@@ -89,6 +100,10 @@
 
 @theme inline {
 	--font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+	/* The in-between sizes the UI uses, in rem so they follow the browser's text size setting. */
+	--text-11: 0.6875rem;
+	--text-13: 0.8125rem;
+	--text-15: 0.9375rem;
 	--color-canvas: var(--canvas);
 	--color-panel: var(--panel);
 	--color-surface: var(--surface);
@@ -103,6 +118,10 @@
 	--color-accent-soft: var(--accent-soft);
 	--color-accent-fg: var(--accent-fg);
 	--color-on-accent: var(--on-accent);
+	--color-focus: var(--focus);
+	--color-accent-strong: var(--accent-strong);
+	--color-on-danger: var(--on-danger);
+	--color-field-border: var(--field-border);
 	--color-secondary: var(--secondary);
 	--color-secondary-soft: var(--secondary-soft);
 	--color-secondary-fg: var(--secondary-fg);
@@ -135,7 +154,7 @@
 	}
 
 	:focus-visible {
-		outline: 2px solid var(--accent);
+		outline: 2px solid var(--focus);
 		outline-offset: 2px;
 	}
 
@@ -194,7 +213,7 @@
 /* Shared control styles, kept deliberately small. */
 @layer components {
 	.btn {
-		@apply inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition-colors select-none disabled:cursor-not-allowed disabled:opacity-50;
+		@apply inline-flex h-9 items-center justify-center gap-2 rounded-lg px-3 text-sm font-medium whitespace-nowrap transition-colors select-none disabled:cursor-not-allowed disabled:opacity-50 aria-disabled:cursor-not-allowed aria-disabled:opacity-50;
 	}
 	.btn-primary {
 		@apply bg-accent text-on-accent hover:bg-accent-hover;
@@ -227,7 +246,7 @@
 	/* On touch, 16px text: iOS zooms into any smaller field when it's focused. Fields that set a
 	   smaller size themselves repeat pointer-coarse:text-base, since their utility wins over this. */
 	.input {
-		@apply h-10 w-full rounded-lg border border-line bg-surface px-3 text-sm text-fg transition-colors outline-none placeholder:text-fg-3 hover:border-line-strong focus:border-accent focus:ring-3 focus:ring-accent/20 pointer-coarse:min-h-11 pointer-coarse:text-base;
+		@apply h-10 w-full rounded-lg border border-field-border bg-surface px-3 text-sm text-fg transition-colors outline-none placeholder:text-fg-3 hover:border-fg-3 focus:border-focus focus:ring-3 focus:ring-accent/20 pointer-coarse:min-h-11 pointer-coarse:text-base;
 	}
 	.card {
 		@apply rounded-xl border border-line bg-surface;
@@ -236,6 +255,6 @@
 		@apply rounded-xl border border-line bg-surface shadow-pop;
 	}
 	.eyebrow {
-		@apply text-[11px] font-semibold tracking-wide text-fg-3 uppercase;
+		@apply text-11 font-semibold tracking-wide text-fg-3 uppercase;
 	}
 }

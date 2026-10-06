@@ -10,6 +10,7 @@
 	import { groups } from '$lib/state/groups.svelte';
 	import type { PeopleGroup, Person, Role } from '$lib/types';
 	import { dismissable } from '$lib/ui/dismissable';
+	import { menu } from '$lib/ui/menu';
 	import { toast } from '$lib/ui/toast.svelte';
 	import SelectionManage from './SelectionManage.svelte';
 
@@ -27,7 +28,7 @@
 	const ROLES: { value: Role; label: string }[] = [
 		{ value: 'required', label: 'Required' },
 		{ value: 'optional', label: 'Optional' },
-		{ value: 'skip', label: 'Skip' }
+		{ value: 'skip', label: 'Skipped' }
 	];
 
 	let groupMenu = $state(false);
@@ -79,7 +80,7 @@
 	};
 </script>
 
-<div class="flex h-9 items-center gap-2.5 px-4 pointer-coarse:h-11">
+<div class="flex min-h-9 items-center gap-2.5 px-4 py-1 pointer-coarse:min-h-11">
 	<input
 		type="checkbox"
 		class="size-4 shrink-0 cursor-pointer accent-accent pointer-coarse:size-5"
@@ -134,11 +135,16 @@
 				{#if groupMenu}
 					<!-- Hangs left from the button: it sits in the sidebar's right half, and the sidebar clips
 					     anything wider than itself. -->
-					<div class="popover absolute top-full right-0 z-30 mt-1 w-56 p-1" role="menu">
+					<div
+						class="popover absolute top-full right-0 z-30 mt-1 max-h-[calc(100dvh-8rem)] w-56 overflow-y-auto p-1"
+						role="menu"
+						aria-label="Groups"
+						{@attach menu(() => (groupMenu = false))}
+					>
 						{#each groups.items as group (group.id)}
 							{@const n = inGroup(group)}
 							<button
-								class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] hover:bg-subtle pointer-coarse:py-2.5"
+								class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-13 hover:bg-subtle pointer-coarse:py-2.5"
 								role="menuitemcheckbox"
 								aria-checked={n === count ? 'true' : n ? 'mixed' : 'false'}
 								onclick={() => toggleIn(group)}
@@ -156,9 +162,12 @@
 								<span class="truncate">{group.name}</span>
 							</button>
 						{/each}
-						{#if groups.items.length}<div class="my-1 border-t border-line"></div>{/if}
+						{#if groups.items.length}<div
+								class="my-1 border-t border-line"
+								role="separator"
+							></div>{/if}
 						<button
-							class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] font-medium text-accent-fg hover:bg-subtle pointer-coarse:py-2.5"
+							class="flex w-full items-center gap-2 rounded-md px-2.5 py-1.5 text-left text-13 font-medium text-accent-fg hover:bg-subtle pointer-coarse:py-2.5"
 							role="menuitem"
 							onclick={() => {
 								groupMenu = false;
@@ -183,7 +192,7 @@
 				<button
 					class="h-6 rounded-md px-2 text-xs font-medium transition-colors pointer-coarse:h-9 {sharedRole ===
 					role.value
-						? 'bg-accent text-on-accent'
+						? 'bg-accent text-on-accent light:ring-1 light:ring-accent-strong'
 						: 'text-fg-2 hover:bg-subtle hover:text-fg'}"
 					aria-pressed={sharedRole === role.value}
 					onclick={() => app.setRoles(app.selected, role.value)}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import CircleAlert from '@lucide/svelte/icons/circle-alert';
 	import { onMount } from 'svelte';
-	import { formatMinuteOfDay } from '$lib/analysis/format';
+	import { formatMinuteOfDay, formatZone } from '$lib/analysis/format';
 	import DatePicker from '$lib/components/new/DatePicker.svelte';
 	import { InvalidInput, parseNewEvent } from '$lib/events/model';
 	import { buildSlots } from '$lib/events/slots';
@@ -87,7 +87,9 @@
 
 <div class="flex min-h-dvh flex-col">
 	<header class="mx-auto flex w-full max-w-5xl items-center justify-between px-5 py-4">
-		<a href="/" class="text-[15px] font-semibold tracking-tight">ThenToMeet</a>
+		<a href="/" class="inline-flex h-10 items-center text-15 font-semibold tracking-tight"
+			>ThenToMeet</a
+		>
 		<SettingsMenu />
 	</header>
 
@@ -101,7 +103,7 @@
 		{#if !accounts.enabled}
 			<div class="card mt-8 p-5 text-sm text-fg-2">
 				Accounts aren’t set up on this ThenToMeet, so events can’t be created here. Paste a
-				When2Meet link on the <a class="text-accent-fg underline-offset-4 hover:underline" href="/"
+				When2Meet link on the <a class="text-accent-fg underline underline-offset-4" href="/"
 					>start page</a
 				>
 				instead.
@@ -109,7 +111,7 @@
 		{:else}
 			<form class="mt-8 space-y-7" onsubmit={create}>
 				<div>
-					<label for="event-title" class="eyebrow mb-1.5 block">Event name</label>
+					<label for="event-title" class="eyebrow mb-1.5 block text-fg-2">Event name</label>
 					<input
 						id="event-title"
 						class="input"
@@ -122,7 +124,7 @@
 				</div>
 
 				<fieldset>
-					<legend class="eyebrow mb-1.5">Which days?</legend>
+					<legend class="eyebrow mb-1.5 text-fg-2">Which days?</legend>
 					<div
 						class="inline-flex rounded-lg border border-line bg-surface p-0.5"
 						role="radiogroup"
@@ -130,7 +132,7 @@
 					>
 						{#each [{ value: 'dates', label: 'Specific dates' }, { value: 'weekly', label: 'Days of the week' }] as option (option.value)}
 							<label
-								class="cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors not-has-[:checked]:text-fg-2 not-has-[:checked]:hover:text-fg has-[:checked]:bg-accent has-[:checked]:text-on-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-accent/40"
+								class="cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors not-has-[:checked]:text-fg-2 not-has-[:checked]:hover:text-fg has-[:checked]:bg-accent has-[:checked]:text-on-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus has-[:focus-visible]:ring-offset-1 has-[:focus-visible]:ring-offset-surface light:has-[:checked]:ring-1 light:has-[:checked]:ring-accent-strong"
 							>
 								<input
 									class="sr-only"
@@ -154,7 +156,9 @@
 								{#each WEEKDAYS as label, day (day)}
 									<button
 										type="button"
-										class="btn {weekdays.includes(day) ? 'btn-primary' : 'btn-secondary'} w-14"
+										class="btn {weekdays.includes(day)
+											? 'btn-primary light:ring-1 light:ring-accent-strong'
+											: 'btn-secondary'} w-14"
 										aria-pressed={weekdays.includes(day)}
 										onclick={() => toggleWeekday(day)}
 									>
@@ -167,10 +171,10 @@
 				</fieldset>
 
 				<fieldset>
-					<legend class="eyebrow mb-1.5">Which times?</legend>
+					<legend class="eyebrow mb-1.5 text-fg-2">Which times?</legend>
 					<div class="grid gap-3 sm:grid-cols-3">
 						<div>
-							<label for="start-hour" class="mb-1 block text-xs text-fg-3">No earlier than</label>
+							<label for="start-hour" class="mb-1 block text-xs text-fg-2">No earlier than</label>
 							<select id="start-hour" class="input" bind:value={startHour}>
 								{#each Array.from({ length: 24 }, (_, h) => h) as hour (hour)}
 									<option value={hour}>{hourLabel(hour)}</option>
@@ -178,7 +182,7 @@
 							</select>
 						</div>
 						<div>
-							<label for="end-hour" class="mb-1 block text-xs text-fg-3">No later than</label>
+							<label for="end-hour" class="mb-1 block text-xs text-fg-2">No later than</label>
 							<select id="end-hour" class="input" bind:value={endHour}>
 								{#each Array.from({ length: 24 }, (_, h) => h + 1) as hour (hour)}
 									<option value={hour}>{hourLabel(hour)}</option>
@@ -186,7 +190,7 @@
 							</select>
 						</div>
 						<div>
-							<label for="slot-length" class="mb-1 block text-xs text-fg-3">Slot length</label>
+							<label for="slot-length" class="mb-1 block text-xs text-fg-2">Slot length</label>
 							<select id="slot-length" class="input" bind:value={slotSeconds}>
 								{#each SLOT_LENGTHS as length (length.seconds)}
 									<option value={length.seconds}>{length.label}</option>
@@ -194,17 +198,21 @@
 							</select>
 						</div>
 					</div>
-					<p class="mt-2 text-xs text-fg-3">
+					<p class="mt-2 text-xs text-fg-2">
 						{#if kind === 'weekly'}
 							Weekly events have no timezone: everyone sees the same times.
 						{:else}
-							Times are in {zone.replaceAll('_', ' ')}. Everyone sees them in their own timezone.
+							Times are in {formatZone(zone)}. Everyone sees them in their own timezone.
 						{/if}
 					</p>
 				</fieldset>
 
 				<div class="flex flex-wrap items-center gap-3 border-t border-line pt-5">
-					<p class="min-w-0 flex-1 text-sm {plan.problem && days ? 'text-warn' : 'text-fg-2'}">
+					<p
+						id="plan-summary"
+						class="min-w-0 flex-1 text-sm {plan.problem && days ? 'text-warn' : 'text-fg-2'}"
+						aria-live="polite"
+					>
 						{#if plan.slots}
 							{days}
 							{kind === 'weekly' ? (days === 1 ? 'day' : 'days') : days === 1 ? 'date' : 'dates'}, {plan
@@ -220,6 +228,7 @@
 						type="submit"
 						class="btn btn-primary h-10 px-5"
 						disabled={busy || !plan.slots || !title.trim()}
+						aria-describedby="plan-summary"
 					>
 						{busy ? 'Creating…' : accounts.user ? 'Create event' : 'Sign in to create'}
 					</button>

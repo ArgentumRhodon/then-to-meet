@@ -66,7 +66,7 @@ const mix = (a: Oklch, b: Oklch, weight: number): Oklch => {
 export const HEAT_EMPTY = '#3a434f';
 const LOW = fromHex('#ec5757');
 const MID = fromHex('#f4c12a');
-const HIGH = fromHex('#4ccb15');
+const HIGH = fromHex('#9be86a');
 const FADE: Oklch = { l: 0.38, c: 0, h: null };
 
 /** `heatColor` from $lib/ui/heat.ts, as hex: the color for `count` of `total` people free. */

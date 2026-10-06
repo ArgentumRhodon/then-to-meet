@@ -1,5 +1,5 @@
 import { DateTime, type WeekdayNumbers } from 'luxon';
-import { formatDay, formatTimeRange } from '$lib/analysis/format';
+import { formatDay, formatTimeRange, formatZone } from '$lib/analysis/format';
 import type { TimeRange, W2MEvent } from '$lib/types';
 import { DEMO_ID, eventUrl } from '$lib/w2m/id';
 
@@ -34,7 +34,7 @@ const weeklyRule = ({ byDay, count }: CalendarMeeting): string =>
 	(count ? `;COUNT=${count}` : '');
 
 const detailsFor = (event: W2MEvent): string =>
-	`Picked with ThenToMeet from ${event.id === DEMO_ID ? 'a demo poll' : eventUrl(event.id)}`;
+	`Picked with ThenToMeet from ${event.id === DEMO_ID ? 'a demo event' : eventUrl(event.id)}`;
 
 const utcStamp = (seconds: number): string =>
 	DateTime.fromSeconds(seconds, { zone: 'utc' }).toFormat("yyyyMMdd'T'HHmmss'Z'");
@@ -140,8 +140,8 @@ export const meetingsFor = (
 		const everyTime = event.people.filter((p) => planned.every((m) => m.attendees.includes(p.id)));
 		const lines = [
 			weekly
-				? `Meets ${howOften(planned.length)} a week (${zone.replaceAll('_', ' ')}):`
-				: `${planned.length} meetings (${zone.replaceAll('_', ' ')}):`,
+				? `Meets ${howOften(planned.length)} a week, ${formatZone(zone, planned[0].start)}:`
+				: `${planned.length} meetings, ${formatZone(zone, planned[0].start)}:`,
 			...planned.map((m, i) => {
 				// A repeating meeting is "Tuesday"; a one-off keeps its date.
 				const when = `${formatDay(m.start, zone, weekly)}, ${formatTimeRange(m.start, m.end, zone)}`;

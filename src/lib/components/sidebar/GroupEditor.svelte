@@ -1,11 +1,20 @@
 <script lang="ts">
 	import Trash2 from '@lucide/svelte/icons/trash-2';
+	import { tick } from 'svelte';
 	import { app } from '$lib/state/app.svelte';
 	import { groups, membersIn } from '$lib/state/groups.svelte';
 	import type { PeopleGroup, Person } from '$lib/types';
-	import { toast } from '$lib/ui/toast.svelte';
 
-	let { group, people }: { group: PeopleGroup; people: Person[] } = $props();
+	let {
+		group,
+		people,
+		ondelete
+	}: {
+		group: PeopleGroup;
+		people: Person[];
+		/** Called once the group is gone, with what to say and how to bring it back. */
+		ondelete: (message: string, undo: () => void) => void;
+	} = $props();
 
 	// Seeded once: the editor is remounted for each group, and the name saves as it's typed.
 	// svelte-ignore state_referenced_locally
@@ -14,33 +23,42 @@
 
 	const present = $derived(membersIn(group, people).length);
 
-	/** Deletes right away; the toast offers it back. */
+	/** Deletes right away; the group bar offers it back, where the editor was. */
 	const remove = (message = `Deleted ${group.name}`) => {
 		const { id } = group;
 		const undo = groups.remove(id);
 		app.setGroup(null);
-		toast.show(message, {
-			label: 'Undo',
-			run: () => {
-				undo();
-				app.setGroup(id);
-			}
+		ondelete(message, () => {
+			undo();
+			app.setGroup(id);
 		});
 	};
 
 	/** A group left with no one in it isn't worth keeping. */
 	const done = () => {
-		if (!present) remove(`Deleted ${group.name}, it was empty`);
-		else app.editGroup(false);
+		if (!present) return remove(`Deleted ${group.name}, it was empty`);
+		app.editGroup(false);
+		focusChips();
 	};
 
+	let doneButton = $state<HTMLButtonElement>();
+
+	/** Enter keeps the name and Escape puts the old one back; either way, on to Done. */
 	const onkeydown = (e: KeyboardEvent & { currentTarget: HTMLInputElement }) => {
-		if (e.key === 'Enter') e.currentTarget.blur();
+		if (e.key === 'Enter') doneButton?.focus();
 		if (e.key !== 'Escape') return;
 		e.preventDefault();
 		name = original;
 		groups.rename(group.id, original);
-		e.currentTarget.blur();
+		doneButton?.focus();
+	};
+
+	/** The editor is about to go away with focus in it; land on the group chips instead. */
+	const focusChips = async () => {
+		await tick();
+		document
+			.querySelector<HTMLElement>('[aria-label="Show a group"] [aria-pressed="true"]')
+			?.focus();
 	};
 
 	/** Invites a real name while the group still has its placeholder one. */
@@ -54,7 +72,7 @@
 <div class="mt-2 rounded-lg bg-subtle p-1.5 pl-2">
 	<div class="flex items-center gap-1.5">
 		<input
-			class="input h-8 min-w-0 flex-1 text-[13px] font-medium pointer-coarse:text-base"
+			class="input h-8 min-w-0 flex-1 text-13 font-medium pointer-coarse:text-base"
 			aria-label="Group name"
 			maxlength="40"
 			bind:value={name}
@@ -67,16 +85,18 @@
 			{@attach nameOnMount}
 		/>
 		<button
-			class="btn btn-ghost btn-sm btn-icon shrink-0 text-fg-3 hover:bg-danger-soft hover:text-danger"
+			class="btn btn-ghost btn-sm btn-icon shrink-0 text-fg-2 hover:bg-danger-soft hover:text-danger"
 			onclick={() => remove()}
 			aria-label="Delete {group.name}"
 			title="Delete group"
 		>
 			<Trash2 class="size-3.5 pointer-coarse:size-4.5" />
 		</button>
-		<button class="btn btn-primary btn-sm shrink-0" onclick={done}>Done</button>
+		<button class="btn btn-primary btn-sm shrink-0" bind:this={doneButton} onclick={done}
+			>Done</button
+		>
 	</div>
-	<p class="mt-1.5 px-0.5 text-[11px] text-fg-3">
+	<p class="mt-1.5 px-0.5 text-11 text-fg-2">
 		{present
 			? 'Check or uncheck people below. Changes save as you go.'
 			: 'Check the people below who belong in this group.'}

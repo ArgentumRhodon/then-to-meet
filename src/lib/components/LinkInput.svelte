@@ -66,7 +66,7 @@
 		</button>
 	</div>
 	{#if invalid}
-		<p id="{hintId}-error" class="text-xs text-danger">
+		<p id="{hintId}-error" class="text-xs text-danger" role="alert">
 			Paste a When2Meet link or event ID, like when2meet.com/?12345678-AbCdE
 		</p>
 	{/if}

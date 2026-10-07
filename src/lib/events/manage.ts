@@ -176,7 +176,7 @@ export const changePassword = async (
 /**
  * Takes the password off an entry, which takes the current one: the entry drops its salt and nonce
  * and keeps a proof of the removal, and the secret is deleted in the same write. After this, like
- * any entry without a password, it can't be given one again.
+ * any entry without a password, it can be given one again (see `addPassword`).
  */
 export const removePassword = (
 	db: Firestore,
@@ -194,6 +194,39 @@ export const removePassword = (
 		});
 		tx.delete(secretRef(db, eventId, key));
 	});
+
+/**
+ * Gives an entry that has no password one: a new salt and nonce on the entry, and the secret
+ * created in the same write. Nothing proves who is asking, since there's nothing to prove it with,
+ * so the rules only let it be done by anyone for an entry no account has claimed, and for a
+ * claimed one by that account or the event's owner and admins.
+ */
+export const addPassword = async (
+	db: Firestore,
+	eventId: string,
+	name: string,
+	password: string
+): Promise<void> => {
+	checkNewPassword(password);
+	const key = responseKey(name);
+	await runTransaction(db, async (tx) => {
+		const snap = await tx.get(responseRef(db, eventId, key));
+		if (!snap.exists()) throw new InvalidInput('There is no one by that name in this event.');
+		if ((snap.data() as ResponseDoc).salt !== undefined) {
+			throw new InvalidInput('That name already has a password.');
+		}
+		const salt = newSalt();
+		tx.update(responseRef(db, eventId, key), {
+			salt,
+			nonce: newNonce(),
+			// An entry whose password was removed still holds the proof of that; a new password
+			// starts clean, like a new entry.
+			proof: deleteField(),
+			updatedAt: Date.now()
+		});
+		tx.set(secretRef(db, eventId, key), { secret: await deriveSecret(password, salt) });
+	});
+};
 
 /**
  * Brings an imported copy up to date with its When2Meet poll, as it is now (see `planResync` for

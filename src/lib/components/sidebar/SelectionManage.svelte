@@ -41,10 +41,17 @@
 	const isAdmin = $derived(
 		!!adminCandidate?.uid && !!app.event?.adminUids?.includes(adminCandidate.uid)
 	);
-	/** One person with a password can have it changed or removed, by whoever knows it. */
-	const lockedPerson = $derived(
-		native && selectedPeople.length === 1 && selectedPeople[0].locked ? selectedPeople[0] : null
-	);
+	/**
+	 * One person, whose password can be dealt with: one that has it can change or remove it, by
+	 * whoever knows it, and one that doesn't can be given one, by anyone for a name no account has
+	 * claimed, and otherwise by that account or the event's owner and admins.
+	 */
+	const passwordPerson = $derived.by(() => {
+		if (!native || !app.event || selectedPeople.length !== 1) return null;
+		const [person] = selectedPeople;
+		if (person.locked || !person.uid) return person;
+		return person.uid === accounts.user?.uid || accounts.manages(app.event) ? person : null;
+	});
 
 	const label = (people: Person[]) =>
 		people.length === 1 ? people[0].name : `${people.length} people`;
@@ -75,20 +82,22 @@
 	};
 </script>
 
-{#if canRemove || lockedPerson}
+{#if canRemove || passwordPerson}
 	<!-- Changes to people themselves, not to how they're viewed, so they sit apart from the rest. -->
 	<div class="space-y-1 border-t border-accent/20 pt-1.5">
 		<!-- "Manage" only when there's managing to do; a password alone is about this one entry. -->
 		<p class="eyebrow px-0.5">{canRemove || adminCandidate ? 'Manage' : 'Entry'}</p>
 		<div class="grid grid-cols-2 gap-1.5">
-			{#if lockedPerson}
+			{#if passwordPerson}
 				<button
 					class="btn btn-secondary btn-sm w-full"
-					onclick={() => (passwordFor = lockedPerson)}
-					title="Change or remove {lockedPerson.name}’s password"
+					onclick={() => (passwordFor = passwordPerson)}
+					title={passwordPerson.locked
+						? `Change or remove ${passwordPerson.name}’s password`
+						: `Add a password to ${passwordPerson.name}`}
 				>
 					<KeyRound class="size-3.5 pointer-coarse:size-4.5" aria-hidden="true" />
-					Password…
+					{passwordPerson.locked ? 'Password…' : 'Add password…'}
 				</button>
 			{/if}
 			{#if adminCandidate}

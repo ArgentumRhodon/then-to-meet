@@ -24,19 +24,18 @@
 	const present = $derived(membersIn(group, people).length);
 
 	/** Deletes right away; the group bar offers it back, where the editor was. */
-	const remove = (message = `Deleted ${group.name}`) => {
+	const remove = () => {
 		const { id } = group;
 		const undo = groups.remove(id);
 		app.setGroup(null);
-		ondelete(message, () => {
+		ondelete(`Deleted ${group.name}`, () => {
 			undo();
 			app.setGroup(id);
 		});
 	};
 
-	/** A group left with no one in it isn't worth keeping. */
+	/** An empty group stays: it may be saved now and filled in later. */
 	const done = () => {
-		if (!present) return remove(`Deleted ${group.name}, it was empty`);
 		app.editGroup(false);
 		focusChips();
 	};
@@ -86,7 +85,7 @@
 		/>
 		<button
 			class="btn btn-ghost btn-sm btn-icon shrink-0 text-fg-2 hover:bg-danger-soft hover:text-danger"
-			onclick={() => remove()}
+			onclick={remove}
 			aria-label="Delete {group.name}"
 			title="Delete group"
 		>

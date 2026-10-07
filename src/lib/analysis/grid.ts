@@ -22,6 +22,8 @@ export interface GridRow {
 
 export interface Grid {
 	zone: string;
+	/** Length of each slot, which is how far apart rows are unless the day has a gap. */
+	slotSeconds: number;
 	days: GridDay[];
 	rows: GridRow[];
 	/** Grid day index for each slot in `event.slots`. */
@@ -75,5 +77,5 @@ export const buildGrid = (event: W2MEvent, zone: string): Grid => {
 		gapBefore: i > 0 && minute - sorted[i - 1] > step
 	}));
 
-	return { zone: tz, days, rows, dayOfSlot };
+	return { zone: tz, slotSeconds: event.slotSeconds, days, rows, dayOfSlot };
 };

@@ -1,4 +1,11 @@
 import type { MeetingsPerWeek } from '$lib/analysis/meetingSets';
+import type {
+	EventOverview,
+	OverviewBest,
+	OverviewDay,
+	OverviewTier,
+	OverviewTime
+} from '$lib/analysis/overview';
 import type { PeopleGroup, Role, Roles } from '$lib/types';
 
 /*
@@ -47,6 +54,8 @@ export interface UserEventData {
 	openedAt?: number;
 	prefs?: EventPrefs;
 	groups?: PeopleGroup[];
+	/** What the home page shows about the event, as of the last time it was open (see analysis/overview). */
+	overview?: EventOverview;
 }
 
 /** A line in the recent events list. */
@@ -55,6 +64,7 @@ export interface RecentEvent {
 	title: string;
 	people: number;
 	openedAt: number;
+	overview?: EventOverview;
 }
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -128,6 +138,79 @@ const readGroups = (raw: unknown): PeopleGroup[] | undefined => {
 	);
 };
 
+const isNumber = (value: unknown): value is number =>
+	typeof value === 'number' && Number.isFinite(value);
+
+const OVERVIEW_TIERS: readonly OverviewTier[] = ['everyone', 'required', 'near'];
+
+const readTime = (raw: unknown): OverviewTime | null =>
+	isRecord(raw) &&
+	Array.isArray(raw.starts) &&
+	raw.starts.length > 0 &&
+	raw.starts.every(isNumber) &&
+	isNumber(raw.end) &&
+	isNumber(raw.free)
+		? { starts: raw.starts, end: raw.end, free: raw.free }
+		: null;
+
+const readBest = (raw: unknown): OverviewBest | null => {
+	if (!isRecord(raw) || !isNumber(raw.count) || !Array.isArray(raw.times)) return null;
+	const tier = oneOf(OVERVIEW_TIERS, raw.tier);
+	const times = raw.times.flatMap((t) => readTime(t) ?? []);
+	return tier && times.length ? { tier, count: raw.count, times } : null;
+};
+
+/** Every column, or none if any of them is off: they only make sense as a whole. */
+const readHeat = (raw: unknown): OverviewDay[] => {
+	if (!Array.isArray(raw)) return [];
+	const days = raw.filter(
+		(d): d is OverviewDay =>
+			isRecord(d) &&
+			typeof d.day === 'string' &&
+			/^\d{4}-\d{2}-\d{2}$/.test(d.day) &&
+			typeof d.hours === 'string' &&
+			/^[0-9.]*$/.test(d.hours)
+	);
+	const same = days.every((d) => d.hours.length === days[0].hours.length);
+	return days.length === raw.length && same ? days.map(({ day, hours }) => ({ day, hours })) : [];
+};
+
+/** An overview, or undefined if its essentials are missing; broken times or heat are dropped. */
+export const readOverview = (raw: unknown): EventOverview | undefined => {
+	if (!isRecord(raw)) return undefined;
+	const { weekly, start, end, responses, zone, duration, considered } = raw;
+	const perWeek =
+		raw.perWeek === 2 || raw.perWeek === 3 ? raw.perWeek : raw.perWeek === 1 ? 1 : null;
+	if (
+		typeof weekly !== 'boolean' ||
+		!isNumber(start) ||
+		!isNumber(end) ||
+		!isNumber(responses) ||
+		typeof zone !== 'string' ||
+		!zone ||
+		!isNumber(duration) ||
+		!isNumber(considered) ||
+		perWeek === null
+	) {
+		return undefined;
+	}
+	const overview: EventOverview = {
+		weekly,
+		start,
+		end,
+		responses,
+		zone,
+		duration,
+		perWeek,
+		considered,
+		best: readBest(raw.best),
+		heat: readHeat(raw.heat)
+	};
+	if (typeof raw.group === 'string' && raw.group) overview.group = raw.group;
+	if (typeof raw.responded === 'boolean') overview.responded = raw.responded;
+	return overview;
+};
+
 export const readEventData = (raw: unknown): UserEventData => {
 	if (!isRecord(raw)) return {};
 	const data: UserEventData = {};
@@ -137,14 +220,18 @@ export const readEventData = (raw: unknown): UserEventData => {
 	if (isRecord(raw.prefs)) data.prefs = readPrefs(raw.prefs);
 	const groups = readGroups(raw.groups);
 	if (groups) data.groups = groups;
+	const overview = readOverview(raw.overview);
+	if (overview) data.overview = overview;
 	return data;
 };
 
 /** A recent-list line from an event document, or null if it was taken off the list or is broken. */
 export const readRecent = (id: string, raw: unknown): RecentEvent | null => {
-	const { title, people, openedAt } = readEventData(raw);
+	const { title, people, openedAt, overview } = readEventData(raw);
 	if (!title || !openedAt) return null;
-	return { id, title, people: people ?? 0, openedAt };
+	const recent: RecentEvent = { id, title, people: people ?? 0, openedAt };
+	if (overview) recent.overview = overview;
+	return recent;
 };
 
 /** A copy with nothing Firestore rejects (it refuses `undefined`), for writing. */

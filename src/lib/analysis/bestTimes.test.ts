@@ -206,6 +206,11 @@ describe('buildGrid', () => {
 		expect(g.rows[0].minute).toBe(9 * 60);
 		expect(g.days[0].date).toBeNull();
 	});
+
+	it('carries the slot length, which the views size their rows by', () => {
+		expect(grid.slotSeconds).toBe(event.slotSeconds);
+		expect(buildGrid({ ...event, slotSeconds: 3600 }, ZONE).slotSeconds).toBe(3600);
+	});
 });
 
 describe('slotAttendance', () => {

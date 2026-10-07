@@ -137,21 +137,42 @@ describe('setting a password', () => {
 		await attempt(clean);
 	});
 
-	it('cannot be added to a name that already exists without one', async () => {
+	it('can be added to a name that exists without one, but only as a salt, a nonce and a secret together', async () => {
 		const owner = await client();
 		const id = await createEvent(owner.db, owner.user!, newEvent);
 		const visitor = await client(false);
 		await submitResponse(visitor.db, null, id, { name: 'Ada', available: [SLOTS[0]] });
 
-		const attacker = await client(false);
-		const { response, secret } = refs(attacker, id);
-		// Setting a secret for an entry that exists is refused outright...
-		expect(await denied(setDoc(secret, { secret: 'a'.repeat(64) }))).toBe(true);
-		// ...and so is giving the entry a salt, even alongside one.
-		const batch = writeBatch(attacker.db);
-		batch.set(secret, { secret: 'a'.repeat(64) });
-		batch.update(response, { salt: newSalt(), nonce: newNonce() });
-		expect(await denied(batch.commit())).toBe(true);
+		const other = await client(false);
+		const { response, secret } = refs(other, id);
+		const lock = { salt: newSalt(), nonce: newNonce() };
+		const secretData = { secret: 'a'.repeat(64) };
+		const attempt = (change: object, data: object = secretData) => {
+			const batch = writeBatch(other.db);
+			batch.set(secret, data);
+			batch.update(response, change);
+			return batch.commit();
+		};
+
+		// A secret with nothing locking the entry, a salt with no secret behind it, or a salt with no
+		// nonce to go with it...
+		expect(await denied(setDoc(secret, secretData))).toBe(true);
+		expect(await denied(updateDoc(response, lock))).toBe(true);
+		expect(await denied(attempt({ salt: lock.salt }))).toBe(true);
+		// ...a secret that isn't the right shape, or a salt that arrives with a proof, which only a
+		// change to a locked entry carries...
+		expect(await denied(attempt(lock, { secret: 'short' }))).toBe(true);
+		expect(await denied(attempt({ ...lock, proof: 'b'.repeat(64) }))).toBe(true);
+		expect(await entry(other, id)).not.toHaveProperty('salt');
+
+		// ...while the salt, nonce and secret together are what adding a password writes. The secret
+		// can't be read back, so it's shown to be there by a change that proves it.
+		await attempt(lock);
+		expect((await entry(other, id)).salt).toBe(lock.salt);
+		const nonce = newNonce();
+		const proof = await proofFor(secretData.secret, lock.nonce, nonce);
+		await updateDoc(response, { available: [SLOTS[2]], nonce, proof });
+		expect((await entry(other, id)).available).toEqual([SLOTS[2]]);
 	});
 
 	it('cannot leave a secret behind for an entry that is not there', async () => {

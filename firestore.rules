@@ -6,9 +6,12 @@ rules_version = '2';
 //   - Anyone with an event's link can read it and everyone's responses.
 //   - Anyone with the link can add themselves by name and set their times, signed in or not, and
 //     can edit anyone's times by entering that name, unless that entry has a password.
-//   - A password is set when an entry is created, and from then on every change to the entry has
-//     to prove it knows the password (see src/lib/events/password.ts for how, and why the proof
-//     can't just be copied from the public entry).
+//   - A password is set when an entry is created, or added later to an entry that has none (for
+//     one no account has claimed, by anyone; for one an account has claimed, by that account or
+//     the event's owner or an admin, so a stranger can't lock someone's signed-in entry). From then
+//     on every change to the entry has to prove it knows the password (see
+//     src/lib/events/password.ts for how, and why the proof can't just be copied from the public
+//     entry). It can be changed or removed with the current one, after which a new one can be added.
 //   - An account is only needed to create an event, which makes it the owner. Owners can edit and
 //     delete their event and delete responses (which is how a forgotten password is dealt with);
 //     nobody else can.
@@ -209,14 +212,31 @@ service cloud.firestore {
             ).toHexString().lower();
         }
 
-        // An entry without a password can't be given one later, or anyone could lock out its person.
-        // An entry with one changes only with its proof, and the password itself changes or goes
-        // only along with its secret (see the secrets rules below).
+        // Who may give an entry its first (or a new) password. There's nothing to prove it with, so
+        // an entry no account has claimed is open to anyone, as its times are; one an account has
+        // claimed is the account's, and its event's owner's and admins', so a stranger can't lock
+        // someone signed in out of their own entry. A locked-out name can be cleared by the owner.
+        function mayLock() {
+          return resource.data.uid == null
+            || (signedIn() && request.auth.uid == resource.data.uid)
+            || managesEventDoc();
+        }
+
+        // An entry without a password changes freely, and can be given one: a new salt and nonce,
+        // no proof, and the secret created in the same write. An entry with one changes only with
+        // its proof, and the password itself changes or goes only along with its secret (see the
+        // secrets rules below).
         allow update: if validResponse()
           && sameOwner()
           && (
             // No password before or after.
             (!('salt' in resource.data) && !('salt' in request.resource.data))
+            // A password added.
+            || (!('salt' in resource.data) && ('salt' in request.resource.data)
+              && !('proof' in request.resource.data)
+              && mayLock()
+              && !exists(secretPath(responseId))
+              && existsAfter(secretPath(responseId)))
             // A password, and a change to the entry with its proof.
             || (('salt' in resource.data) && ('salt' in request.resource.data)
               && request.resource.data.salt == resource.data.salt
@@ -239,9 +259,9 @@ service cloud.firestore {
       }
 
       // The secret behind an entry's password. Nobody reads it; the rules above do. It's created
-      // along with its (new) entry, and only ever replaced or deleted as part of a change to that
-      // entry's password that proves the old one (or by the event's owner or an admin, who can
-      // delete it).
+      // along with its (new) entry, or with the salt an entry without a password is given, and
+      // only ever replaced or deleted as part of a change to that entry's password that proves the
+      // old one (or by the event's owner or an admin, who can delete it).
       match /secrets/{secretId} {
         function entryBefore() {
           return get(responsePath(secretId)).data;
@@ -253,11 +273,16 @@ service cloud.firestore {
 
         allow read: if false;
 
-        allow create: if !exists(responsePath(secretId))
-          && existsAfter(responsePath(secretId))
+        // Either with a new entry, or with an existing one that has no password, which gets its salt
+        // (and who may give it one) in that same write, by the entry's own rules.
+        allow create: if existsAfter(responsePath(secretId))
           && request.resource.data.keys().hasOnly(['secret'])
           && request.resource.data.secret is string
-          && request.resource.data.secret.size() == 64;
+          && request.resource.data.secret.size() == 64
+          && (!exists(responsePath(secretId))
+            || (!('salt' in entryBefore())
+              && ('salt' in entryAfter())
+              && !('proof' in entryAfter())));
 
         // Replaced when the entry's password is: its salt and nonce change together, with a proof
         // worked out from this (the old) secret.

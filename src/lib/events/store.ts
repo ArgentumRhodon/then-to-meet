@@ -27,6 +27,7 @@ import {
 	parsePassword,
 	parseResponse,
 	PasswordRequired,
+	summarize,
 	toEvent,
 	type EventDoc,
 	type EventSummary,
@@ -243,7 +244,9 @@ export const submitResponse = async (
 						change.nonce = newNonce();
 						change.proof = await proofFor(secret, prior.nonce ?? '', change.nonce);
 					} else if (password !== null) {
-						throw new InvalidInput("That name has no password, and one can't be added now.");
+						throw new InvalidInput(
+							'That name has no password. Select them in the People list to add one.'
+						);
 					}
 					// A signed-in user entering a name nobody has claimed yet (like an imported person's)
 					// claims it.
@@ -302,42 +305,49 @@ export const submitResponse = async (
 };
 
 /**
- * Which of these events are definitely gone. An event that couldn't be checked (offline, say) is
- * left out, so a bad connection never wipes anyone's list.
+ * Reads these events' documents (not their responses): `found` sums up the ones that exist, and
+ * `missing` are the ones that are definitely gone. An event that couldn't be checked (offline,
+ * say) is in neither, so a bad connection never wipes anyone's list.
  */
-export const findMissingEvents = async (db: Firestore, ids: string[]): Promise<string[]> => {
-	const gone = await Promise.all(
+export const peekEvents = async (
+	db: Firestore,
+	uid: string | null,
+	ids: string[]
+): Promise<{ found: EventSummary[]; missing: string[] }> => {
+	const found: EventSummary[] = [];
+	const missing: string[] = [];
+	await Promise.all(
 		ids.map(async (id) => {
 			try {
-				return (await getDoc(eventRef(db, id))).exists() ? null : id;
+				const snap = await getDoc(eventRef(db, id));
+				if (snap.exists()) found.push(summarize(id, snap.data() as EventDoc, uid));
+				else missing.push(id);
 			} catch {
-				return null;
+				// Unknown: left out of both.
 			}
 		})
 	);
-	return gone.filter((id): id is string => id !== null);
+	// In the order asked, whatever order the reads came back in.
+	const order = (a: string, b: string) => ids.indexOf(a) - ids.indexOf(b);
+	return {
+		found: found.sort((a, b) => order(a.id, b.id)),
+		missing: missing.sort(order)
+	};
 };
 
-/** Events the user owns or has responded to, most recently active first. */
-export const listEventsFor = async (db: Firestore, uid: string): Promise<EventSummary[]> => {
+/** Up to `max` events the user owns or has responded to, most recently active first. */
+export const listEventsFor = async (
+	db: Firestore,
+	uid: string,
+	max = 50
+): Promise<EventSummary[]> => {
 	const found = await getDocs(
 		query(
 			collection(db, 'events'),
 			where('memberUids', 'array-contains', uid),
 			orderBy('updatedAt', 'desc'),
-			limit(50)
+			limit(max)
 		)
 	);
-	return found.docs.map((d) => {
-		const event = d.data() as EventDoc;
-		const summary: EventSummary = {
-			id: d.id,
-			title: event.title,
-			responseCount: event.responseCount,
-			updatedAt: event.updatedAt,
-			owned: event.ownerId === uid
-		};
-		if (event.source.type === 'when2meet') summary.importedFrom = event.source.id;
-		return summary;
-	});
+	return found.docs.map((d) => summarize(d.id, d.data() as EventDoc, uid));
 };

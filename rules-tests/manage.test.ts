@@ -9,7 +9,14 @@ import {
 	writeBatch
 } from 'firebase/firestore';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { deleteEntry, deleteEvent, changePassword, removePassword } from '$lib/events/manage';
+import {
+	addPassword,
+	changePassword,
+	deleteEntry,
+	deleteEvent,
+	removePassword,
+	setAdmin
+} from '$lib/events/manage';
 import { InvalidInput, PasswordRequired, responseKey, WrongPassword } from '$lib/events/model';
 import { deriveSecret, newNonce, newSalt, proofFor, REMOVE } from '$lib/events/password';
 import { createEvent, loadNativeEvent, submitResponse } from '$lib/events/store';
@@ -325,16 +332,6 @@ describe('removing a password', () => {
 		expect((await getDoc(refs(ada, id).response)).data()).toHaveProperty('salt');
 	});
 
-	it('cannot be given a password again afterwards', async () => {
-		const { id } = await owned();
-		const ada = await join(id, 'Ada', { password: PW });
-		await removePassword(ada.db, id, 'Ada', PW);
-		const batch = writeBatch(ada.db);
-		batch.update(refs(ada, id).response, { salt: newSalt(), nonce: newNonce() });
-		batch.set(refs(ada, id).secret, { secret: 'a'.repeat(64) });
-		expect(await denied(batch.commit())).toBe(true);
-	});
-
 	describe('attacks', () => {
 		it('cannot drop the lock without a proof', async () => {
 			const { id } = await owned();
@@ -395,6 +392,96 @@ describe('removing a password', () => {
 			});
 			batch.delete(refs(attacker, id).secret);
 			expect(await denied(batch.commit())).toBe(true);
+		});
+	});
+});
+
+describe('adding a password', () => {
+	const PW = 'first-password';
+
+	it('locks a name that never had one, for a visitor with no account', async () => {
+		const { id } = await owned();
+		const ada = await join(id, 'Ada');
+		await addPassword(ada.db, id, 'Ada', PW);
+
+		const entry = (await getDoc(refs(ada, id).response)).data()!;
+		expect(entry.salt).toMatch(/^\d+\$[0-9a-f]{32}$/);
+		expect(entry).not.toHaveProperty('proof');
+		const stranger = await client(false);
+		const change = { name: 'Ada', available: [SLOTS[3]] };
+		await expect(submitResponse(stranger.db, null, id, change)).rejects.toThrow(PasswordRequired);
+		await expect(
+			submitResponse(stranger.db, null, id, { ...change, password: 'nope' })
+		).rejects.toThrow(WrongPassword);
+		await submitResponse(stranger.db, null, id, { ...change, password: PW });
+		expect((await loadNativeEvent(stranger.db, id)).people[0]).toMatchObject({ locked: true });
+	});
+
+	it('puts a password back on a name whose password was removed', async () => {
+		const { id } = await owned();
+		const ada = await join(id, 'Ada', { password: PW });
+		await removePassword(ada.db, id, 'Ada', PW);
+		await addPassword(ada.db, id, 'Ada', 'second');
+
+		// The proof of the removal doesn't carry over; the new password starts like a new entry's.
+		expect((await getDoc(refs(ada, id).response)).data()).not.toHaveProperty('proof');
+		const change = { name: 'Ada', available: [SLOTS[1]] };
+		await expect(submitResponse(ada.db, null, id, { ...change, password: PW })).rejects.toThrow(
+			WrongPassword
+		);
+		await submitResponse(ada.db, null, id, { ...change, password: 'second' });
+		// And it changes and goes like any other.
+		await changePassword(ada.db, id, 'Ada', 'second', 'third');
+		await removePassword(ada.db, id, 'Ada', 'third');
+		await addPassword(ada.db, id, 'Ada', 'fourth');
+		await submitResponse(ada.db, null, id, { ...change, password: 'fourth' });
+	});
+
+	it('is refused for a name that has one, one that is not there, and a password that is no good', async () => {
+		const { id } = await owned();
+		const ada = await join(id, 'Ada', { password: PW });
+		await join(id, 'Bo');
+		await expect(addPassword(ada.db, id, 'Ada', 'x')).rejects.toThrow(InvalidInput);
+		await expect(addPassword(ada.db, id, 'Nobody', 'x')).rejects.toThrow(InvalidInput);
+		await expect(addPassword(ada.db, id, 'Bo', '')).rejects.toThrow(InvalidInput);
+		await expect(addPassword(ada.db, id, 'Bo', 'x'.repeat(101))).rejects.toThrow(InvalidInput);
+		expect((await getDoc(refs(ada, id, 'Bo').response)).data()).not.toHaveProperty('salt');
+		// Ada's own password is still the one it was.
+		await submitResponse(ada.db, null, id, { name: 'Ada', available: [SLOTS[1]], password: PW });
+	});
+
+	describe('for a name an account has claimed', () => {
+		const claimed = async () => {
+			const { owner, id } = await owned();
+			const member = await client();
+			await join(id, 'Ada', {}, member);
+			return { owner, id, member };
+		};
+
+		it('is for that account, and no one else', async () => {
+			const { id, member } = await claimed();
+			const signedOut = await client(false);
+			const otherAccount = await client();
+			for (const stranger of [signedOut, otherAccount]) {
+				expect(await denied(addPassword(stranger.db, id, 'Ada', 'nope'))).toBe(true);
+			}
+			expect((await getDoc(refs(member, id).response)).data()).not.toHaveProperty('salt');
+
+			await addPassword(member.db, id, 'Ada', PW);
+			expect((await getDoc(refs(member, id).response)).data()).toHaveProperty('salt');
+		});
+
+		it('is also for the owner and an admin', async () => {
+			const { owner, id } = await claimed();
+			await addPassword(owner.db, id, 'Ada', PW);
+			expect((await getDoc(refs(owner, id).response)).data()).toHaveProperty('salt');
+
+			const admin = await client();
+			await join(id, 'Cy', {}, admin);
+			await setAdmin(owner.db, id, admin.user!.uid, true);
+			await join(id, 'Bo', {}, await client());
+			await addPassword(admin.db, id, 'Bo', PW);
+			expect((await getDoc(refs(owner, id, 'Bo').response)).data()).toHaveProperty('salt');
 		});
 	});
 });

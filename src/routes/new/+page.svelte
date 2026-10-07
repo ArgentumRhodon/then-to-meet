@@ -3,13 +3,13 @@
 	import { onMount } from 'svelte';
 	import { formatMinuteOfDay, formatZone } from '$lib/analysis/format';
 	import DatePicker from '$lib/components/new/DatePicker.svelte';
+	import WeekdayPicker from '$lib/components/new/WeekdayPicker.svelte';
 	import { InvalidInput, parseNewEvent } from '$lib/events/model';
 	import { buildSlots } from '$lib/events/slots';
 	import { openEvent } from '$lib/navigation';
 	import { accounts } from '$lib/state/accounts.svelte';
 	import SettingsMenu from '$lib/ui/SettingsMenu.svelte';
 
-	const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 	const SLOT_LENGTHS = [
 		{ seconds: 900, label: '15 minutes' },
 		{ seconds: 1800, label: '30 minutes' },
@@ -51,9 +51,6 @@
 	});
 
 	const days = $derived(kind === 'weekly' ? weekdays.length : dates.length);
-
-	const toggleWeekday = (day: number) =>
-		(weekdays = weekdays.includes(day) ? weekdays.filter((d) => d !== day) : [...weekdays, day]);
 
 	const create = async (e: SubmitEvent) => {
 		e.preventDefault();
@@ -123,112 +120,103 @@
 					/>
 				</div>
 
-				<fieldset>
-					<legend class="eyebrow mb-1.5 text-fg-2">Which days?</legend>
-					<div
-						class="inline-flex rounded-lg border border-line bg-surface p-0.5"
-						role="radiogroup"
-						aria-label="Kind of event"
-					>
-						{#each [{ value: 'dates', label: 'Specific dates' }, { value: 'weekly', label: 'Days of the week' }] as option (option.value)}
-							<label
-								class="cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors not-has-[:checked]:text-fg-2 not-has-[:checked]:hover:text-fg has-[:checked]:bg-accent has-[:checked]:text-on-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus has-[:focus-visible]:ring-offset-1 has-[:focus-visible]:ring-offset-surface light:has-[:checked]:ring-1 light:has-[:checked]:ring-accent-strong"
-							>
-								<input
-									class="sr-only"
-									type="radio"
-									name="kind"
-									value={option.value}
-									bind:group={kind}
-								/>
-								{option.label}
-							</label>
-						{/each}
-					</div>
+				<!-- Wide: the calendar and the times sit side by side. Narrow, or for days of the week, which
+				     have no calendar to sit beside, the times go under the days. -->
+				<div
+					class="grid gap-y-4 sm:gap-x-8 {kind === 'dates'
+						? 'sm:grid-cols-[20rem_minmax(0,1fr)]'
+						: ''}"
+				>
+					<fieldset class="col-span-full min-w-0">
+						<legend class="eyebrow mb-1.5 text-fg-2">Which days?</legend>
+						<div
+							class="inline-flex rounded-lg border border-line bg-surface p-0.5"
+							role="radiogroup"
+							aria-label="Kind of event"
+						>
+							{#each [{ value: 'dates', label: 'Specific dates' }, { value: 'weekly', label: 'Days of the week' }] as option (option.value)}
+								<label
+									class="cursor-pointer rounded-md px-3 py-1.5 text-sm font-medium transition-colors not-has-[:checked]:text-fg-2 not-has-[:checked]:hover:text-fg has-[:checked]:bg-accent has-[:checked]:text-on-accent has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-focus has-[:focus-visible]:ring-offset-1 has-[:focus-visible]:ring-offset-surface light:has-[:checked]:ring-1 light:has-[:checked]:ring-accent-strong"
+								>
+									<input
+										class="sr-only"
+										type="radio"
+										name="kind"
+										value={option.value}
+										bind:group={kind}
+									/>
+									{option.label}
+								</label>
+							{/each}
+						</div>
+					</fieldset>
 
-					<div class="mt-4">
-						{#if kind === 'dates'}
-							<div class="card max-w-xs p-3">
-								<DatePicker selected={dates} onchange={(next) => (dates = next)} />
-							</div>
-						{:else}
-							<div class="flex flex-wrap gap-1.5" role="group" aria-label="Days of the week">
-								{#each WEEKDAYS as label, day (day)}
-									<button
-										type="button"
-										class="btn {weekdays.includes(day)
-											? 'btn-primary light:ring-1 light:ring-accent-strong'
-											: 'btn-secondary'} w-14"
-										aria-pressed={weekdays.includes(day)}
-										onclick={() => toggleWeekday(day)}
-									>
-										{label}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				</fieldset>
+					{#if kind === 'dates'}
+						<div class="card min-w-0 p-3">
+							<DatePicker selected={dates} onchange={(next) => (dates = next)} />
+						</div>
+					{:else}
+						<WeekdayPicker selected={weekdays} onchange={(next) => (weekdays = next)} />
+					{/if}
 
-				<fieldset>
-					<legend class="eyebrow mb-1.5 text-fg-2">Which times?</legend>
-					<div class="grid gap-3 sm:grid-cols-3">
-						<div>
-							<label for="start-hour" class="mb-1 block text-xs text-fg-2">No earlier than</label>
-							<select id="start-hour" class="input" bind:value={startHour}>
-								{#each Array.from({ length: 24 }, (_, h) => h) as hour (hour)}
-									<option value={hour}>{hourLabel(hour)}</option>
-								{/each}
-							</select>
+					<fieldset class="mt-3 min-w-0 {kind === 'dates' ? 'sm:mt-0' : ''}">
+						<legend class="eyebrow mb-1.5 text-fg-2">Which times?</legend>
+						<div class="grid gap-4 {kind === 'weekly' ? 'sm:grid-cols-3' : ''}">
+							<div>
+								<label for="start-hour" class="mb-1 block text-xs text-fg-2">No earlier than</label>
+								<select id="start-hour" class="input" bind:value={startHour}>
+									{#each Array.from({ length: 24 }, (_, h) => h) as hour (hour)}
+										<option value={hour}>{hourLabel(hour)}</option>
+									{/each}
+								</select>
+							</div>
+							<div>
+								<label for="end-hour" class="mb-1 block text-xs text-fg-2">No later than</label>
+								<select id="end-hour" class="input" bind:value={endHour}>
+									{#each Array.from({ length: 24 }, (_, h) => h + 1) as hour (hour)}
+										<option value={hour}>{hourLabel(hour)}</option>
+									{/each}
+								</select>
+							</div>
+							<div>
+								<label for="slot-length" class="mb-1 block text-xs text-fg-2">Slot length</label>
+								<select id="slot-length" class="input" bind:value={slotSeconds}>
+									{#each SLOT_LENGTHS as length (length.seconds)}
+										<option value={length.seconds}>{length.label}</option>
+									{/each}
+								</select>
+							</div>
 						</div>
-						<div>
-							<label for="end-hour" class="mb-1 block text-xs text-fg-2">No later than</label>
-							<select id="end-hour" class="input" bind:value={endHour}>
-								{#each Array.from({ length: 24 }, (_, h) => h + 1) as hour (hour)}
-									<option value={hour}>{hourLabel(hour)}</option>
-								{/each}
-							</select>
-						</div>
-						<div>
-							<label for="slot-length" class="mb-1 block text-xs text-fg-2">Slot length</label>
-							<select id="slot-length" class="input" bind:value={slotSeconds}>
-								{#each SLOT_LENGTHS as length (length.seconds)}
-									<option value={length.seconds}>{length.label}</option>
-								{/each}
-							</select>
-						</div>
-					</div>
-					<p class="mt-2 text-xs text-fg-2">
-						{#if kind === 'weekly'}
-							Weekly events have no timezone: everyone sees the same times.
-						{:else}
-							Times are in {formatZone(zone)}. Everyone sees them in their own timezone.
-						{/if}
-					</p>
-				</fieldset>
+						<p class="mt-3 text-xs text-fg-2">
+							{#if kind === 'weekly'}
+								Weekly events have no timezone: everyone sees the same times.
+							{:else}
+								Times are in {formatZone(zone)}. Everyone sees them in their own timezone.
+							{/if}
+						</p>
+					</fieldset>
+				</div>
 
 				<div class="flex flex-wrap items-center gap-3 border-t border-line pt-5">
+					<!-- Only said when something stops the event being made. -->
 					<p
-						id="plan-summary"
+						id="plan-hint"
 						class="min-w-0 flex-1 text-sm {plan.problem && days ? 'text-warn' : 'text-fg-2'}"
 						aria-live="polite"
 					>
-						{#if plan.slots}
-							{days}
-							{kind === 'weekly' ? (days === 1 ? 'day' : 'days') : days === 1 ? 'date' : 'dates'}, {plan
-								.slots.length}
-							slots
-						{:else if days}
-							{plan.problem}
-						{:else}
-							{kind === 'weekly' ? 'Pick at least one day.' : 'Pick at least one date.'}
+						{#if !plan.slots}
+							{#if days}
+								{plan.problem}
+							{:else}
+								{kind === 'weekly' ? 'Pick at least one day.' : 'Pick at least one date.'}
+							{/if}
 						{/if}
 					</p>
 					<button
 						type="submit"
 						class="btn btn-primary h-10 px-5"
 						disabled={busy || !plan.slots || !title.trim()}
-						aria-describedby="plan-summary"
+						aria-describedby={plan.slots ? undefined : 'plan-hint'}
 					>
 						{busy ? 'Creating…' : accounts.user ? 'Create event' : 'Sign in to create'}
 					</button>

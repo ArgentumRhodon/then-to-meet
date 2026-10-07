@@ -47,11 +47,17 @@
 		return pos;
 	});
 
-	// Fingers get rows of at least 24px, the smallest comfortable target; the page scrolls instead.
+	// Height follows time: a 15-minute slot is `quarterHeight` tall, a 30-minute one twice that, an
+	// hour four times, so a stretch of the day takes the same room whatever the slot length. Long
+	// days squeeze the quarter hours a little. Fingers get at least 24px per quarter hour, the
+	// smallest comfortable target; the page scrolls instead.
 	const coarse = new MediaQuery('(pointer: coarse)');
-	const rowHeight = $derived(
-		Math.max(grid.rows.length > 64 ? 14 : grid.rows.length > 40 ? 16 : 20, coarse.current ? 24 : 0)
-	);
+	const quarters = $derived(event.slotSeconds / 900);
+	const quarterHeight = $derived.by(() => {
+		const shown = grid.rows.length * quarters;
+		return Math.max(shown > 64 ? 14 : shown > 40 ? 16 : 20, coarse.current ? 24 : 0);
+	});
+	const rowHeight = $derived(quarterHeight * quarters);
 
 	const heat = (slot: number): string => {
 		if (app.pinnedPerson !== null)
@@ -541,6 +547,7 @@
 			class:dimmed={held.length > 0}
 			class:pointer-focused={pointerFocused}
 			style:--row="{rowHeight}px"
+			style:--quarter="{quarterHeight}px"
 			style:grid-template-columns="3.25rem repeat({grid.days.length}, minmax(2.75rem, 1fr))"
 			style:grid-template-rows={layout.template}
 			style:max-width="{3.25 + grid.days.length * 10}rem"
@@ -720,10 +727,10 @@
 	}
 	/* Thin stripes in the palette's top color over a darkened cell: the heat color still shows the
 	   count, and the stripes mark that everyone required is free. The stripes are a square tile that
-	   divides the row height evenly, so they run unbroken from one row to the next. */
+	   divides a quarter hour evenly, and so every row, so they run unbroken from one row to the next. */
 	.cell.partial,
 	.partial-swatch {
-		--tile: calc(var(--row, 14px) / 2);
+		--tile: calc(var(--quarter, 14px) / 2);
 		background:
 			linear-gradient(
 					135deg,

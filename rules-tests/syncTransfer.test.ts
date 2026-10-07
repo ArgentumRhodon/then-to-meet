@@ -4,10 +4,10 @@ import { deleteEvent, resyncWhen2Meet, transferOwnership } from '$lib/events/man
 import { InvalidInput } from '$lib/events/model';
 import {
 	createEvent,
-	findMissingEvents,
 	importWhen2Meet,
 	listEventsFor,
 	loadNativeEvent,
+	peekEvents,
 	submitResponse
 } from '$lib/events/store';
 import type { W2MEvent } from '$lib/types';
@@ -167,7 +167,7 @@ describe('transferring ownership', () => {
 		const { owner, heir, id } = await setup();
 		await transferOwnership(owner.db, id, heir.user!.uid);
 		const mine = await listEventsFor(owner.db, owner.user!.uid);
-		expect(mine.map((e) => [e.id, e.owned])).toEqual([[id, false]]);
+		expect(mine.map((e) => [e.id, e.role])).toEqual([[id, 'member']]);
 	});
 
 	it('only goes to an account that responded to the event', async () => {
@@ -188,7 +188,7 @@ describe('transferring ownership', () => {
 	});
 });
 
-describe('finding deleted events', () => {
+describe('peeking at events', () => {
 	it('reports the ones that are gone, as any signed-in or signed-out visitor sees them', async () => {
 		const owner = await client();
 		const make = () =>
@@ -201,10 +201,21 @@ describe('finding deleted events', () => {
 		const [kept, deleted] = [await make(), await make()];
 		await deleteEvent(owner.db, deleted);
 		const visitor = await client(false);
-		expect(await findMissingEvents(visitor.db, [kept, deleted, 'neverExisted0000000'])).toEqual([
-			deleted,
-			'neverExisted0000000'
-		]);
-		expect(await findMissingEvents(visitor.db, [])).toEqual([]);
+		const peeked = await peekEvents(visitor.db, null, [kept, deleted, 'neverExisted0000000']);
+		expect(peeked.missing).toEqual([deleted, 'neverExisted0000000']);
+		expect(peeked.found.map((e) => [e.id, e.responseCount, e.role])).toEqual([[kept, 0, null]]);
+		expect(await peekEvents(visitor.db, null, [])).toEqual({ found: [], missing: [] });
+	});
+
+	it('gives the reader their own part in each event', async () => {
+		const owner = await client();
+		const id = await createEvent(owner.db, owner.user!, {
+			title: 'E',
+			weekly: false,
+			slotSeconds: 900,
+			slots: SLOTS
+		});
+		const { found } = await peekEvents(owner.db, owner.user!.uid, [id]);
+		expect(found.map((e) => e.role)).toEqual(['owner']);
 	});
 });

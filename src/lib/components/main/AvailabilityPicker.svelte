@@ -212,6 +212,7 @@
 		bind:this={gridEl}
 		class="picker grid"
 		class:painting
+		style:--quarters={grid.slotSeconds / 900}
 		style:grid-template-columns="3rem repeat({grid.days.length}, minmax(2.75rem, 1fr))"
 		style:max-width="{3 + grid.days.length * 9}rem"
 		role="application"
@@ -289,8 +290,9 @@
 
 <style>
 	.picker {
+		--row-gap: 2px;
 		column-gap: 3px;
-		row-gap: 2px;
+		row-gap: var(--row-gap);
 		min-width: max-content;
 		user-select: none;
 		-webkit-user-select: none;
@@ -311,8 +313,11 @@
 		overflow: auto;
 		max-height: max(18rem, 60dvh);
 	}
+	/* Height follows time: a 15-minute slot is one --quarter, a 30-minute one is two of them and the
+	   gap between, an hour four, so a stretch of the day takes the same room whatever the slot length. */
 	.picker {
-		--cell-height: 1.5rem;
+		--quarter: 1.5rem;
+		--cell-height: calc(var(--quarters, 1) * (var(--quarter) + var(--row-gap)) - var(--row-gap));
 	}
 	/* The day names stay at the top and the times at the left. They need a background of their own
 	   or the cells show through, and a little shadow to cover the gaps between cells. */
@@ -344,7 +349,7 @@
 	/* Fingers are less exact than a mouse, so the cells grow. */
 	@media (pointer: coarse) {
 		.picker {
-			--cell-height: 1.75rem;
+			--quarter: 1.75rem;
 		}
 	}
 	.touch-only {

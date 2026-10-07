@@ -157,15 +157,19 @@ class Accounts {
 		}
 	}
 
-	/** Which of these events no longer exist (ThenToMeet's only; other IDs and failed checks don't count). */
-	async missingEvents(ids: string[]): Promise<string[]> {
+	/**
+	 * Reads the documents of whichever of these are ThenToMeet events (see `peekEvents`): sums up
+	 * the ones that exist and says which no longer do. Other IDs, and failed checks, are in neither.
+	 */
+	async peekEvents(ids: string[]): Promise<{ found: EventSummary[]; missing: string[] }> {
 		const native = ids.filter(isNativeEventId);
-		if (!this.enabled || !native.length) return [];
+		const none = { found: [], missing: [] };
+		if (!this.enabled || !native.length) return none;
 		try {
-			const { getClientDb, findMissingEvents } = await firebase();
-			return await findMissingEvents(getClientDb(), native);
+			const { getClientDb, peekEvents } = await firebase();
+			return await peekEvents(getClientDb(), this.user?.uid ?? null, native);
 		} catch {
-			return [];
+			return none;
 		}
 	}
 
@@ -250,6 +254,16 @@ class Accounts {
 		}
 	}
 
+	/** Gives an entry that has no password one. */
+	async addPassword(eventId: string, name: string, password: string): Promise<void> {
+		try {
+			const { db, addPassword } = await manage();
+			await addPassword(db, eventId, name, password);
+		} catch (e) {
+			throw explain(e, 'add a password to this name');
+		}
+	}
+
 	/** Takes the password off an entry; takes the current one. */
 	async removePassword(eventId: string, name: string, current: string): Promise<void> {
 		try {
@@ -306,12 +320,12 @@ class Accounts {
 		}
 	}
 
-	/** The account's events, most recently active first. */
-	async events(): Promise<EventSummary[]> {
+	/** Up to `max` of the account's events, most recently active first. Each one is a read. */
+	async events(max: number): Promise<EventSummary[]> {
 		const user = this.user;
 		if (!user) return [];
 		const { getClientDb, listEventsFor } = await firebase();
-		return listEventsFor(getClientDb(), user.uid);
+		return listEventsFor(getClientDb(), user.uid, max);
 	}
 }
 

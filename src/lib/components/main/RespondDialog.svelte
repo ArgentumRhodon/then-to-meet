@@ -6,6 +6,7 @@
 	import { accounts } from '$lib/state/accounts.svelte';
 	import { app } from '$lib/state/app.svelte';
 	import { formatZone } from '$lib/analysis/format';
+	import PasswordInput from '$lib/ui/PasswordInput.svelte';
 	import { toast } from '$lib/ui/toast.svelte';
 	import AvailabilityPicker from './AvailabilityPicker.svelte';
 
@@ -149,12 +150,10 @@
 							<span class="font-normal normal-case">(optional)</span>
 						{/if}
 					</label>
-					<input
+					<PasswordInput
 						id="respond-password"
-						class="input"
-						type="password"
 						autocomplete={existing?.locked ? 'current-password' : 'new-password'}
-						maxlength="100"
+						maxlength={100}
 						disabled={!!existing && !existing.locked}
 						required={existing?.locked}
 						aria-invalid={passwordError !== null}

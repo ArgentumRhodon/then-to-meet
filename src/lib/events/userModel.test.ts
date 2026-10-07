@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { forFirestore, readEventData, readPrefs, readRecent, readSettings } from './userModel';
+import {
+	forFirestore,
+	readEventData,
+	readOverview,
+	readPrefs,
+	readRecent,
+	readSettings
+} from './userModel';
 
 describe('readSettings', () => {
 	it('keeps a valid theme and palette', () => {
@@ -99,6 +106,72 @@ describe('readRecent', () => {
 
 	it('counts a missing headcount as zero', () => {
 		expect(readRecent('abc', { title: 'Sync', openedAt: 5 })?.people).toBe(0);
+	});
+
+	it('brings the overview along', () => {
+		expect(readRecent('abc', { title: 'Sync', openedAt: 5, overview })?.overview).toEqual(overview);
+	});
+});
+
+const overview = {
+	weekly: false,
+	start: 100,
+	end: 200,
+	responses: 3,
+	zone: 'Europe/Paris',
+	duration: 60,
+	perWeek: 2,
+	group: 'Leads',
+	considered: 2,
+	best: { tier: 'required', count: 4, times: [{ starts: [100, 150], end: 160, free: 2 }] },
+	heat: [
+		{ day: '2026-10-12', hours: '09.' },
+		{ day: '2026-10-13', hours: '.95' }
+	],
+	responded: false
+};
+
+describe('readOverview', () => {
+	it('round-trips a full overview', () => {
+		expect(readOverview(overview)).toEqual(overview);
+		expect(readEventData({ overview }).overview).toEqual(overview);
+	});
+
+	it('drops the whole thing when an essential is missing or wrong', () => {
+		expect(readOverview({ ...overview, zone: '' })).toBeUndefined();
+		expect(readOverview({ ...overview, start: 'soon' })).toBeUndefined();
+		expect(readOverview({ ...overview, perWeek: 4 })).toBeUndefined();
+		expect(readOverview(null)).toBeUndefined();
+		expect(readEventData({ overview: 'x' })).toEqual({});
+	});
+
+	it('drops broken times, and the best times once none are left', () => {
+		const best = {
+			...overview.best,
+			times: [{ starts: [], end: 1, free: 1 }, ...overview.best.times]
+		};
+		expect(readOverview({ ...overview, best })?.best?.times).toEqual(overview.best.times);
+		expect(readOverview({ ...overview, best: { ...best, times: [] } })?.best).toBeNull();
+		expect(readOverview({ ...overview, best: { ...best, tier: 'fewer' } })?.best).toBeNull();
+	});
+
+	it('keeps the heatmap only when every column is sound and the same height', () => {
+		const heat = (columns: unknown) => readOverview({ ...overview, heat: columns })?.heat;
+		expect(
+			heat([
+				{ day: '2026-10-12', hours: '9' },
+				{ day: '2026-10-13', hours: '99' }
+			])
+		).toEqual([]);
+		expect(heat([{ day: '2026-10-12', hours: '9x' }])).toEqual([]);
+		expect(heat([{ day: 'Monday', hours: '9' }])).toEqual([]);
+		expect(heat('nope')).toEqual([]);
+	});
+
+	it('leaves out an empty group and a non-boolean answer to "responded"', () => {
+		const read = readOverview({ ...overview, group: '', responded: 'yes' });
+		expect(read).not.toHaveProperty('group');
+		expect(read).not.toHaveProperty('responded');
 	});
 });
 

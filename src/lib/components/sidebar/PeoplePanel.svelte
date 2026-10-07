@@ -340,6 +340,8 @@
 			<li class="px-2 py-3 text-13 text-fg-3">
 				{#if query.trim()}
 					No one matches that search.
+				{:else if app.group?.members.length === 0}
+					No one is in {app.group.name} yet.
 				{:else if app.group}
 					No one in {app.group.name} is in this event anymore.
 				{:else}

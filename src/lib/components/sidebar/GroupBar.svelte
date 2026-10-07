@@ -163,7 +163,9 @@
 			<div class="min-w-0 flex-1">
 				<p class="truncate text-13 font-medium">{active.name}</p>
 				<p class="text-11 text-fg-2">
-					Showing overlap for {peopleCount(present.length)}
+					{present.length
+						? `Showing overlap for ${peopleCount(present.length)}`
+						: 'No one in this group yet. Edit it to add people.'}
 				</p>
 			</div>
 			<button

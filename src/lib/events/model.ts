@@ -68,14 +68,66 @@ export interface ResponseEntry {
 	doc: ResponseDoc;
 }
 
-export interface EventSummary {
+/**
+ * A signed-in account's part in an event: it owns it, is an admin, or responded (or claimed a
+ * name). Anything else is null.
+ */
+export type EventRole = 'owner' | 'admin' | 'member';
+
+/** How many people have responded to a ThenToMeet event, and the signed-in account's part in it. */
+export interface EventPulse {
+	responseCount: number;
+	role: EventRole | null;
+}
+
+/** A ThenToMeet event as the home page lists it, from its document alone (no responses). */
+export interface EventSummary extends EventPulse {
 	id: string;
 	title: string;
-	responseCount: number;
+	/** Milliseconds. */
 	updatedAt: number;
-	owned: boolean;
+	weekly: boolean;
+	/** When the first slot starts and the last one ends, in Unix seconds. */
+	start: number;
+	end: number;
 	importedFrom?: string;
 }
+
+const roleFor = (
+	uid: string | null,
+	ownerId: string | undefined,
+	adminUids: string[] | undefined,
+	member: () => boolean
+): EventRole | null => {
+	if (!uid) return null;
+	if (ownerId === uid) return 'owner';
+	if (adminUids?.includes(uid)) return 'admin';
+	return member() ? 'member' : null;
+};
+
+export const summarize = (id: string, event: EventDoc, uid: string | null): EventSummary => {
+	const summary: EventSummary = {
+		id,
+		title: event.title,
+		responseCount: event.responseCount,
+		updatedAt: event.updatedAt,
+		role: roleFor(uid, event.ownerId, event.adminUids, () => !!event.memberUids?.includes(uid!)),
+		weekly: event.weekly,
+		start: event.slots[0] ?? 0,
+		end: (event.slots[event.slots.length - 1] ?? 0) + event.slotSeconds
+	};
+	if (event.source.type === 'when2meet') summary.importedFrom = event.source.id;
+	return summary;
+};
+
+/** The same counts for a ThenToMeet event that's open, so the home page needn't read it again. */
+export const pulseOf = (event: W2MEvent, uid: string | null): EventPulse => {
+	const everyone = [...event.people, ...event.noTimes];
+	return {
+		responseCount: everyone.length,
+		role: roleFor(uid, event.ownerId, event.adminUids, () => everyone.some((p) => p.uid === uid))
+	};
+};
 
 /** Most slots one event may have: a month of 15-minute slots is 2,880. */
 export const MAX_SLOTS = 5000;

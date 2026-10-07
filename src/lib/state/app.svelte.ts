@@ -1,4 +1,5 @@
 import { browser } from '$app/environment';
+import { untrack } from 'svelte';
 import {
 	blockForSlots,
 	findBestTimes,
@@ -19,6 +20,7 @@ import {
 import { clampDuration, DEFAULT_DURATION } from '$lib/analysis/duration';
 import { buildGrid } from '$lib/analysis/grid';
 import { findMeetingSets, type MeetingSet, type MeetingsPerWeek } from '$lib/analysis/meetingSets';
+import { buildOverview } from '$lib/analysis/overview';
 import { sameRoles, withGroup } from '$lib/analysis/roles';
 import { isNativeEventId } from '$lib/events/id';
 import type { ResyncReport } from '$lib/events/model';
@@ -145,6 +147,26 @@ class AppState {
 			: null
 	);
 	attendance = $derived(this.event ? slotAttendance(this.event, this.effectiveRoles) : null);
+	/**
+	 * What the home page shows about this event, from its setup as it stands. None while the view
+	 * is narrowed to the checked people, which is only a quick look.
+	 */
+	overview = $derived.by(() => {
+		const { event, grid, best, attendance } = this;
+		if (!event || !grid || !best || !attendance || this.onlySelected) return null;
+		return buildOverview({
+			event,
+			grid,
+			best,
+			sets: this.meetingSets,
+			attendance,
+			duration: this.duration,
+			perWeek: this.perWeek,
+			group: this.groupLabel,
+			uid: accounts.user?.uid ?? null,
+			now: Date.now() / 1000
+		});
+	});
 	/** Who can make each picked time, recomputed as roles change. */
 	selectedBlocks = $derived.by(() => {
 		const { event, grid } = this;
@@ -730,7 +752,8 @@ class AppState {
 
 	/**
 	 * Saves this event's setup (roles, group, duration, and so on) to the signed-in user's account
-	 * so it comes back next visit. Signed out, it's only kept for this visit.
+	 * so it comes back next visit, along with the overview the home page shows. Signed out, they're
+	 * only kept for this visit. Run from an effect, it runs again whenever either changes.
 	 */
 	persist() {
 		if (!this.event) return;
@@ -741,6 +764,10 @@ class AppState {
 		else if (this.sharedGroup) prefs.sharedGroup = this.sharedGroup;
 		if (this.#seen) prefs.seen = this.#seen;
 		userData.queueEvent(this.event.id, { prefs });
+		const { id } = this.event;
+		const overview = this.overview;
+		// The recent list is read to update it, which mustn't make the effect depend on it.
+		if (overview) untrack(() => recent.describe(id, overview));
 	}
 
 	/**

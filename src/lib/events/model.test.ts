@@ -15,6 +15,8 @@ import {
 	responseKey,
 	parseNewEvent,
 	planResync,
+	pulseOf,
+	summarize,
 	toEvent,
 	type EventDoc,
 	type ResponseDoc
@@ -410,5 +412,71 @@ describe('planResync', () => {
 		expect(() => planResync({ ...event, source: { type: 'thentomeet' } }, responses, p, 1)).toThrow(
 			InvalidInput
 		);
+	});
+});
+
+describe('summarize', () => {
+	const doc: EventDoc = {
+		ownerId: OWNER,
+		title: 'Standup',
+		weekly: false,
+		slotSeconds: 900,
+		slots: [1000, 1900, 2800],
+		nextPersonId: 4,
+		responseCount: 3,
+		memberUids: [OWNER, 'uid-member', 'uid-admin'],
+		adminUids: ['uid-admin'],
+		source: { type: 'thentomeet' },
+		createdAt: 1,
+		updatedAt: 2
+	};
+
+	it('sums up an event from its document, with the slots it spans', () => {
+		expect(summarize('e1', doc, 'uid-member')).toEqual({
+			id: 'e1',
+			title: 'Standup',
+			responseCount: 3,
+			updatedAt: 2,
+			role: 'member',
+			weekly: false,
+			start: 1000,
+			end: 3700
+		});
+	});
+
+	it('gives each account its part, and none to a stranger or someone signed out', () => {
+		expect(summarize('e1', doc, OWNER).role).toBe('owner');
+		expect(summarize('e1', doc, 'uid-admin').role).toBe('admin');
+		expect(summarize('e1', doc, 'uid-stranger').role).toBeNull();
+		expect(summarize('e1', doc, null).role).toBeNull();
+	});
+
+	it('names the poll an import came from', () => {
+		const imported: EventDoc = {
+			...doc,
+			source: { type: 'when2meet', id: '123-abc', importedAt: 1 }
+		};
+		expect(summarize('e1', imported, OWNER).importedFrom).toBe('123-abc');
+	});
+});
+
+describe('pulseOf', () => {
+	const event: W2MEvent = {
+		...poll,
+		people: [{ id: 1, name: 'Ana', uid: 'uid-ana' }],
+		noTimes: [{ id: 2, name: 'Ben', uid: 'uid-ben' }],
+		ownerId: OWNER,
+		adminUids: ['uid-admin']
+	};
+
+	it('counts everyone who responded, with or without times', () => {
+		expect(pulseOf(event, null)).toEqual({ responseCount: 2, role: null });
+	});
+
+	it('finds the part an account has in an open event', () => {
+		expect(pulseOf(event, OWNER).role).toBe('owner');
+		expect(pulseOf(event, 'uid-admin').role).toBe('admin');
+		expect(pulseOf(event, 'uid-ben').role).toBe('member');
+		expect(pulseOf(event, 'uid-stranger').role).toBeNull();
 	});
 });

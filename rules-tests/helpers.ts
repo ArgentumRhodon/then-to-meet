@@ -20,8 +20,12 @@ import type { W2MEvent } from '$lib/types';
  */
 
 export const PROJECT = 'demo-thentomeet';
-const FIRESTORE = { host: '127.0.0.1', port: 8080 };
-const AUTH = 'http://127.0.0.1:9099';
+// Where `firebase emulators:exec` says the emulators are, or else the ports in firebase.json.
+const [firestoreHost, firestorePort] = (
+	process.env.FIRESTORE_EMULATOR_HOST ?? '127.0.0.1:8080'
+).split(':');
+const FIRESTORE = { host: firestoreHost, port: Number(firestorePort) };
+const AUTH = `http://${process.env.FIREBASE_AUTH_EMULATOR_HOST ?? '127.0.0.1:9099'}`;
 
 export interface Client {
 	db: Firestore;

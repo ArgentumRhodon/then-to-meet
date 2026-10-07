@@ -5,7 +5,19 @@ change/removal, the emulator rules tests) are committed. The latest round, uncom
 availability picker's touch mode and sticky headers, **Update from When2Meet**, **Transfer
 ownership**, stale recents, **abuse limits** and **lower read costs**.
 
-> **`firestore.rules` changed again and must be redeployed together with the new client**
+> **2026-10-06 round (uncommitted): `firestore.rules` changed once more, so redeploy it** (adding a
+> password to an entry that has none; see "Passwords"). The client works against the old rules for
+> everything except **Add password…**, which the old rules refuse. The same round also: draws the
+> heatmap and the picker's rows in proportion to the slot length (a 15-minute slot is the old row
+> height, 30 minutes twice that, an hour four times; `Grid.slotSeconds`), puts the create page's
+> time selects beside the calendar from the `sm` breakpoint up, makes the days of the week
+> draggable (`WeekdayPicker`), drops the "N dates, M slots" line, adds `PasswordInput` (show/hide
+> eye) to every password field, and stops deleting a group that's empty when Done is pressed.
+>
+> **Home dashboard (2026-10-06, uncommitted, no rules change):** the start page is now a dashboard
+> for anyone with events to come back to. See "Home dashboard" below.
+>
+> **`firestore.rules` changed earlier too and must be redeployed together with the new client**
 > (`npm run firebase:deploy`, or paste it into the console). Joining an event is now one write that
 > bumps the event's counters and names the new response in a `lastJoin` field; the new client sends
 > that, and the old rules refuse it (and the new rules refuse an old client's join). Deploy both at
@@ -64,7 +76,10 @@ src/lib/state/           accounts.svelte.ts  Auth state + wrappers (created in t
                          migrate.ts          one-time localStorage -> account move
                          session.ts          syncAccount(): applies saved settings on sign-in/out
                          app.svelte.ts       also follows native events live (#startWatching/#onLive)
+                         recent.svelte.ts    recent list + each event's overview + `pulses` (counts)
+                         dashboard.svelte.ts the account's events for the home page (cached 2 min)
                          theme / heatPalette / recent / groups  save through userData
+src/lib/analysis/overview.ts    buildOverview: what a dashboard card shows, from the event as set up
 src/lib/server/events/load.ts   loadEvent(): dispatches to When2Meet or reads Firestore as a
                                 signed-out visitor (for link previews), with a 10s deadline
 src/lib/components/main/        RespondDialog (name, password, times ONLY), AvailabilityPicker,
@@ -73,6 +88,7 @@ src/lib/components/sidebar/SelectionManage.svelte  the "Manage" section of the s
                                 Remove… (owner) and Password… (one locked person)
 src/lib/ui/ConfirmDialog.svelte generic confirm for destructive actions
 src/lib/components/new/         DatePicker.svelte;  src/routes/new/+page.svelte  (create event)
+src/lib/components/home/        Dashboard, EventCard, MiniHeatmap (Landing.svelte picks it or the intro)
 firestore.rules / firestore.indexes.json / firebase.json
 rules-tests/                    emulator tests (see "How to run"); vitest.rules.config.ts
 ```
@@ -95,7 +111,8 @@ events/{eventId}                  ownerId, title, weekly, slotSeconds, slots[], 
 events/{eventId}/responses/{key}  personId, name, uid|null, available[], updatedAt, salt?, nonce?, proof?
 events/{eventId}/secrets/{key}    secret   (nobody can read it; only the rules)
 users/{uid}                       theme, heat
-users/{uid}/events/{eventId}      prefs{}, groups[], title, people, openedAt   (openedAt 0 = off the recent list)
+users/{uid}/events/{eventId}      prefs{}, groups[], title, people, openedAt   (openedAt 0 = off the recent list),
+                                  overview{}  (what the home page shows; see "Home dashboard")
 ```
 
 - Native event IDs are 20-char Firestore auto-IDs (no hyphen); When2Meet's are `\d+-\w+`.
@@ -122,11 +139,18 @@ response could be copied and replayed, so it's a challenge-response (`password.t
   the secret (new value). The rules allow a salt change only with a valid proof AND a changed secret in
   the same write, and the secrets `update` rule independently requires a salt change plus that proof.
 - **Remove:** the response drops `salt`/`nonce` and keeps `proof = H(secret|nonce|'remove')`; the secret
-  is deleted in the same write (the secrets `delete` rule checks that proof). An entry without a
-  password can never be given one later (otherwise anyone could lock a person out).
+  is deleted in the same write (the secrets `delete` rule checks that proof).
+- **Add** (`addPassword`, added 2026-10-06 at the user's request, so a removed password can be set
+  again): an entry with no password gets a new salt and nonce (and no `proof`) and its secret is
+  created in the same write. Nothing can prove who is asking, so `mayLock()` in the rules lets anyone
+  lock an entry no account has claimed (`uid == null`), and only that account or the event's owner and
+  admins lock a claimed one. A stranger can still lock out an unclaimed (anonymous or imported) name;
+  the owner clears that by removing the entry. The secrets `create` rule accepts a secret for an
+  existing entry only if that entry has no salt before and has one (and no proof) after.
 - Owners can delete an entry together with its secret (`deleteEntry` does both), which frees the name.
-- UI: **Password…** (selection card, one locked person selected) opens `PasswordDialog`; it takes the
-  current password and either a new one or "remove".
+- UI: **Password…** / **Add password…** (selection card, one person selected) opens `PasswordDialog`;
+  for a locked name it takes the current password and either a new one or "remove", for an unlocked
+  one it takes just a new one. Every password field is a `PasswordInput` with a show/hide eye button.
 - The proof format must match between `password.ts` and the rules exactly. `rules-tests/` proves it.
 
 ## Per-user data writes
@@ -144,8 +168,8 @@ failed. The gate matters: a default saved before the migration would overwrite m
 ```bash
 npm run dev          # .claude/launch.json also has "dev" on port 5180
 npm run check        # svelte-check: 0 errors expected
-npm test             # 283 pass, 2 skipped (live When2Meet tests)
-npm run test:rules   # 99 emulator tests (needs Java on PATH; see below)
+npm test             # 333 pass, 2 skipped (live When2Meet tests)
+npm run test:rules   # 148 emulator tests (needs Java on PATH; see below)
 npm run build
 npm run firebase:deploy   # pushes firestore.rules + indexes only (not hosting); or paste the rules
                           # into the console. After editing firestore.rules, REDEPLOY.
@@ -162,6 +186,14 @@ npm run firebase:deploy   # pushes firestore.rules + indexes only (not hosting);
   the matching legitimate write is asserted to succeed. **When a rule test "passes" by being denied,
   make sure the positive twin passes first.** `firestore-debug.log` is written to the repo root
   (gitignored) and is useful: it shows which rule line errored.
+- **After `npm run test:rules` check that no `java.exe` is left on port 8080** (`Get-NetTCPConnection
+  -LocalPort 8080`). On this machine the emulator sometimes outlives the run, and the next run then
+  fails with "port taken". Stop that PID only if it started during your run.
+- **Emulators already running** (say, your own `npm run emulators`) hold ports 8080/9099, so
+  `test:rules` can't start its own. Don't point the tests at them: every test wipes the database.
+  `rules-tests/helpers.ts` follows `FIRESTORE_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_HOST`, which
+  `emulators:exec` sets, so run the `test:rules` command by hand with `--config <copy>` added,
+  where the copy of firebase.json uses other ports and absolute paths to the rules and indexes.
 - `debug()` output from rules did not show up in the emulator log; bisect by editing the rule instead
   (restore with `git checkout firestore.rules`, but only if there are no unsaved real changes).
 - A real When2Meet poll for manual checks: `38870872-X4Rvz` (from the repo's live-check workflow).
@@ -202,10 +234,10 @@ Done since the last handoff: the picker's touch mode (tap marks on release; "Dra
 **Transfer ownership** (`transferOwnership`, `TransferDialog`; needs no rules change: owners can already
 update their event), and stale recents (an event found missing is dropped from the account's recent
 list when it's opened, when it's deleted while open, and, for ThenToMeet IDs, on sign-in via
-`findMissingEvents`). Tests: `syncTransfer.test.ts` (rules), `planResync` in `model.test.ts`,
+`findMissingEvents`, since replaced by `peekEvents`). Tests: `syncTransfer.test.ts` (rules), `planResync` in `model.test.ts`,
 `recent.test.ts`, and the new cases in `app.live.test.ts`.
 
-1. Adding a password to an existing entry (deliberately disallowed). Co-owners were replaced by
+1. Co-owners were replaced by
    **admins** (user's choice, 2026-10-05; see below). A transfer only checks in the client that the new owner responded; the rules would let
    an owner write any `ownerId`, which is within the "not particularly tight" stance.
 2. Re-sync never removes people who left the poll, and a poll whose slot length or weekly/dated kind
@@ -256,6 +288,33 @@ transferring and choosing admins also stay with the owner; an admin can step dow
   (`server/events/load.ts`) so a page and its preview image share one read; the page itself asks to
   re-read (`reread`) so someone who just saved doesn't get an older copy.
 - Still true: a load reads every response, and the cap is what bounds that (500 reads).
+
+## Home dashboard
+
+The start page used to be the intro plus two short lists. Anyone with a recent event, or (signed in)
+any event of their own, now gets `components/home/Dashboard.svelte` instead; first-time visitors still
+get the intro (`Landing.svelte` decides, and shows placeholders while a signed-in account loads).
+
+- **Cards** (recent events, 6 then "Show all"): dates, when opened, a mini heatmap (a column per day,
+  a cell per hour, always dark like the real one), the next best time with who it works for and how
+  many more, people, "N new", Owner/Admin, "You haven't added your times", "When2Meet". The header
+  line totals what needs a look. Signed out, a banner says the list only lasts the visit.
+- **More of your events**: the account's ThenToMeet events (`listEventsFor`, owner/admin/responded)
+  that aren't already a card, as rows.
+- **Overview** (`analysis/overview.ts`): built in `app.overview` from the event as the viewer has it
+  set up (roles, group, length, meetings a week, zone), skipped while "only selected" narrows the view.
+  `persist()` hands it to `recent.describe`, which keeps it on the recent item and queues it with the
+  rest of the per-event data, so it costs no extra write. Times already passed are left out (dated
+  polls) and filtered again when shown. `readOverview` validates it on the way back in.
+- **No extra reads for the cards.** The overview rides along with the recent list's own query.
+  "N new" compares the overview's `responses` with `recent.pulses[id].responseCount`, which comes from
+  event documents read anyway: the sign-in check for deleted events (`peekEvents`, which replaced
+  `findMissingEvents` and now also sums up what it reads), the account's list, and the open event
+  itself (`pulseOf` in `recent.remember`). Counts younger than 2 minutes aren't read again.
+- **Fewer reads for the account's list**: it was 50 documents on every visit to the start page, and
+  is now 20 (`YOURS_MAX`), at most every 2 minutes (`dashboard.refresh`).
+- When2Meet polls have no live counts (reading them means scraping When2Meet), so their cards are as
+  of the last visit. Events opened before this shipped show a placeholder until opened again.
 
 ## Where else the context lives
 

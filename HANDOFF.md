@@ -186,9 +186,9 @@ npm run firebase:deploy   # pushes firestore.rules + indexes only (not hosting);
   the matching legitimate write is asserted to succeed. **When a rule test "passes" by being denied,
   make sure the positive twin passes first.** `firestore-debug.log` is written to the repo root
   (gitignored) and is useful: it shows which rule line errored.
-- **After `npm run test:rules` check that no `java.exe` is left on port 8080** (`Get-NetTCPConnection
-  -LocalPort 8080`). On this machine the emulator sometimes outlives the run, and the next run then
-  fails with "port taken". Stop that PID only if it started during your run.
+- **After `npm run test:rules` check that no `java.exe` is left on port 8080**
+  (`Get-NetTCPConnection -LocalPort 8080`). On this machine the emulator sometimes outlives the run,
+  and the next run then fails with "port taken". Stop that PID only if it started during your run.
 - **Emulators already running** (say, your own `npm run emulators`) hold ports 8080/9099, so
   `test:rules` can't start its own. Don't point the tests at them: every test wipes the database.
   `rules-tests/helpers.ts` follows `FIRESTORE_EMULATOR_HOST` / `FIREBASE_AUTH_EMULATOR_HOST`, which

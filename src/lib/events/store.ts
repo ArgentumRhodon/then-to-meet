@@ -121,10 +121,16 @@ export const watchNativeEvent = (
 	// The first snapshot of each listener has to come from the server: this browser's cache may
 	// hold only a few of the event's documents (its own response, say), and the first snapshot is
 	// what the app opens the event with. After that, local changes are reported as they happen.
+	// When the cache already holds exactly what the server has (an event opened earlier in this
+	// tab, say), the server's answer changes nothing but `fromCache`, and Firestore only reports
+	// that when asked to: without it the open would wait for a snapshot that never comes. The
+	// metadata-only snapshots that follow report the same content, which the app ignores.
+	const options = { includeMetadataChanges: true };
 	let eventSynced = false;
 	let responsesSynced = false;
 	const stopEvent = onSnapshot(
 		eventRef(db, id),
+		options,
 		(snap) => {
 			if (!eventSynced && snap.metadata?.fromCache) return;
 			eventSynced = true;
@@ -135,6 +141,7 @@ export const watchNativeEvent = (
 	);
 	const stopResponses = onSnapshot(
 		responsesOf(db, id),
+		options,
 		(snap) => {
 			if (!responsesSynced && snap.metadata?.fromCache) return;
 			responsesSynced = true;

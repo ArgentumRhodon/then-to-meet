@@ -98,7 +98,7 @@
 	let focusBefore: HTMLElement | null = null;
 	/**
 	 * The slot the arrow keys were last on. It outlives the tooltip, so leaving the grid (or
-	 * pressing Escape to hide the details) and coming back carries on from the same place.
+	 * pressing Escape) and coming back carries on from the same place.
 	 */
 	let keySlot: number | null = null;
 	/** Where a Shift+arrow range started, while Shift is held. */
@@ -289,13 +289,9 @@
 			ArrowLeft: [-1, 0],
 			ArrowRight: [1, 0]
 		};
-		// The first Escape only hides the details, as any popup should (WCAG 1.4.13). After that,
-		// the workspace's handler backs out of whatever's pinned or picked.
-		if (e.key === 'Escape') {
-			if (!tipRect) return;
-			e.preventDefault();
-			return hideTip();
-		}
+		// Escape hides the details (WCAG 1.4.13) and goes on to the workspace's handler, so the same
+		// press also backs out of whatever's pinned or picked.
+		if (e.key === 'Escape') return hideTip();
 		if ((e.key === 'Enter' || e.key === ' ') && app.hoveredSlot !== null) {
 			e.preventDefault();
 			return pickAt(app.hoveredSlot, e.shiftKey);
@@ -683,7 +679,7 @@
 
 <p id="heatmap-keys" class="sr-only">
 	Arrow keys move between time slots. Enter checks a meeting starting at one, Shift+Enter adds
-	another, and Shift with Up or Down checks an exact range. Escape hides the details, then clears.
+	another, and Shift with Up or Down checks an exact range. Escape hides the details and clears.
 </p>
 <!-- Always present, so switching to one person's times (or back) is announced. -->
 <p class="sr-only" role="status">{spotlit ? `Showing only ${spotlit.name}’s times` : ''}</p>

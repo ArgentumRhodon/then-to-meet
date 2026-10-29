@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-type Listener = { next: (snap: unknown) => void; error: (e: Error) => void; stop: () => void };
+type Listener = {
+	options: { includeMetadataChanges?: boolean };
+	next: (snap: unknown) => void;
+	error: (e: Error) => void;
+	stop: () => void;
+};
 const fake = vi.hoisted(() => ({ listeners: new Map<string, Listener>() }));
 
 vi.mock('firebase/firestore', () => {
@@ -8,9 +13,14 @@ vi.mock('firebase/firestore', () => {
 	return {
 		collection: (_db: unknown, ...segments: string[]) => ref(segments.join('/')),
 		doc: (_db: unknown, ...segments: string[]) => ref(segments.join('/')),
-		onSnapshot: (target: { path: string }, next: Listener['next'], error: Listener['error']) => {
+		onSnapshot: (
+			target: { path: string },
+			options: Listener['options'],
+			next: Listener['next'],
+			error: Listener['error']
+		) => {
 			const stop = vi.fn();
-			fake.listeners.set(target.path, { next, error, stop });
+			fake.listeners.set(target.path, { options, next, error, stop });
 			return stop;
 		}
 	};
@@ -70,6 +80,27 @@ describe('watchNativeEvent', () => {
 		await settle();
 		expect(onEvent).toHaveBeenCalledTimes(1);
 		expect(onEvent.mock.calls[0][0].people).toHaveLength(1);
+	});
+
+	it('opens when the server only confirms what was already cached', async () => {
+		const onEvent = vi.fn();
+		watchNativeEvent(db, 'e1', onEvent, vi.fn());
+		const listeners = fake.listeners;
+		// Firestore reports a change that's only `fromCache` turning false just when asked to.
+		for (const listener of listeners.values()) {
+			expect(listener.options).toEqual({ includeMetadataChanges: true });
+		}
+		// An event opened earlier in this tab: the cache holds all of it, then the server agrees.
+		for (const fromCache of [true, false]) {
+			listeners
+				.get('events/e1')!
+				.next({ metadata: { fromCache }, exists: () => true, data: () => event });
+			listeners
+				.get('events/e1/responses')!
+				.next({ metadata: { fromCache }, docs: [{ data: () => ada }] });
+		}
+		await settle();
+		expect(onEvent).toHaveBeenCalledTimes(1);
 	});
 
 	it('waits until it has both the event and its responses, then reports the event', async () => {

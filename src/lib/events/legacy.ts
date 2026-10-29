@@ -13,7 +13,8 @@ import {
  * account the first time they sign in. Nothing here touches storage except by the `Pick<Storage>`
  * it's handed.
  *
- *   ttm:theme, ttm:heat       a bare string each
+ *   ttm:theme, ttm:heat       a bare string each (the palette is no longer a setting, so ttm:heat
+ *                             is only cleared)
  *   ttm:recent                [{ id, title, people, openedAt }]
  *   ttm:event:<id>            the event's setup (roles, duration, zone, ...)
  *   ttm:groups:<id>           the event's saved groups
@@ -62,10 +63,7 @@ export const readLegacy = (storage: StorageLike): LegacyData => {
 	);
 	keys.push(...present);
 
-	const settings = readSettings({
-		theme: storage.getItem('ttm:theme') ?? undefined,
-		heat: storage.getItem('ttm:heat') ?? undefined
-	});
+	const settings = readSettings({ theme: storage.getItem('ttm:theme') ?? undefined });
 
 	const events = new Map<string, UserEventData>();
 	const touch = (id: string): UserEventData => {

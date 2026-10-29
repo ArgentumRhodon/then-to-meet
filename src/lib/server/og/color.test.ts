@@ -20,13 +20,13 @@ describe('heatHex', () => {
 		// Chrome's rendering of heatColor(n, 7) with the standard palette, n = 0 to 7.
 		const chrome = [
 			'#3a434f',
-			'#8d514c',
-			'#a05949',
-			'#b46841',
-			'#c58237',
-			'#cfa83c',
-			'#c5c63e',
-			'#9be86a'
+			'#3f5e45',
+			'#3f6647',
+			'#44704b',
+			'#4b7e52',
+			'#588f5d',
+			'#6ba76c',
+			'#d9f0a3'
 		];
 		chrome.forEach((expected, n) => {
 			const actual = channels(heatHex(n, 7));

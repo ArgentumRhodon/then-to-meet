@@ -43,7 +43,8 @@ export interface OverviewDay {
 	day: string;
 	/**
 	 * One character per hour, the same hours in every column: '0' to '9' for the share of people
-	 * free in tenths (any at all is at least '1'), '.' for an hour the poll doesn't cover that day.
+	 * free in ninths (any at all is at least '1'), '.' for an hour the poll doesn't cover that day.
+	 * '9' is kept for everyone free the whole hour, which the heatmap's top color stands for.
 	 */
 	hours: string;
 }
@@ -166,7 +167,8 @@ const heatColumns = (
 			const cell = share.get(hour);
 			if (!cell) return '.';
 			const mean = cell.sum / cell.slots;
-			return String(mean > 0 ? Math.max(1, Math.round(mean * 9)) : 0);
+			if (mean >= 1) return '9';
+			return String(mean > 0 ? Math.min(8, Math.max(1, Math.round(mean * 9))) : 0);
 		});
 		return { day: day.key, hours: cells.join('') };
 	});

@@ -15,7 +15,6 @@
 	import { app } from '$lib/state/app.svelte';
 	import { theme, type ThemePref } from '$lib/state/theme.svelte';
 	import { dismissable } from './dismissable';
-	import HeatPaletteOptions from './HeatPaletteOptions.svelte';
 	import { keepInView } from './keepInView';
 	import { menu } from './menu';
 	import TimezoneList from './TimezoneList.svelte';
@@ -73,7 +72,7 @@
 		onclick={toggle}
 		aria-haspopup="menu"
 		aria-expanded={open}
-		title="Account, theme, heatmap colors, and timezone"
+		title="Account, theme, and timezone"
 	>
 		<Settings class="size-3.5 text-fg-2 pointer-coarse:size-4.5" aria-hidden="true" />
 		Settings
@@ -175,11 +174,6 @@
 								/>
 							</button>
 						{/each}
-					</div>
-					<div class="my-1 border-t border-line" role="separator"></div>
-					<div role="group" aria-labelledby="{id}-heat">
-						<p id="{id}-heat" class="eyebrow px-2.5 pt-1.5 pb-1">Heatmap colors</p>
-						<HeatPaletteOptions onchoose={close} />
 					</div>
 					{#if hasEvent}
 						<div class="my-1 border-t border-line" role="separator"></div>

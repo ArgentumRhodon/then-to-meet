@@ -230,20 +230,23 @@
 	>
 		<div class="corner"></div>
 		{#each grid.days as day, d (day.key)}
+			<!-- Square, so its background covers the cells scrolling under it; only the hover is rounded. -->
 			<button
 				type="button"
-				class="day-head rounded-md pt-1 pb-1.5 text-center hover:bg-subtle"
+				class="day-head group text-center"
 				onclick={() => toggleGroup(slotsOfDay(d))}
 				tabindex="-1"
 				aria-label="{day.date ?? day.weekday}: mark or clear the whole day"
 			>
-				<span class="block text-11 font-medium text-fg-3 uppercase">{day.weekday}</span>
-				{#if day.date}
-					<span class="block text-13 font-semibold text-fg tabular">
-						<span class="sm:hidden">{day.dayOfMonth}</span>
-						<span class="hidden sm:inline">{day.date}</span>
-					</span>
-				{/if}
+				<span class="block rounded-md pt-1 pb-1.5 group-hover:bg-subtle">
+					<span class="block text-11 font-medium text-fg-3 uppercase">{day.weekday}</span>
+					{#if day.date}
+						<span class="block text-13 font-semibold text-fg tabular">
+							<span class="sm:hidden">{day.dayOfMonth}</span>
+							<span class="hidden sm:inline">{day.date}</span>
+						</span>
+					{/if}
+				</span>
 			</button>
 		{/each}
 

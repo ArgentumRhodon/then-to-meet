@@ -33,11 +33,13 @@
 	--secondary: #3b82f6;
 	--secondary-soft: light-dark(#e0ebfe, #334868);
 	--secondary-fg: light-dark(#1f5ccc, #b1cdfb);
-	/* Heatmap surfaces. The heatmap always renders in the dark scheme (see scheme-dark), since
-	   color ramps read far better on dark; these are its empty cells and a hueless gray at their
-	   lightness, so fading a color keeps its hue. */
-	--heat-0: #3a434f;
-	--heat-fade: oklch(0.38 0 none);
+	/* Heatmap surfaces: its empty cells and a hueless gray at their lightness, so fading a color
+	   keeps its hue. On light they sit just under the canvas, so a sparse cell fades to a clean
+	   pastel rather than a dusty one. The veil is laid over a cell under the partial stripes,
+	   lifting it away from the stripe color. */
+	--heat-0: light-dark(#e8eef1, #3a434f);
+	--heat-fade: light-dark(oklch(0.965 0 none), oklch(0.38 0 none));
+	--heat-veil: light-dark(rgb(255 255 255 / 0.6), rgb(0 0 0 / 0.45));
 	--warn: light-dark(#8a5f00, #f4c12a);
 	--warn-soft: light-dark(#fdf3d3, #54513f);
 	/* Dark is lighter than rocket's #e2557c, which was under 3:1 as text on the panels. */
@@ -54,40 +56,16 @@
 	--shadow-tint: light-dark(rgb(14 42 53 / 0.08), rgb(0 0 0 / 0.35));
 }
 
-/* Heatmap palettes: three stops each (few, some, everyone free). data-heat sits on <html> for the
-   whole app, and on swatches to preview a palette in place. Every palette gets bolder toward
-   "everyone"; the colorblind ones also get steadily lighter, so lightness alone orders the cells
-   (checked with a Machado 2009 color vision deficiency simulation). Dark values only, since the
-   heatmap is always dark. */
-:root,
-[data-heat='standard'] {
-	/* v1's red-to-green, through rocket's error and warning. The green is lighter than rocket's
-	   success (#4ccb15, still --ok), which is darker than the amber before it: "everyone free" has to
-	   be the brightest cell, for every kind of color vision, not a dimmer one. */
-	--heat-low: #ec5757;
-	--heat-mid: #f4c12a;
-	--heat-high: #9be86a;
-}
-
-/* Red-green (green-weak): blue to yellow through neutral, the axis deuteranopes keep. */
-[data-heat='deuteranopia'] {
-	--heat-low: #5b8def;
-	--heat-mid: oklch(0.72 0 none);
-	--heat-high: #f5c542;
-}
-
-/* Red-green (red-weak): reds and oranges look dark to protanopes, so end on a lighter yellow. */
-[data-heat='protanopia'] {
-	--heat-low: #4c6ef5;
-	--heat-mid: oklch(0.74 0 none);
-	--heat-high: #ffe066;
-}
-
-/* Blue-yellow: pink-red to teal through neutral, the axis tritanopes keep. */
-[data-heat='tritanopia'] {
-	--heat-low: #f0507f;
-	--heat-mid: oklch(0.72 0 none);
-	--heat-high: #3dd6c4;
+/* The heatmap's ramp, by three stops (few, some, everyone free): ColorBrewer's YlGn, a
+   colorblind-safe sequential ramp, by its lowest, middle and highest colors. Its lightness moves
+   steadily from end to end, so lightness alone orders the cells for every kind of color vision;
+   v1's red-to-green was the pair color vision deficiency confuses most. Pale yellow to deep green
+   on light; on dark it runs the other way, deep green to pale lime, so every step is still bolder
+   against the ground and "everyone free" stands out most. */
+:root {
+	--heat-low: light-dark(#f7fcb9, #238443);
+	--heat-mid: light-dark(#78c679, #78c679);
+	--heat-high: light-dark(#238443, #d9f0a3);
 }
 
 :root[data-theme='light'] {
@@ -189,13 +167,6 @@
 			@slot;
 		}
 	}
-}
-
-/* Renders an element and everything in it with the dark tokens. Every token is light-dark(), so
-   flipping color-scheme is all it takes; color is re-set so text picks up the dark value too. */
-@utility scheme-dark {
-	color-scheme: dark;
-	color: var(--fg);
 }
 
 /* The page background with v1's glow. Fixed to the viewport, so sticky headers that repaint it

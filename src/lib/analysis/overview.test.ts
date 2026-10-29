@@ -124,6 +124,17 @@ describe('buildOverview', () => {
 		expect(overviewOf(halves).heat).toEqual([{ day: '2026-10-12', hours: '5' }]);
 	});
 
+	it('keeps the top shade for everyone free the whole hour', () => {
+		const crowd: W2MEvent = {
+			...twoDays,
+			people: Array.from({ length: 20 }, (_, i) => ({ id: i + 1, name: `P${i + 1}` })),
+			slots: [
+				{ time: at('2026-10-12T09:00:00Z'), available: Array.from({ length: 19 }, (_, i) => i + 1) }
+			]
+		};
+		expect(overviewOf(crowd).heat).toEqual([{ day: '2026-10-12', hours: '8' }]);
+	});
+
 	it('leaves out times that have passed, falling back to the next best tier', () => {
 		const afterMonday = overviewOf(twoDays, { now: at('2026-10-12T10:00:00Z') });
 		expect(afterMonday.best?.count).toBe(1);

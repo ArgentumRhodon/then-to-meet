@@ -5,7 +5,7 @@
 	import Users from '@lucide/svelte/icons/users';
 	import X from '@lucide/svelte/icons/x';
 	import { DateTime } from 'luxon';
-	import { formatDuration, zonePlace } from '$lib/analysis/format';
+	import { formatDay, formatDuration, zonePlace } from '$lib/analysis/format';
 	import {
 		describeDays,
 		describeTime,
@@ -78,7 +78,8 @@
 	const nothing = (o: EventOverview) => {
 		if (!o.responses) return 'No responses yet';
 		if (!o.considered) return 'Everyone is skipped';
-		if (ended) return 'This poll has ended';
+		// A poll that runs to midnight ended on the day before.
+		if (ended) return `This poll ended on ${formatDay(o.end - 1, o.zone, false)}`;
 		if (o.best) return 'Its best times have passed';
 		return o.group ? `Nothing fits ${o.group} yet` : 'Nothing fits everyone yet';
 	};

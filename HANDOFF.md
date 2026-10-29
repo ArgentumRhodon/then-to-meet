@@ -51,7 +51,7 @@ Auth + Firestore, **without ever breaking the When2Meet path**.
    Firestore. Signed-out visitors keep state in memory for the visit only. No `localStorage`, except
    that the first sign-in on a browser moves any older saved data into the account and clears it.
 6. Look and feel decisions from earlier work are in the memory file `thentomeet-v2-direction.md`
-   (dark default, rocket palette, heatmap always dark, etc.). Keep new UI consistent with them.
+   (dark default, rocket palette, etc.). The heatmap follows the theme, with its own light palettes in `app.css`. Keep new UI consistent with them.
 7. The user approved installing a portable JDK (see "How to run") so the emulator can run here.
 
 ## Architecture map
@@ -78,7 +78,7 @@ src/lib/state/           accounts.svelte.ts  Auth state + wrappers (created in t
                          app.svelte.ts       also follows native events live (#startWatching/#onLive)
                          recent.svelte.ts    recent list + each event's overview + `pulses` (counts)
                          dashboard.svelte.ts the account's events for the home page (cached 2 min)
-                         theme / heatPalette / recent / groups  save through userData
+                         theme / recent / groups  save through userData
 src/lib/analysis/overview.ts    buildOverview: what a dashboard card shows, from the event as set up
 src/lib/server/events/load.ts   loadEvent(): dispatches to When2Meet or reads Firestore as a
                                 signed-out visitor (for link previews), with a 10s deadline
@@ -296,7 +296,7 @@ any event of their own, now gets `components/home/Dashboard.svelte` instead; fir
 get the intro (`Landing.svelte` decides, and shows placeholders while a signed-in account loads).
 
 - **Cards** (recent events, 6 then "Show all"): dates, when opened, a mini heatmap (a column per day,
-  a cell per hour, always dark like the real one), the next best time with who it works for and how
+  a cell per hour, themed like the real one), the next best time with who it works for and how
   many more, people, "N new", Owner/Admin, "You haven't added your times", "When2Meet". The header
   line totals what needs a look. Signed out, a banner says the list only lasts the visit.
 - **More of your events**: the account's ThenToMeet events (`listEventsFor`, owner/admin/responded)

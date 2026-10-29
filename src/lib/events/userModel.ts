@@ -23,12 +23,8 @@ import type { PeopleGroup, Role, Roles } from '$lib/types';
 export const THEMES = ['system', 'light', 'dark'] as const;
 export type ThemePref = (typeof THEMES)[number];
 
-export const HEAT_PALETTE_IDS = ['standard', 'deuteranopia', 'protanopia', 'tritanopia'] as const;
-export type HeatPaletteId = (typeof HEAT_PALETTE_IDS)[number];
-
 export interface UserSettings {
 	theme?: ThemePref;
-	heat?: HeatPaletteId;
 }
 
 /** Everyone's times as of the last visit, as fingerprints (see `snapshot` in analysis/changes). */
@@ -79,9 +75,7 @@ export const readSettings = (raw: unknown): UserSettings => {
 	if (!isRecord(raw)) return {};
 	const settings: UserSettings = {};
 	const theme = oneOf(THEMES, raw.theme);
-	const heat = oneOf(HEAT_PALETTE_IDS, raw.heat);
 	if (theme) settings.theme = theme;
-	if (heat) settings.heat = heat;
 	return settings;
 };
 

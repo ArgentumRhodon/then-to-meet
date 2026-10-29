@@ -42,8 +42,7 @@
 		);
 </script>
 
-<!-- Dark like the heatmap it stands in for. -->
-<div class="rounded-lg bg-canvas p-2.5 scheme-dark">
+<div class="rounded-lg bg-canvas p-2.5">
 	<p class="mb-1.5 flex flex-wrap items-center justify-between gap-x-3 text-11 text-fg-3">
 		<span>{day.weekday}{day.date ? `, ${day.date}` : ''} at a glance</span>
 		{#if anyPartial}
@@ -77,7 +76,7 @@
 					{#if inside.length}
 						<!-- The whole window, outlined in the accent color like the heatmap's. -->
 						<span
-							class="pointer-events-none absolute -inset-y-0.5 rounded-[3px] border-2 border-accent"
+							class="pointer-events-none absolute -inset-y-0.5 rounded-[3px] border-2 border-accent-strong"
 							style:left="{(segment.indexOf(inside[0]) / segment.length) * 100}%"
 							style:width="{(inside.length / segment.length) * 100}%"
 						></span>
@@ -98,7 +97,7 @@
 	.partial {
 		background:
 			linear-gradient(to bottom, var(--heat-high) 50%, transparent 50%) 0 0 / 100% 4px,
-			linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.45)),
+			linear-gradient(var(--heat-veil), var(--heat-veil)),
 			var(--base, var(--heat-0));
 	}
 </style>

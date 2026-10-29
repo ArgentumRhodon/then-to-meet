@@ -9,11 +9,8 @@ import {
 } from './userModel';
 
 describe('readSettings', () => {
-	it('keeps a valid theme and palette', () => {
-		expect(readSettings({ theme: 'light', heat: 'tritanopia' })).toEqual({
-			theme: 'light',
-			heat: 'tritanopia'
-		});
+	it('keeps a valid theme, and drops the old heatmap palette', () => {
+		expect(readSettings({ theme: 'light', heat: 'tritanopia' })).toEqual({ theme: 'light' });
 	});
 
 	it('drops anything else, and survives junk', () => {

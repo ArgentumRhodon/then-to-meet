@@ -450,11 +450,9 @@
 
 <svelte:window onblur={hideTip} />
 
-<!-- Always dark: color ramps read far better on a dark ground. In the light theme it sits in the
-     page as a framed panel. -->
 <div
 	bind:this={root}
-	class="relative flex min-h-0 flex-col bg-page scheme-dark light:m-3 light:overflow-hidden light:rounded-2xl light:shadow-[0_12px_32px_-14px_rgb(14_42_53/0.45)] light:sm:m-4 {spotlit
+	class="relative flex min-h-0 flex-col bg-page {spotlit
 		? 'ring-2 ring-accent/70 ring-inset'
 		: ''} {className}"
 >
@@ -687,7 +685,7 @@
 
 {#if tipRect && hovered !== null}
 	<div
-		class="popover pointer-events-none fixed z-40 scheme-dark"
+		class="popover pointer-events-none fixed z-40"
 		style={tipStyle}
 		bind:clientHeight={tipHeight}
 		bind:clientWidth={tipWidth}
@@ -721,7 +719,7 @@
 		background: var(--base);
 		transition: opacity 150ms;
 	}
-	/* Thin stripes in the palette's top color over a darkened cell: the heat color still shows the
+	/* Thin stripes in the palette's top color over a veiled cell: the heat color still shows the
 	   count, and the stripes mark that everyone required is free. The stripes are a square tile that
 	   divides a quarter hour evenly, and so every row, so they run unbroken from one row to the next. */
 	.cell.partial,
@@ -736,7 +734,7 @@
 					transparent 75%
 				)
 				0 0 / var(--tile) var(--tile),
-			linear-gradient(rgb(0 0 0 / 0.45), rgb(0 0 0 / 0.45)),
+			linear-gradient(var(--heat-veil), var(--heat-veil)),
 			var(--base, var(--heat-0));
 	}
 	.cell:not(.empty) {
@@ -787,14 +785,14 @@
 	}
 	.rail.scrolled::before {
 		right: -4px;
-		box-shadow: 6px 0 8px -6px rgb(0 0 0 / 0.6);
+		box-shadow: 6px 0 8px -6px light-dark(rgb(14 42 53 / 0.3), rgb(0 0 0 / 0.6));
 	}
 	.block-outline {
 		pointer-events: none;
 		z-index: 2;
 		border-radius: 6px;
 		box-shadow:
-			0 0 0 2px var(--accent),
+			0 0 0 2px var(--accent-strong),
 			0 0 0 4px var(--canvas);
 		opacity: 0.85;
 	}

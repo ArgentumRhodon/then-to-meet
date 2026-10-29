@@ -23,7 +23,7 @@ const run = async (uid: string, storage: RemovableStorage): Promise<boolean> => 
 
 	let saved = 0;
 	let failed = false;
-	if (legacy.settings.theme || legacy.settings.heat || legacy.events.size) {
+	if (legacy.settings.theme || legacy.events.size) {
 		const [client, store] = await Promise.all([
 			import('$lib/firebase/client'),
 			import('$lib/events/userStore')

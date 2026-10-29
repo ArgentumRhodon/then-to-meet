@@ -16,9 +16,9 @@ describe('a user’s own data', () => {
 	it('round-trips settings', async () => {
 		const me = await client();
 		expect(await loadSettings(me.db, me.user!.uid)).toBeNull();
+		await saveSettings(me.db, me.user!.uid, { theme: 'dark' });
 		await saveSettings(me.db, me.user!.uid, { theme: 'light' });
-		await saveSettings(me.db, me.user!.uid, { heat: 'tritanopia' });
-		expect(await loadSettings(me.db, me.user!.uid)).toEqual({ theme: 'light', heat: 'tritanopia' });
+		expect(await loadSettings(me.db, me.user!.uid)).toEqual({ theme: 'light' });
 	});
 
 	it('round-trips an event’s setup, replacing whole fields rather than merging into them', async () => {

@@ -27,7 +27,7 @@ describe('readLegacy', () => {
 				[`ttm:groups:${W2M}`]: JSON.stringify([group])
 			})
 		);
-		expect(legacy.settings).toEqual({ theme: 'light', heat: 'tritanopia' });
+		expect(legacy.settings).toEqual({ theme: 'light' });
 		expect(legacy.events.get(W2M)).toEqual({
 			title: 'Sync',
 			people: 5,
@@ -119,10 +119,7 @@ describe('onlyNew', () => {
 	});
 
 	it('takes everything when there is nothing yet', () => {
-		expect(onlyNew(null, { theme: 'light', heat: 'standard' })).toEqual({
-			theme: 'light',
-			heat: 'standard'
-		});
+		expect(onlyNew(null, { theme: 'light' })).toEqual({ theme: 'light' });
 	});
 
 	it('is empty when the account has it all', () => {

@@ -21,8 +21,7 @@
 </script>
 
 {#if heat.length && rows}
-	<!-- Dark like the heatmap it stands for. -->
-	<div class="rounded-lg bg-canvas p-2 scheme-dark" role="img" aria-label={label}>
+	<div class="rounded-lg bg-canvas p-2" role="img" aria-label={label}>
 		<div
 			class="grid h-14"
 			style:grid-template-columns={columns}

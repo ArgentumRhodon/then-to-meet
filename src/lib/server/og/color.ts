@@ -1,3 +1,5 @@
+import { SHORT_OF_EVERYONE } from '$lib/ui/heat';
+
 /**
  * The heatmap's colors as plain hex, for rendering it outside the browser. The app builds them
  * with CSS color-mix() in OKLCH (see `heatColor` in $lib/ui/heat.ts); this does the same math,
@@ -64,15 +66,15 @@ const mix = (a: Oklch, b: Oklch, weight: number): Oklch => {
 
 /** The standard palette's dark values, from app.css. */
 export const HEAT_EMPTY = '#3a434f';
-const LOW = fromHex('#ec5757');
-const MID = fromHex('#f4c12a');
-const HIGH = fromHex('#9be86a');
+const LOW = fromHex('#238443');
+const MID = fromHex('#78c679');
+const HIGH = fromHex('#d9f0a3');
 const FADE: Oklch = { l: 0.38, c: 0, h: null };
 
 /** `heatColor` from $lib/ui/heat.ts, as hex: the color for `count` of `total` people free. */
 export const heatHex = (count: number, total: number): string => {
 	if (!total || !count) return HEAT_EMPTY;
-	const f = count / total;
+	const f = count >= total ? 1 : (count / total) * SHORT_OF_EVERYONE;
 	const t = f ** 2;
 	const hue =
 		t <= 0.5

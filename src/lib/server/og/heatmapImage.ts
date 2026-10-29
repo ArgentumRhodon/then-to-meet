@@ -14,7 +14,7 @@ import { heatHex } from './color';
 export const IMAGE_WIDTH = 1200;
 export const IMAGE_HEIGHT = 630;
 
-// The dark theme from app.css, since the heatmap is always dark.
+// The dark theme from app.css: unfurls have no theme to follow, and the ramp reads best on dark.
 const CANVAS = '#313944';
 const FG = '#cdf0f6';
 const FG_2 = '#c1c7d1';

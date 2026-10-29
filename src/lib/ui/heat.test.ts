@@ -20,8 +20,13 @@ describe('heatColor', () => {
 		expect(new Set(levels).size).toBe(levels.length);
 	});
 
-	it('stays on the low-to-mid half until most people are free', () => {
-		expect(heatColor(2, 5)).toContain('var(--heat-low)');
-		expect(heatColor(4, 5)).toContain('var(--heat-high)');
+	it('saves the top of the ramp for everyone free, even in a big group', () => {
+		expect(heatColor(28, 29)).not.toContain('var(--heat-high) 100%');
+		expect(strength(heatColor(100, 100)) - strength(heatColor(99, 100))).toBeGreaterThan(10);
+	});
+
+	it('stays on the low-to-mid half until nearly everyone is free', () => {
+		expect(heatColor(4, 5)).toContain('var(--heat-low)');
+		expect(heatColor(9, 10)).toContain('var(--heat-high)');
 	});
 });
